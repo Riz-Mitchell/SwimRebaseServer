@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace SwimRebase.Controllers
+namespace REST.Controllers
 {
     [ApiController]
     [Route("[controller]")]
