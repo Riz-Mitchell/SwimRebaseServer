@@ -1,0 +1,6 @@
+@SwimRebase_HostAddress = http://localhost:5039
+
+GET {{SwimRebase_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
