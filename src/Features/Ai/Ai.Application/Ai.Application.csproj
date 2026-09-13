@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ai.Domain\Ai.Domain.csproj" />
+    <ProjectReference Include="..\..\Auth\Auth.Application\Auth.Application.csproj" />
   </ItemGroup>
 
 </Project>

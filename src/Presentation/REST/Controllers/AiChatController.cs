@@ -2,6 +2,7 @@ using System.Text.Json;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Application.Services;
+using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

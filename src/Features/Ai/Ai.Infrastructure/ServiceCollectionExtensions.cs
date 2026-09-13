@@ -1,7 +1,6 @@
 using Ai.Application.Interfaces;
 using Ai.Application.Options;
 using Ai.Application.Services;
-using Ai.Infrastructure.Auth;
 using Ai.Infrastructure.Chat;
 using Ai.Infrastructure.Persistence;
 using Ai.Infrastructure.Repositories;
@@ -29,15 +28,14 @@ public static class ServiceCollectionExtensions
         services.Configure<AiModelOptions>(configuration.GetSection(AiModelOptions.SectionName));
         services.Configure<ChatCompactionOptions>(configuration.GetSection(ChatCompactionOptions.SectionName));
 
-        services.AddHttpContextAccessor();
-
         services.AddSingleton(_ =>
         {
             var apiKey = configuration["Anthropic:ApiKey"];
             return string.IsNullOrWhiteSpace(apiKey) ? new AnthropicClient() : new AnthropicClient { ApiKey = apiKey };
         });
 
-        services.AddScoped<ICurrentUserAccessor, CurrentUserAccessor>();
+        // ICurrentUserAccessor is registered by Auth.Infrastructure.AddAuthInfrastructure - the Ai
+        // feature only depends on the interface (via Auth.Application), never its implementation.
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IToolExecutionRepository, ToolExecutionRepository>();

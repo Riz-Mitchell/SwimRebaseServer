@@ -1,14 +1,14 @@
 using System.Security.Claims;
-using Ai.Application.Interfaces;
+using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Http;
 
-namespace Ai.Infrastructure.Auth;
+namespace Auth.Infrastructure;
 
 /// <summary>
 /// Resolves the Supabase user id from the `sub` claim of the already-validated JWT on the current
-/// request. Relies on JWT Bearer auth being configured against Supabase's shared JWT secret
-/// (see the REST host's startup) - this class only ever reads a principal ASP.NET has already
-/// validated; it never parses or trusts a token itself.
+/// request. Relies on JWT Bearer auth being configured against Supabase's shared JWT secret (see
+/// <see cref="ServiceCollectionExtensions.AddAuthInfrastructure"/>) - this class only ever reads a
+/// principal ASP.NET has already validated; it never parses or trusts a token itself.
 /// </summary>
 public sealed class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor) : ICurrentUserAccessor
 {

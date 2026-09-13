@@ -1,9 +1,9 @@
-namespace Ai.Application.Interfaces;
+namespace Auth.Application.Interfaces;
 
 /// <summary>
 /// Resolves the authenticated Supabase user (JWT `sub` claim) for the current request.
-/// Every repository and tool call is scoped through this - nothing in Ai.Application ever
-/// accepts a caller-supplied user id.
+/// Every feature scopes its data access through this - nothing downstream ever accepts a
+/// caller-supplied user id.
 /// </summary>
 public interface ICurrentUserAccessor
 {
