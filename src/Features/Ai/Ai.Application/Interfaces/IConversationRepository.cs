@@ -1,0 +1,33 @@
+using Ai.Domain.Models;
+
+namespace Ai.Application.Interfaces;
+
+/// <summary>
+/// Pure query/tracking - no SaveChanges, no transactions (see <see cref="IUnitOfWork"/>). Every
+/// read is scoped to a caller-supplied user id, never re-derived from the entity itself.
+/// </summary>
+public interface IConversationRepository
+{
+    Task<Conversation?> FindAsync(Guid userId, Guid conversationId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<Conversation>> ListForUserAsync(Guid userId, CancellationToken cancellationToken);
+
+    void Add(Conversation conversation);
+
+    /// <summary>Messages not yet folded into a summary, in order - what actually gets sent to the model.</summary>
+    Task<IReadOnlyList<ConversationMessage>> GetLiveContextMessagesAsync(Guid conversationId, CancellationToken cancellationToken);
+
+    Task<ConversationSummary?> GetLatestSummaryAsync(Guid conversationId, CancellationToken cancellationToken);
+
+    Task<int> GetNextSequenceNumberAsync(Guid conversationId, CancellationToken cancellationToken);
+
+    void AddMessage(ConversationMessage message);
+
+    void AddSummary(ConversationSummary summary);
+
+    /// <summary>Immediate bulk update (bypasses the change tracker) - safe to call inside an open <see cref="IUnitOfWorkTransaction"/>.</summary>
+    Task MarkMessagesCompactedAsync(IReadOnlyList<Guid> messageIds, CancellationToken cancellationToken);
+
+    /// <summary>Immediate bulk update (bypasses the change tracker).</summary>
+    Task TouchLastMessageAtAsync(Guid conversationId, DateTimeOffset at, CancellationToken cancellationToken);
+}

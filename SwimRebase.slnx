@@ -1,8 +1,8 @@
 <Solution>
   <Folder Name="/Features/" />
   <Folder Name="/Features/Ai/">
-    <Project Path="Ai.Domain/Ai.Domain.csproj" Id="871a68c5-8bc9-43c7-b14f-9d6206542b5c" />
     <Project Path="src/Features/Ai/Ai.Application/Ai.Application.csproj" Id="5682a429-e52b-43a2-94c0-fad755079e95" />
+    <Project Path="src/Features/Ai/Ai.Domain/Ai.Domain.csproj" />
     <Project Path="src/Features/Ai/Ai.Infrastructure/Ai.Infrastructure.csproj" Id="12544a2d-2e0f-4249-b7c2-ca2b1f6bc0f5" />
   </Folder>
   <Folder Name="/Misc/">
