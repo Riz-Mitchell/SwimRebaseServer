@@ -100,7 +100,7 @@ namespace Ai.Infrastructure.Migrations
                         .HasColumnName("is_compacted");
 
                     b.Property<string>("RawContentJson")
-                        .HasColumnType("jsonb")
+                        .HasColumnType("text")
                         .HasColumnName("raw_content_json");
 
                     b.Property<string>("Role")
@@ -244,7 +244,7 @@ namespace Ai.Infrastructure.Migrations
 
                     b.Property<string>("InputJson")
                         .IsRequired()
-                        .HasColumnType("jsonb")
+                        .HasColumnType("text")
                         .HasColumnName("input_json");
 
                     b.Property<DateTimeOffset?>("ResolvedAt")
@@ -252,7 +252,7 @@ namespace Ai.Infrastructure.Migrations
                         .HasColumnName("resolved_at");
 
                     b.Property<string>("ResultJson")
-                        .HasColumnType("jsonb")
+                        .HasColumnType("text")
                         .HasColumnName("result_json");
 
                     b.Property<string>("Status")

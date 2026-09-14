@@ -13,8 +13,11 @@ public sealed class ToolExecutionRequestConfiguration : IEntityTypeConfiguration
 
         builder.Property(t => t.AnthropicToolUseId).HasMaxLength(200).IsRequired();
         builder.Property(t => t.ToolName).HasMaxLength(200).IsRequired();
-        builder.Property(t => t.InputJson).HasColumnType("jsonb").IsRequired();
-        builder.Property(t => t.ResultJson).HasColumnType("jsonb");
+        // Plain text, not jsonb - see ConversationMessageConfiguration.RawContentJson for why:
+        // jsonb reorders object keys on storage, which breaks polymorphic JSON deserialization on
+        // types with a "$type" discriminator, and neither column is ever queried at the SQL level.
+        builder.Property(t => t.InputJson).HasColumnType("text").IsRequired();
+        builder.Property(t => t.ResultJson).HasColumnType("text");
         builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
         builder.Property(t => t.CreatedAt).IsRequired();
 
