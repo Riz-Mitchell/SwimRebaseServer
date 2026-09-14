@@ -17,13 +17,14 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Wires the Ai feature's persistence, Anthropic client, and orchestration services.
-    /// Expects a "AiDatabase" connection string and, optionally, "Anthropic:ApiKey" (falls back to
-    /// the ANTHROPIC_API_KEY environment variable, same as the bare Anthropic SDK client).
+    /// Expects a "Database" connection string (shared with the other features until they need to
+    /// scale onto separate databases) and, optionally, "Anthropic:ApiKey" (falls back to the
+    /// ANTHROPIC_API_KEY environment variable, same as the bare Anthropic SDK client).
     /// </summary>
     public static IServiceCollection AddAiInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<AiDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString("AiDatabase"))
+            .UseNpgsql(configuration.GetConnectionString("Database"))
             .UseSnakeCaseNamingConvention());
 
         services.Configure<AiModelOptions>(configuration.GetSection(AiModelOptions.SectionName));

@@ -11,11 +11,14 @@ namespace Training.Infrastructure;
 
 public static class ServiceCollectionExtensions
 {
-    /// <summary>Wires the Training feature's own database and services. Expects a "TrainingDatabase" connection string.</summary>
+    /// <summary>
+    /// Wires the Training feature's own database and services. Expects a "Database" connection
+    /// string - shared with the other features until they need to scale onto separate databases.
+    /// </summary>
     public static IServiceCollection AddTrainingInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<TrainingDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString("TrainingDatabase"))
+            .UseNpgsql(configuration.GetConnectionString("Database"))
             .UseSnakeCaseNamingConvention());
 
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<TrainingDbContext>>(TrainingKeys.UnitOfWork);

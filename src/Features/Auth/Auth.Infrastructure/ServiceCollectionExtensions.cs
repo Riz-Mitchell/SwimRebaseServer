@@ -15,16 +15,17 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Wires the Auth feature: JWT Bearer authentication against Supabase's ES256/JWKS signing keys,
-    /// the auth store, and user auto-provisioning. Expects "AuthDatabase" and "Supabase:Url"
-    /// configuration - the handler discovers the JWKS endpoint from Supabase's OIDC metadata and
-    /// handles key caching/rotation itself. Pair with <c>app.UseAuthentication()</c>/<c>UseAuthorization()</c>
+    /// the auth store, and user auto-provisioning. Expects "Database" (shared with the other
+    /// features until they need to scale onto separate databases) and "Supabase:Url" configuration
+    /// - the handler discovers the JWKS endpoint from Supabase's OIDC metadata and handles key
+    /// caching/rotation itself. Pair with <c>app.UseAuthentication()</c>/<c>UseAuthorization()</c>
     /// and <c>app.UseMiddleware&lt;Auth.Infrastructure.Middleware.UserProvisioningMiddleware&gt;()</c>
     /// in the host's request pipeline.
     /// </summary>
     public static IServiceCollection AddAuthInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<AuthDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString("AuthDatabase"))
+            .UseNpgsql(configuration.GetConnectionString("Database"))
             .UseSnakeCaseNamingConvention());
 
         services.AddHttpContextAccessor();
