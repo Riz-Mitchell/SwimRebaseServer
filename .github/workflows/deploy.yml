@@ -74,4 +74,4 @@ jobs:
 
       - name: Azure logout
         if: always()
-        run: az logout
+        run: az logout || true
