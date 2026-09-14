@@ -1,6 +1,7 @@
 using Ai.Infrastructure;
 using Auth.Infrastructure;
 using Auth.Infrastructure.Middleware;
+using Training.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,7 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddAuthInfrastructure(builder.Configuration);
 builder.Services.AddAiInfrastructure(builder.Configuration);
+builder.Services.AddTrainingInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 

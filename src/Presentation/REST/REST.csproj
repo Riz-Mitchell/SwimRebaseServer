@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Features\Ai\Ai.Infrastructure\Ai.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Features\Auth\Auth.Infrastructure\Auth.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Features\Training\Training.Infrastructure\Training.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
