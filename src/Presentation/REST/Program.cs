@@ -2,6 +2,7 @@ using Ai.Infrastructure;
 using Auth.Infrastructure;
 using Auth.Infrastructure.Middleware;
 using Azure.Identity;
+using Microsoft.EntityFrameworkCore;
 using Training.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,6 +28,16 @@ builder.Services.AddAiInfrastructure(builder.Configuration);
 builder.Services.AddTrainingInfrastructure(builder.Configuration);
 
 var app = builder.Build();
+
+// Each feature owns its own migrations against the shared "Database" connection string - apply
+// them all on startup so a fresh/wiped database is brought up to date without a manual
+// `dotnet ef database update` step per feature.
+using (var migrationScope = app.Services.CreateScope())
+{
+    await migrationScope.ServiceProvider.GetRequiredService<AiDbContext>().Database.MigrateAsync();
+    await migrationScope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync();
+    await migrationScope.ServiceProvider.GetRequiredService<TrainingDbContext>().Database.MigrateAsync();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
