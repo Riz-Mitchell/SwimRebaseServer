@@ -51,21 +51,6 @@ jobs:
           template: infra/main.bicep
           parameters: infra/${{ inputs.bicepParamFile }}.bicepparam
 
-      - name: Set App Service application settings (Key Vault references)
-        env:
-          VAULT_URI: https://${{ vars.AZURE_VAULT_NAME }}.vault.azure.net
-        uses: azure/appservice-settings@v1
-        with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          app-settings-json: |
-            [
-              { "name": "ConnectionStrings__AiDatabase", "value": "@Microsoft.KeyVault(SecretUri=${{ env.VAULT_URI }}/secrets/ConnectionStrings--AiDatabase/)", "slotSetting": false },
-              { "name": "ConnectionStrings__AuthDatabase", "value": "@Microsoft.KeyVault(SecretUri=${{ env.VAULT_URI }}/secrets/ConnectionStrings--AuthDatabase/)", "slotSetting": false },
-              { "name": "ConnectionStrings__TrainingDatabase", "value": "@Microsoft.KeyVault(SecretUri=${{ env.VAULT_URI }}/secrets/ConnectionStrings--TrainingDatabase/)", "slotSetting": false },
-              { "name": "Supabase__Url", "value": "@Microsoft.KeyVault(SecretUri=${{ env.VAULT_URI }}/secrets/Supabase--Url/)", "slotSetting": false },
-              { "name": "Anthropic__ApiKey", "value": "@Microsoft.KeyVault(SecretUri=${{ env.VAULT_URI }}/secrets/Anthropic--ApiKey/)", "slotSetting": false }
-            ]
-
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3
         with:

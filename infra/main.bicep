@@ -13,6 +13,9 @@ param webAppName string
 @description('Key Vault name (must be globally unique, 3-24 chars)')
 param vaultName string
 
+@description('ASPNETCORE_ENVIRONMENT value - selects which appsettings.{Environment}.json the app layers in')
+param aspNetCoreEnvironment string
+
 var keyVaultSecretsUserRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
 
 resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
@@ -43,6 +46,16 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
     siteConfig: {
       linuxFxVersion: 'DOTNETCORE|10.0'
       minTlsVersion: '1.2'
+      appSettings: [
+        {
+          name: 'KeyVaultUri'
+          value: vault.properties.vaultUri
+        }
+        {
+          name: 'ASPNETCORE_ENVIRONMENT'
+          value: aspNetCoreEnvironment
+        }
+      ]
     }
   }
   tags: {
