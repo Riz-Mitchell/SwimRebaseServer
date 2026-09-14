@@ -9,4 +9,5 @@ jobs:
     uses: ./.github/workflows/deploy.yml
     with:
       environment: staging
+      bicepParamFile: dev
     secrets: inherit
