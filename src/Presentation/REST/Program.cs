@@ -14,7 +14,20 @@ var builder = WebApplication.CreateBuilder(args);
 var keyVaultUri = builder.Configuration["KeyVaultUri"];
 if (!string.IsNullOrWhiteSpace(keyVaultUri))
 {
-    builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), new DefaultAzureCredential());
+    Console.WriteLine($"[startup] Fetching secrets from Key Vault {keyVaultUri} ...");
+    Console.Out.Flush();
+    try
+    {
+        builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), new DefaultAzureCredential());
+        Console.WriteLine("[startup] Key Vault secrets loaded.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[startup] Key Vault fetch FAILED: {ex}");
+        Console.Out.Flush();
+        throw;
+    }
+    Console.Out.Flush();
 }
 
 // Add services to the container.
@@ -34,9 +47,28 @@ var app = builder.Build();
 // `dotnet ef database update` step per feature.
 using (var migrationScope = app.Services.CreateScope())
 {
-    await migrationScope.ServiceProvider.GetRequiredService<AiDbContext>().Database.MigrateAsync();
-    await migrationScope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync();
-    await migrationScope.ServiceProvider.GetRequiredService<TrainingDbContext>().Database.MigrateAsync();
+    foreach (var (name, migrate) in new (string, Func<Task>)[]
+    {
+        ("Ai", () => migrationScope.ServiceProvider.GetRequiredService<AiDbContext>().Database.MigrateAsync()),
+        ("Auth", () => migrationScope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync()),
+        ("Training", () => migrationScope.ServiceProvider.GetRequiredService<TrainingDbContext>().Database.MigrateAsync()),
+    })
+    {
+        Console.WriteLine($"[startup] Migrating {name}Db ...");
+        Console.Out.Flush();
+        try
+        {
+            await migrate();
+            Console.WriteLine($"[startup] {name}Db migrated.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[startup] {name}Db migration FAILED: {ex}");
+            Console.Out.Flush();
+            throw;
+        }
+        Console.Out.Flush();
+    }
 }
 
 // Configure the HTTP request pipeline.
