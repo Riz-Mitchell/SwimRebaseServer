@@ -5,6 +5,8 @@ namespace Ai.Infrastructure;
 
 public sealed class AiDbContext(DbContextOptions<AiDbContext> options) : DbContext(options)
 {
+    public DbSet<AiUser> AiUsers => Set<AiUser>();
+
     public DbSet<Conversation> Conversations => Set<Conversation>();
 
     public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();

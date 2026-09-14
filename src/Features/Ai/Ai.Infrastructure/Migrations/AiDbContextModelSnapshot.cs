@@ -22,6 +22,26 @@ namespace Ai.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Ai.Domain.Models.AiUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("LastActiveAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_active_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ai_users");
+
+                    b.ToTable("ai_users", (string)null);
+                });
+
             modelBuilder.Entity("Ai.Domain.Models.Conversation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -266,6 +286,18 @@ namespace Ai.Infrastructure.Migrations
                     b.ToTable("tool_execution_requests", (string)null);
                 });
 
+            modelBuilder.Entity("Ai.Domain.Models.Conversation", b =>
+                {
+                    b.HasOne("Ai.Domain.Models.AiUser", "AiUser")
+                        .WithMany("Conversations")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_conversations_ai_users_user_id");
+
+                    b.Navigation("AiUser");
+                });
+
             modelBuilder.Entity("Ai.Domain.Models.ConversationMessage", b =>
                 {
                     b.HasOne("Ai.Domain.Models.Conversation", "Conversation")
@@ -290,6 +322,18 @@ namespace Ai.Infrastructure.Migrations
                     b.Navigation("Conversation");
                 });
 
+            modelBuilder.Entity("Ai.Domain.Models.TokenUsageRecord", b =>
+                {
+                    b.HasOne("Ai.Domain.Models.AiUser", "AiUser")
+                        .WithMany("TokenUsageRecords")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_token_usage_records_ai_users_user_id");
+
+                    b.Navigation("AiUser");
+                });
+
             modelBuilder.Entity("Ai.Domain.Models.ToolExecutionRequest", b =>
                 {
                     b.HasOne("Ai.Domain.Models.Conversation", "Conversation")
@@ -299,7 +343,25 @@ namespace Ai.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_tool_execution_requests_conversations_conversation_id");
 
+                    b.HasOne("Ai.Domain.Models.AiUser", "AiUser")
+                        .WithMany("ToolExecutionRequests")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_tool_execution_requests_ai_users_user_id");
+
+                    b.Navigation("AiUser");
+
                     b.Navigation("Conversation");
+                });
+
+            modelBuilder.Entity("Ai.Domain.Models.AiUser", b =>
+                {
+                    b.Navigation("Conversations");
+
+                    b.Navigation("TokenUsageRecords");
+
+                    b.Navigation("ToolExecutionRequests");
                 });
 
             modelBuilder.Entity("Ai.Domain.Models.Conversation", b =>

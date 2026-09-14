@@ -5,6 +5,7 @@ public class TokenUsageRecord
 {
     public Guid Id { get; set; }
 
+    /// <summary>FK to <see cref="AiUser"/>.</summary>
     public Guid UserId { get; set; }
 
     public Guid ConversationId { get; set; }
@@ -23,4 +24,6 @@ public class TokenUsageRecord
     public bool WasCompactionCall { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    public AiUser? AiUser { get; set; }
 }

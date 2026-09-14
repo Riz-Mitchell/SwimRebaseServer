@@ -11,7 +11,7 @@ public class ToolExecutionRequest
 
     public Guid ConversationId { get; set; }
 
-    /// <summary>Denormalized for scoping queries directly by user without a join.</summary>
+    /// <summary>FK to <see cref="AiUser"/> - carried directly here (not just via the conversation) so the guard's core query can scope by user without a join.</summary>
     public Guid UserId { get; set; }
 
     /// <summary>The originating assistant message this tool_use block belongs to.</summary>
@@ -33,6 +33,8 @@ public class ToolExecutionRequest
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? ResolvedAt { get; set; }
+
+    public AiUser? AiUser { get; set; }
 
     public Conversation? Conversation { get; set; }
 }

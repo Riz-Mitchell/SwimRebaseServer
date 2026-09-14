@@ -37,12 +37,14 @@ public static class ServiceCollectionExtensions
         // ICurrentUserAccessor is registered by Auth.Infrastructure.AddAuthInfrastructure - the Ai
         // feature only depends on the interface (via Auth.Application), never its implementation.
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IAiUserRepository, AiUserRepository>();
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IToolExecutionRepository, ToolExecutionRepository>();
         services.AddScoped<ITokenUsageRepository, TokenUsageRepository>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
         services.AddScoped<IAiChatClient, AnthropicChatClient>();
         services.AddScoped<IChatCompactionService, ChatCompactionService>();
+        services.AddScoped<IAiUserProvisioningService, AiUserProvisioningService>();
         services.AddScoped<ToolExecutor>();
         services.AddScoped<GatedToolApprovalResolver>();
         services.AddScoped<ChatTurnLoop>();

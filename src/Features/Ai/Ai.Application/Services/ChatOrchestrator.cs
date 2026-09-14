@@ -16,12 +16,17 @@ public sealed class ChatOrchestrator(
     IToolExecutionRepository toolExecutions,
     IUnitOfWork unitOfWork,
     IChatCompactionService compaction,
+    IAiUserProvisioningService aiUserProvisioning,
     GatedToolApprovalResolver approvalResolver,
     ChatTurnLoop turnLoop)
 {
     public async IAsyncEnumerable<AiChatEvent> SendUserMessageAsync(
         Guid userId, Guid? conversationId, string userMessage, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // The one point of contact: every other Ai entity FKs to AiUser, so it must exist before
+        // GetOrCreateConversationAsync (or anything downstream) can insert a row that references it.
+        await aiUserProvisioning.EnsureExistsAsync(userId, cancellationToken);
+
         var conversation = await GetOrCreateConversationAsync(userId, conversationId, cancellationToken);
 
         var sequenceNumber = await conversations.GetNextSequenceNumberAsync(conversation.Id, cancellationToken);
