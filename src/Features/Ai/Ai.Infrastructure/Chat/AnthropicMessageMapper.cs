@@ -33,8 +33,12 @@ internal static class AnthropicMessageMapper
         _ => throw new NotSupportedException($"Unsupported content block '{block.GetType().Name}'."),
     };
 
-    /// <summary>Parses our tool's raw JSON Schema string into the SDK's typed <see cref="InputSchema"/>.</summary>
-    public static ToolUnion ToToolUnion(AiToolSpec spec)
+    /// <summary>
+    /// Parses our tool's raw JSON Schema string into the SDK's typed <see cref="InputSchema"/>.
+    /// The tool list is identical on every turn of a conversation (see <c>ChatTurnLoop</c>), so the
+    /// last tool gets a cache breakpoint - Anthropic caches everything up to and including it.
+    /// </summary>
+    public static ToolUnion ToToolUnion(AiToolSpec spec, bool cache = false)
     {
         using var schema = JsonDocument.Parse(spec.JsonSchema);
         var root = schema.RootElement;
@@ -61,6 +65,7 @@ internal static class AnthropicMessageMapper
                 Properties = properties,
                 Required = required,
             },
+            CacheControl = cache ? new CacheControlEphemeral() : null,
         };
     }
 }

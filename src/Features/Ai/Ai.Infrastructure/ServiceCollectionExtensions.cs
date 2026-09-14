@@ -42,6 +42,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IToolExecutionRepository, ToolExecutionRepository>();
         services.AddScoped<ITokenUsageRepository, TokenUsageRepository>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
+        services.AddScoped<IAiTool, GetTimetableTool>();
+        services.AddScoped<IAiTool, UpsertTimetableSlotTool>();
+        services.AddScoped<IAiTool, DeleteTimetableSlotTool>();
         services.AddScoped<IAiChatClient, AnthropicChatClient>();
         services.AddScoped<IChatCompactionService, ChatCompactionService>();
         services.AddScoped<IAiUserProvisioningService, AiUserProvisioningService>();

@@ -1,4 +1,3 @@
-using System.Text;
 using Auth.Application.Interfaces;
 using Auth.Application.Services;
 using Auth.Infrastructure.Persistence;
@@ -14,10 +13,11 @@ namespace Auth.Infrastructure;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Wires the Auth feature: JWT Bearer authentication against Supabase's shared HS256 secret,
-    /// the auth store, and user auto-provisioning. Expects "AuthDatabase" and "Supabase:JwtSecret"
-    /// configuration. Pair with <c>app.UseAuthentication()</c>/<c>UseAuthorization()</c> and
-    /// <c>app.UseMiddleware&lt;Auth.Infrastructure.Middleware.UserProvisioningMiddleware&gt;()</c>
+    /// Wires the Auth feature: JWT Bearer authentication against Supabase's ES256/JWKS signing keys,
+    /// the auth store, and user auto-provisioning. Expects "AuthDatabase" and "Supabase:Url"
+    /// configuration - the handler discovers the JWKS endpoint from Supabase's OIDC metadata and
+    /// handles key caching/rotation itself. Pair with <c>app.UseAuthentication()</c>/<c>UseAuthorization()</c>
+    /// and <c>app.UseMiddleware&lt;Auth.Infrastructure.Middleware.UserProvisioningMiddleware&gt;()</c>
     /// in the host's request pipeline.
     /// </summary>
     public static IServiceCollection AddAuthInfrastructure(this IServiceCollection services, IConfiguration configuration)
@@ -28,13 +28,15 @@ public static class ServiceCollectionExtensions
 
         services.AddHttpContextAccessor();
 
-        var supabaseJwtSecret = configuration["Supabase:JwtSecret"];
-        if (string.IsNullOrWhiteSpace(supabaseJwtSecret))
+        var supabaseUrl = configuration["Supabase:Url"];
+        if (string.IsNullOrWhiteSpace(supabaseUrl))
         {
             throw new InvalidOperationException(
-                "Missing configuration 'Supabase:JwtSecret' - set it via user-secrets or an environment " +
-                "variable to the project's JWT secret (Supabase dashboard: Project Settings > API > JWT Settings).");
+                "Missing configuration 'Supabase:Url' - set it via user-secrets or an environment " +
+                "variable to the project's URL (Supabase dashboard: Project Settings > API > Project URL).");
         }
+
+        var authority = $"{supabaseUrl.TrimEnd('/')}/auth/v1";
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -44,14 +46,24 @@ public static class ServiceCollectionExtensions
                 // ClaimTypes.NameIdentifier, so ICurrentUserAccessor reads the same claim name
                 // Supabase issues.
                 options.MapInboundClaims = false;
+
+                // Authority drives discovery of "{authority}/.well-known/openid-configuration", which
+                // Supabase serves with a jwks_uri - the handler fetches, caches, and auto-refreshes
+                // those signing keys itself (including on an unrecognized kid), so no manual JWKS
+                // fetching/caching is needed here.
+                options.Authority = authority;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(supabaseJwtSecret)),
-                    ValidateIssuer = false,
+                    ValidateIssuer = true,
+                    ValidIssuer = authority,
                     ValidateAudience = true,
                     ValidAudience = "authenticated",
                     ValidateLifetime = true,
+                    // Supabase's discovery metadata advertises RS256/HS256/ES256 as generally supported,
+                    // but this project's JWKS only publishes an ES256 key - pin to it explicitly so a
+                    // token can't claim a different algorithm (e.g. HS256-confusion against the public key).
+                    ValidAlgorithms = [SecurityAlgorithms.EcdsaSha256],
                 };
             });
 

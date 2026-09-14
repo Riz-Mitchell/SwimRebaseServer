@@ -1,9 +1,9 @@
 namespace Ai.Application.Interfaces;
 
 /// <summary>
-/// A tool the model can call. No swim-domain tools are implemented yet - this is purely the
-/// contract + guard framework so tools can be dropped in later without touching the orchestration
-/// or approval pipeline.
+/// A tool the model can call. Implementations live in Ai.Infrastructure (see the Training feature's
+/// timetable tools for an example) and register themselves via DI - the orchestration and approval
+/// pipeline never changes to accommodate a new one.
 /// </summary>
 public interface IAiTool
 {

@@ -25,7 +25,11 @@ public sealed class AnthropicChatClient(AnthropicClient client, IOptions<AiModel
             MaxTokens = request.MaxTokens ?? options.MaxTokens,
             Messages = request.Messages.Select(AnthropicMessageMapper.ToMessageParam).ToList(),
             System = string.IsNullOrWhiteSpace(request.SystemPrompt) ? null : request.SystemPrompt!,
-            Tools = request.Tools.Count == 0 ? null : request.Tools.Select(AnthropicMessageMapper.ToToolUnion).ToList(),
+            Tools = request.Tools.Count == 0
+                ? null
+                : request.Tools
+                    .Select((tool, index) => AnthropicMessageMapper.ToToolUnion(tool, cache: index == request.Tools.Count - 1))
+                    .ToList(),
         };
 
         var events = client.Messages.CreateStreaming(parameters);
