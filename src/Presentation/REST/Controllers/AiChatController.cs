@@ -22,7 +22,11 @@ public sealed class AiChatController(
     IConversationRepository conversations,
     ITokenUsageRepository tokenUsage) : ControllerBase
 {
-    [HttpPost("conversations/{conversationId:guid?}/messages")]
+    // Two templates because an optional route parameter that isn't the final segment (this one is
+    // followed by "/messages") doesn't collapse correctly when omitted - ASP.NET Core won't match
+    // "conversations/messages" against "conversations/{conversationId:guid?}/messages" on its own.
+    [HttpPost("conversations/messages")]
+    [HttpPost("conversations/{conversationId:guid}/messages")]
     public Task SendMessage(Guid? conversationId, [FromBody] SendMessageRequest request, CancellationToken cancellationToken) =>
         StreamEventsAsync(
             orchestrator.SendUserMessageAsync(currentUser.UserId, conversationId, request.Message, cancellationToken),
