@@ -22,6 +22,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrainingUserProvisioningService, TrainingUserProvisioningService>();
         services.AddScoped<ITimetableRepository, TimetableRepository>();
         services.AddScoped<TimetableService>();
+        services.AddScoped<IFocusRepository, FocusRepository>();
+        services.AddScoped<FocusService>();
 
         return services;
     }

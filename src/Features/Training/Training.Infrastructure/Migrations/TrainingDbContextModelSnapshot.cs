@@ -22,6 +22,48 @@ namespace Training.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Training.Domain.Models.ComparisonPoint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("FocusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("focus_id");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer")
+                        .HasColumnName("order");
+
+                    b.Property<string>("Polarity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("polarity");
+
+                    b.Property<string>("TagLine")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("tag_line");
+
+                    b.HasKey("Id")
+                        .HasName("pk_comparison_points");
+
+                    b.HasIndex("FocusId", "Polarity", "Order")
+                        .HasDatabaseName("ix_comparison_points_focus_id_polarity_order");
+
+                    b.ToTable("comparison_points", (string)null);
+                });
+
             modelBuilder.Entity("Training.Domain.Models.ExpectedSession", b =>
                 {
                     b.Property<Guid>("TimetableEntryId")
@@ -48,6 +90,106 @@ namespace Training.Infrastructure.Migrations
                         .HasName("pk_expected_sessions");
 
                     b.ToTable("expected_sessions", (string)null);
+                });
+
+            modelBuilder.Entity("Training.Domain.Models.Focus", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("DaysCompleted")
+                        .HasColumnType("integer")
+                        .HasColumnName("days_completed");
+
+                    b.Property<DateOnly?>("EndedAt")
+                        .HasColumnType("date")
+                        .HasColumnName("ended_at");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("origin");
+
+                    b.Property<string>("OriginalUserRequest")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("original_user_request");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
+
+                    b.Property<string>("Prompt")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("prompt");
+
+                    b.Property<DateOnly>("StartedAt")
+                        .HasColumnType("date")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TagLine")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("tag_line");
+
+                    b.Property<int>("TotalDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_days");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_focuses");
+
+                    b.HasIndex("UserId", "Priority")
+                        .IsUnique()
+                        .HasDatabaseName("ix_focuses_user_id_priority")
+                        .HasFilter("status = 'Active'");
+
+                    b.ToTable("focuses", (string)null);
+                });
+
+            modelBuilder.Entity("Training.Domain.Models.FocusCheckIn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CheckedInAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("checked_in_at");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<Guid>("FocusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("focus_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_focus_check_ins");
+
+                    b.HasIndex("FocusId", "Date")
+                        .IsUnique()
+                        .HasDatabaseName("ix_focus_check_ins_focus_id_date");
+
+                    b.ToTable("focus_check_ins", (string)null);
                 });
 
             modelBuilder.Entity("Training.Domain.Models.TimetableEntry", b =>
@@ -130,6 +272,18 @@ namespace Training.Infrastructure.Migrations
                     b.ToTable("training_users", (string)null);
                 });
 
+            modelBuilder.Entity("Training.Domain.Models.ComparisonPoint", b =>
+                {
+                    b.HasOne("Training.Domain.Models.Focus", "Focus")
+                        .WithMany("ComparisonPoints")
+                        .HasForeignKey("FocusId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_comparison_points_focuses_focus_id");
+
+                    b.Navigation("Focus");
+                });
+
             modelBuilder.Entity("Training.Domain.Models.ExpectedSession", b =>
                 {
                     b.HasOne("Training.Domain.Models.TimetableEntry", "TimetableEntry")
@@ -140,6 +294,30 @@ namespace Training.Infrastructure.Migrations
                         .HasConstraintName("fk_expected_sessions_timetable_entries_timetable_entry_id");
 
                     b.Navigation("TimetableEntry");
+                });
+
+            modelBuilder.Entity("Training.Domain.Models.Focus", b =>
+                {
+                    b.HasOne("Training.Domain.Models.TrainingUser", "TrainingUser")
+                        .WithMany("Focuses")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_focuses_training_users_user_id");
+
+                    b.Navigation("TrainingUser");
+                });
+
+            modelBuilder.Entity("Training.Domain.Models.FocusCheckIn", b =>
+                {
+                    b.HasOne("Training.Domain.Models.Focus", "Focus")
+                        .WithMany("CheckIns")
+                        .HasForeignKey("FocusId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_focus_check_ins_focuses_focus_id");
+
+                    b.Navigation("Focus");
                 });
 
             modelBuilder.Entity("Training.Domain.Models.TimetableEntry", b =>
@@ -154,6 +332,13 @@ namespace Training.Infrastructure.Migrations
                     b.Navigation("TrainingUser");
                 });
 
+            modelBuilder.Entity("Training.Domain.Models.Focus", b =>
+                {
+                    b.Navigation("CheckIns");
+
+                    b.Navigation("ComparisonPoints");
+                });
+
             modelBuilder.Entity("Training.Domain.Models.TimetableEntry", b =>
                 {
                     b.Navigation("ExpectedSession");
@@ -161,6 +346,8 @@ namespace Training.Infrastructure.Migrations
 
             modelBuilder.Entity("Training.Domain.Models.TrainingUser", b =>
                 {
+                    b.Navigation("Focuses");
+
                     b.Navigation("TimetableEntries");
                 });
 #pragma warning restore 612, 618

@@ -24,5 +24,10 @@ public sealed class TrainingUserConfiguration : IEntityTypeConfiguration<Trainin
             .WithOne(t => t.TrainingUser)
             .HasForeignKey(t => t.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(u => u.Focuses)
+            .WithOne(f => f.TrainingUser)
+            .HasForeignKey(f => f.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

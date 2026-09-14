@@ -16,4 +16,6 @@ public class TrainingUser
     public DateTimeOffset LastActiveAt { get; set; }
 
     public List<TimetableEntry> TimetableEntries { get; set; } = [];
+
+    public List<Focus> Focuses { get; set; } = [];
 }

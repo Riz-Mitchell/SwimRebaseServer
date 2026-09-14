@@ -11,6 +11,12 @@ public sealed class TrainingDbContext(DbContextOptions<TrainingDbContext> option
 
     public DbSet<ExpectedSession> ExpectedSessions => Set<ExpectedSession>();
 
+    public DbSet<Focus> Focuses => Set<Focus>();
+
+    public DbSet<ComparisonPoint> ComparisonPoints => Set<ComparisonPoint>();
+
+    public DbSet<FocusCheckIn> FocusCheckIns => Set<FocusCheckIn>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TrainingDbContext).Assembly);
