@@ -2,7 +2,7 @@ using Ai.Domain.Models;
 
 namespace Ai.Application.Interfaces;
 
-/// <summary>Pure query/tracking - no SaveChanges (see <see cref="IUnitOfWork"/>).</summary>
+/// <summary>Pure query/tracking - no SaveChanges (see <see cref="Shared.Infrastructure.IUnitOfWork"/>).</summary>
 public interface ITokenUsageRepository
 {
     void Add(TokenUsageRecord record);

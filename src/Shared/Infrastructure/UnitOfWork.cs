@@ -1,9 +1,15 @@
-using Auth.Application.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Auth.Infrastructure.Persistence;
+namespace Shared.Infrastructure;
 
-public sealed class UnitOfWork(AuthDbContext db) : IUnitOfWork
+/// <summary>
+/// Generic EF Core <see cref="IUnitOfWork"/> closed over one feature's DbContext. Register a keyed
+/// instance per feature (<c>services.AddKeyedScoped&lt;IUnitOfWork, UnitOfWork&lt;TContext&gt;&gt;(key)</c>)
+/// so multiple features can share this implementation without colliding on the unkeyed registration.
+/// </summary>
+public sealed class UnitOfWork<TContext>(TContext db) : IUnitOfWork
+    where TContext : DbContext
 {
     public Task SaveChangesAsync(CancellationToken cancellationToken) => db.SaveChangesAsync(cancellationToken);
 

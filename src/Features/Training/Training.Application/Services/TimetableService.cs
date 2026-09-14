@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Shared.Infrastructure;
 using Training.Application.Interfaces;
 using Training.Domain.Models;
 
@@ -11,7 +13,7 @@ namespace Training.Application.Services;
 public sealed class TimetableService(
     ITimetableRepository timetable,
     ITrainingUserProvisioningService userProvisioning,
-    IUnitOfWork unitOfWork)
+    [FromKeyedServices(TrainingKeys.UnitOfWork)] IUnitOfWork unitOfWork)
 {
     /// <summary>
     /// Creates a new slot (<paramref name="slotId"/> null) or a new version of an existing one,

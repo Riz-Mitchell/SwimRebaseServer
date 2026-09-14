@@ -1,12 +1,13 @@
+using Auth.Application;
 using Auth.Application.Interfaces;
 using Auth.Application.Services;
-using Auth.Infrastructure.Persistence;
 using Auth.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Shared.Infrastructure;
 
 namespace Auth.Infrastructure;
 
@@ -70,7 +71,7 @@ public static class ServiceCollectionExtensions
         services.AddAuthorization();
 
         services.AddScoped<ICurrentUserAccessor, CurrentUserAccessor>();
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddKeyedScoped<IUnitOfWork, UnitOfWork<AuthDbContext>>(AuthKeys.UnitOfWork);
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUserProvisioningService, UserProvisioningService>();
 

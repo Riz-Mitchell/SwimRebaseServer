@@ -1,9 +1,13 @@
+using Microsoft.Extensions.DependencyInjection;
+using Shared.Infrastructure;
 using Training.Application.Interfaces;
 using Training.Domain.Models;
 
 namespace Training.Application.Services;
 
-public sealed class TrainingUserProvisioningService(ITrainingUserRepository trainingUsers, IUnitOfWork unitOfWork) : ITrainingUserProvisioningService
+public sealed class TrainingUserProvisioningService(
+    ITrainingUserRepository trainingUsers,
+    [FromKeyedServices(TrainingKeys.UnitOfWork)] IUnitOfWork unitOfWork) : ITrainingUserProvisioningService
 {
     public async Task EnsureExistsAsync(Guid userId, CancellationToken cancellationToken)
     {

@@ -3,6 +3,8 @@ using System.Text;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Shared.Infrastructure;
 
 namespace Ai.Application.Services;
 
@@ -15,7 +17,7 @@ public sealed class ChatTurnLoop(
     IConversationRepository conversations,
     IToolExecutionRepository toolExecutions,
     ITokenUsageRepository tokenUsage,
-    IUnitOfWork unitOfWork,
+    [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     IAiChatClient chatClient,
     IAiToolRegistry toolRegistry,
     IChatCompactionService compaction,

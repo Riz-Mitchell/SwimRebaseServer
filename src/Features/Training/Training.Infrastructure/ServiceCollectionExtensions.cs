@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Shared.Infrastructure;
+using Training.Application;
 using Training.Application.Interfaces;
 using Training.Application.Services;
-using Training.Infrastructure.Persistence;
 using Training.Infrastructure.Repositories;
 
 namespace Training.Infrastructure;
@@ -17,7 +18,7 @@ public static class ServiceCollectionExtensions
             .UseNpgsql(configuration.GetConnectionString("TrainingDatabase"))
             .UseSnakeCaseNamingConvention());
 
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddKeyedScoped<IUnitOfWork, UnitOfWork<TrainingDbContext>>(TrainingKeys.UnitOfWork);
         services.AddScoped<ITrainingUserRepository, TrainingUserRepository>();
         services.AddScoped<ITrainingUserProvisioningService, TrainingUserProvisioningService>();
         services.AddScoped<ITimetableRepository, TimetableRepository>();

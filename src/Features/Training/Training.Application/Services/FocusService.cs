@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Shared.Infrastructure;
 using Training.Application.Interfaces;
 using Training.Domain.Models;
 
@@ -11,7 +13,7 @@ namespace Training.Application.Services;
 public sealed class FocusService(
     IFocusRepository focuses,
     ITrainingUserProvisioningService userProvisioning,
-    IUnitOfWork unitOfWork)
+    [FromKeyedServices(TrainingKeys.UnitOfWork)] IUnitOfWork unitOfWork)
 {
     public async Task<Focus> CreateAsync(
         Guid userId, FocusInput input, FocusOrigin origin, string? originalUserRequest, CancellationToken cancellationToken)

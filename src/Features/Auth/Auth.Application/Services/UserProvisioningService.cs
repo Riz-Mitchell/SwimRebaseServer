@@ -1,9 +1,13 @@
 using Auth.Application.Interfaces;
 using Auth.Domain.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Shared.Infrastructure;
 
 namespace Auth.Application.Services;
 
-public sealed class UserProvisioningService(IUserRepository users, IUnitOfWork unitOfWork) : IUserProvisioningService
+public sealed class UserProvisioningService(
+    IUserRepository users,
+    [FromKeyedServices(AuthKeys.UnitOfWork)] IUnitOfWork unitOfWork) : IUserProvisioningService
 {
     public async Task EnsureUserExistsAsync(Guid userId, string? email, CancellationToken cancellationToken)
     {

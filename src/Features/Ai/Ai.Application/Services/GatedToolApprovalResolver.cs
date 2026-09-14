@@ -1,6 +1,8 @@
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Shared.Infrastructure;
 
 namespace Ai.Application.Services;
 
@@ -12,7 +14,7 @@ namespace Ai.Application.Services;
 public sealed class GatedToolApprovalResolver(
     IToolExecutionRepository toolExecutions,
     IConversationRepository conversations,
-    IUnitOfWork unitOfWork,
+    [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     IChatCompactionService compaction,
     ToolExecutor toolExecutor)
 {

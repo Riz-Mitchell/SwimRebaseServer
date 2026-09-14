@@ -2,7 +2,7 @@ using Auth.Domain.Models;
 
 namespace Auth.Application.Interfaces;
 
-/// <summary>Pure query/tracking against the auth store - no SaveChanges. See <see cref="IUnitOfWork"/>.</summary>
+/// <summary>Pure query/tracking against the auth store - no SaveChanges. See <see cref="Shared.Infrastructure.IUnitOfWork"/>.</summary>
 public interface IUserRepository
 {
     Task<AppUser?> FindAsync(Guid userId, CancellationToken cancellationToken);

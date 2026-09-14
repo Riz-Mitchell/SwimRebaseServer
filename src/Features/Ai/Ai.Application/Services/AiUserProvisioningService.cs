@@ -1,9 +1,13 @@
 using Ai.Application.Interfaces;
 using Ai.Domain.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Shared.Infrastructure;
 
 namespace Ai.Application.Services;
 
-public sealed class AiUserProvisioningService(IAiUserRepository aiUsers, IUnitOfWork unitOfWork) : IAiUserProvisioningService
+public sealed class AiUserProvisioningService(
+    IAiUserRepository aiUsers,
+    [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork) : IAiUserProvisioningService
 {
     public async Task EnsureExistsAsync(Guid userId, CancellationToken cancellationToken)
     {

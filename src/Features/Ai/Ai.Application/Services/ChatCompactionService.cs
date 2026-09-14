@@ -3,7 +3,9 @@ using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Application.Options;
 using Ai.Domain.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Shared.Infrastructure;
 
 namespace Ai.Application.Services;
 
@@ -17,7 +19,7 @@ namespace Ai.Application.Services;
 public sealed class ChatCompactionService(
     IConversationRepository conversations,
     ITokenUsageRepository tokenUsage,
-    IUnitOfWork unitOfWork,
+    [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     IAiChatClient chatClient,
     IOptions<ChatCompactionOptions> options) : IChatCompactionService
 {
