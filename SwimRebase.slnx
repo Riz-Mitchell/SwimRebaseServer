@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/Devops/">
+    <File Path="infra/dev.bicepparam" />
+    <File Path="infra/main.bicep" />
+    <File Path="infra/prod.bicepparam" />
+  </Folder>
   <Folder Name="/Features/" />
   <Folder Name="/Features/Ai/">
     <Project Path="src/Features/Ai/Ai.Application/Ai.Application.csproj" Id="5682a429-e52b-43a2-94c0-fad755079e95" />
