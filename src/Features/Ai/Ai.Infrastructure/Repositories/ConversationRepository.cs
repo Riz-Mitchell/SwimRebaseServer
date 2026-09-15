@@ -40,6 +40,16 @@ public sealed class ConversationRepository(AiDbContext db) : IConversationReposi
             .OrderBy(m => m.SequenceNumber)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<ConversationMessage>> GetMessagesPageAsync(
+        Guid conversationId, int? beforeSequenceNumber, int limit, CancellationToken cancellationToken) =>
+        await db.ConversationMessages
+            .AsNoTracking()
+            .Where(m => m.ConversationId == conversationId)
+            .Where(m => beforeSequenceNumber == null || m.SequenceNumber < beforeSequenceNumber)
+            .OrderByDescending(m => m.SequenceNumber)
+            .Take(limit + 1)
+            .ToListAsync(cancellationToken);
+
     public async Task<ConversationSummary?> GetLatestSummaryAsync(Guid conversationId, CancellationToken cancellationToken) =>
         await db.ConversationSummaries
             .Where(s => s.ConversationId == conversationId)

@@ -65,6 +65,25 @@ List the current user's conversations. Both query params optional - default is `
 
 ---
 
+### `GET /api/ai/conversations/{conversationId}/messages?before={int}&limit={int}`
+Keyset-paginated message history for a conversation, newest-first. `before` (optional) is the `sequenceNumber` of the oldest message already loaded - omit for the first page, then pass `nextBefore` from the previous response to fetch older messages. `limit` optional, default 50, clamped to 1-100.
+
+**Path params:** `conversationId` (guid)
+
+**Response:**
+```json
+{
+  "items": [
+    { "id": "guid", "sequenceNumber": 12, "role": "User|Assistant|Tool", "content": "string", "createdAt": "datetime" }
+  ],
+  "hasMore": true,
+  "nextBefore": 8
+}
+```
+`nextBefore` is `null` when `hasMore` is `false`.
+
+---
+
 ### `GET /api/ai/usage?from={datetime}&to={datetime}`
 Token usage summary for the current user. Both query params optional.
 

@@ -49,6 +49,30 @@ public sealed class AiChatController(
         return Ok(result.Select(c => new { c.Id, c.Title, c.CreatedAt, c.LastMessageAt }));
     }
 
+    [HttpGet("conversations/{conversationId:guid}/messages")]
+    public async Task<IActionResult> GetMessages(
+        Guid conversationId,
+        [FromQuery] int? before,
+        [FromQuery] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var conversation = await conversations.FindAsync(currentUser.UserId, conversationId, cancellationToken);
+        if (conversation is null) return NotFound();
+
+        limit = Math.Clamp(limit, 1, 100);
+
+        var page = await conversations.GetMessagesPageAsync(conversationId, before, limit, cancellationToken);
+        var hasMore = page.Count > limit;
+        var items = hasMore ? page.Take(limit).ToList() : page;
+
+        return Ok(new
+        {
+            items = items.Select(m => new { m.Id, m.SequenceNumber, m.Role, m.Content, m.CreatedAt }),
+            hasMore,
+            nextBefore = hasMore ? items[^1].SequenceNumber : (int?)null,
+        });
+    }
+
     [HttpGet("usage")]
     public async Task<IActionResult> GetUsage(
         [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken cancellationToken)

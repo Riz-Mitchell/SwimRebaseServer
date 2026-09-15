@@ -19,6 +19,14 @@ public interface IConversationRepository
     /// <summary>Messages not yet folded into a summary, in order - what actually gets sent to the model.</summary>
     Task<IReadOnlyList<ConversationMessage>> GetLiveContextMessagesAsync(Guid conversationId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Newest-first keyset page of a conversation's messages. Pass the smallest <see cref="ConversationMessage.SequenceNumber"/>
+    /// already seen as <paramref name="beforeSequenceNumber"/> to fetch the next (older) page; omit it for the first page.
+    /// Requests <paramref name="limit"/> + 1 rows internally so the caller can tell whether more pages remain.
+    /// </summary>
+    Task<IReadOnlyList<ConversationMessage>> GetMessagesPageAsync(
+        Guid conversationId, int? beforeSequenceNumber, int limit, CancellationToken cancellationToken);
+
     Task<ConversationSummary?> GetLatestSummaryAsync(Guid conversationId, CancellationToken cancellationToken);
 
     Task<int> GetNextSequenceNumberAsync(Guid conversationId, CancellationToken cancellationToken);
