@@ -17,4 +17,14 @@ public sealed class ToolExecutionRepository(AiDbContext db) : IToolExecutionRepo
         await db.ToolExecutionRequests
             .Where(t => t.AssistantMessageId == assistantMessageId)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<ToolExecutionRequest>> GetPendingForConversationAsync(
+        Guid userId, Guid conversationId, CancellationToken cancellationToken) =>
+        await db.ToolExecutionRequests
+            .AsNoTracking()
+            .Where(t => t.UserId == userId
+                && t.ConversationId == conversationId
+                && t.Status == ToolExecutionStatus.PendingApproval)
+            .OrderBy(t => t.CreatedAt)
+            .ToListAsync(cancellationToken);
 }

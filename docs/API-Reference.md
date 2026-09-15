@@ -84,6 +84,21 @@ Keyset-paginated message history for a conversation, newest-first. `before` (opt
 
 ---
 
+### `GET /api/ai/conversations/{conversationId}/tool-requests/pending`
+List still-unresolved (`PendingApproval`) gated tool requests for a conversation, oldest first. Use this to recover a conversation's state after reconnecting (e.g. after a dropped SSE connection or a server crash mid-turn) instead of relying solely on the `permission_required` SSE event, which is only ever emitted once and is lost if the client wasn't connected to receive it.
+
+**Path params:** `conversationId` (guid)
+
+**Response:**
+```json
+[
+  { "id": "guid", "assistantMessageId": "guid", "toolName": "string", "inputJson": "string", "createdAt": "datetime" }
+]
+```
+Resolve each one via `POST /api/ai/tool-requests/{toolExecutionRequestId}/resolve` above. An empty array means the conversation has nothing outstanding - if the frontend appears "stuck" waiting for approval, calling this endpoint is the way to tell whether there's really a request to resolve or whether the client's local state is just out of sync.
+
+---
+
 ### `GET /api/ai/usage?from={datetime}&to={datetime}`
 Token usage summary for the current user. Both query params optional.
 

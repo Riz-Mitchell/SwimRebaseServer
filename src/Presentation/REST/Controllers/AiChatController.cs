@@ -20,6 +20,7 @@ public sealed class AiChatController(
     ChatOrchestrator orchestrator,
     ICurrentUserAccessor currentUser,
     IConversationRepository conversations,
+    IToolExecutionRepository toolExecutions,
     ITokenUsageRepository tokenUsage) : ControllerBase
 {
     // Two templates because an optional route parameter that isn't the final segment (this one is
@@ -71,6 +72,23 @@ public sealed class AiChatController(
             hasMore,
             nextBefore = hasMore ? items[^1].SequenceNumber : (int?)null,
         });
+    }
+
+    [HttpGet("conversations/{conversationId:guid}/tool-requests/pending")]
+    public async Task<IActionResult> GetPendingToolRequests(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var conversation = await conversations.FindAsync(currentUser.UserId, conversationId, cancellationToken);
+        if (conversation is null) return NotFound();
+
+        var pending = await toolExecutions.GetPendingForConversationAsync(currentUser.UserId, conversationId, cancellationToken);
+        return Ok(pending.Select(t => new
+        {
+            t.Id,
+            t.AssistantMessageId,
+            t.ToolName,
+            t.InputJson,
+            t.CreatedAt,
+        }));
     }
 
     [HttpGet("usage")]
