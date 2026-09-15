@@ -26,6 +26,15 @@ public sealed class GatedToolApprovalResolver(
     public async Task<Guid?> ResolveAsync(
         Guid userId, ToolExecutionRequest request, bool approve, string? denialReason, CancellationToken cancellationToken)
     {
+        // Everything from here through the tool_result message insert is one transaction. Without
+        // it, a crash between the two original SaveChanges calls left the request durably
+        // Approved/Denied with no corresponding tool_result ever written - a permanently dangling
+        // tool_use block that bricks every future send to the conversation (Anthropic rejects any
+        // request whose history has a tool_use with no following tool_result). Wrapping it means a
+        // crash mid-resolve rolls the status change back too, leaving the request PendingApproval
+        // and safely re-resolvable instead of stuck half-done.
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
         request.Status = approve ? ToolExecutionStatus.Approved : ToolExecutionStatus.Denied;
         request.DenialReason = denialReason;
         request.ResolvedAt = DateTimeOffset.UtcNow;
@@ -34,6 +43,7 @@ public sealed class GatedToolApprovalResolver(
         var siblings = await toolExecutions.GetByAssistantMessageIdAsync(request.AssistantMessageId, cancellationToken);
         if (siblings.Any(s => s.Status == ToolExecutionStatus.PendingApproval))
         {
+            await transaction.CommitAsync(cancellationToken);
             return null;
         }
 
@@ -46,6 +56,7 @@ public sealed class GatedToolApprovalResolver(
         var sequenceNumber = await conversations.GetNextSequenceNumberAsync(request.ConversationId, cancellationToken);
         conversations.AddMessage(ConversationMessageFactory.CreateToolResultMessage(request.ConversationId, sequenceNumber, resultBlocks));
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         await compaction.CompactIfNeededAsync(request.ConversationId, userId, cancellationToken);
         return request.ConversationId;
