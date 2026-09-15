@@ -3,6 +3,7 @@ using Auth.Infrastructure;
 using Auth.Infrastructure.Middleware;
 using Azure.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 using Training.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,7 +33,8 @@ if (!string.IsNullOrWhiteSpace(keyVaultUri))
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
