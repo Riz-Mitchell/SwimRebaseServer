@@ -9,6 +9,7 @@ using Anthropic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Shared.Application;
 using Shared.Infrastructure;
 
 namespace Ai.Infrastructure;
@@ -43,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IToolExecutionRepository, ToolExecutionRepository>();
         services.AddScoped<ITokenUsageRepository, TokenUsageRepository>();
+        services.AddScoped<IUploadedImageRepository, UploadedImageRepository>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
         services.AddScoped<IAiTool, GetTimetableTool>();
         services.AddScoped<IAiTool, UpsertTimetableSlotTool>();
@@ -51,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAiChatClient, AnthropicChatClient>();
         services.AddScoped<IChatCompactionService, ChatCompactionService>();
         services.AddScoped<IAiUserProvisioningService, AiUserProvisioningService>();
+        services.AddScoped<ImageUploadService>();
         services.AddScoped<ToolExecutor>();
         services.AddScoped<GatedToolApprovalResolver>();
         services.AddScoped<ChatTurnLoop>();

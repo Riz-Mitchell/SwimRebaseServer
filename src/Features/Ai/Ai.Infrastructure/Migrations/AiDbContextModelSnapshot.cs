@@ -286,6 +286,60 @@ namespace Ai.Infrastructure.Migrations
                     b.ToTable("tool_execution_requests", (string)null);
                 });
 
+            modelBuilder.Entity("Ai.Domain.Models.UploadedImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("object_key");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_uploaded_images");
+
+                    b.HasIndex("ObjectKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_uploaded_images_object_key");
+
+                    b.HasIndex("UserId", "Id")
+                        .HasDatabaseName("ix_uploaded_images_user_id_id");
+
+                    b.ToTable("uploaded_images", (string)null);
+                });
+
             modelBuilder.Entity("Ai.Domain.Models.Conversation", b =>
                 {
                     b.HasOne("Ai.Domain.Models.AiUser", "AiUser")
@@ -355,6 +409,18 @@ namespace Ai.Infrastructure.Migrations
                     b.Navigation("Conversation");
                 });
 
+            modelBuilder.Entity("Ai.Domain.Models.UploadedImage", b =>
+                {
+                    b.HasOne("Ai.Domain.Models.AiUser", "AiUser")
+                        .WithMany("UploadedImages")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_uploaded_images_ai_users_user_id");
+
+                    b.Navigation("AiUser");
+                });
+
             modelBuilder.Entity("Ai.Domain.Models.AiUser", b =>
                 {
                     b.Navigation("Conversations");
@@ -362,6 +428,8 @@ namespace Ai.Infrastructure.Migrations
                     b.Navigation("TokenUsageRecords");
 
                     b.Navigation("ToolExecutionRequests");
+
+                    b.Navigation("UploadedImages");
                 });
 
             modelBuilder.Entity("Ai.Domain.Models.Conversation", b =>

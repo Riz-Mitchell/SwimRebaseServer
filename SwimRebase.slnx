@@ -26,5 +26,9 @@
   <Folder Name="/Presentation/">
     <Project Path="src/Presentation/REST/REST.csproj" Id="b52430eb-1e4a-414c-8498-f9fd66b85327" />
   </Folder>
-  <Project Path="src/Shared/Shared.csproj" Id="f891bb64-8c8c-44a2-9ef7-cfe2e60b9e78" />
+  <Folder Name="/Shared/">
+    <Project Path="src/Shared/Shared.Domain/Shared.Domain.csproj" />
+    <Project Path="src/Shared/Shared.Application/Shared.Application.csproj" />
+    <Project Path="src/Shared/Shared.Infrastructure/Shared.Infrastructure.csproj" />
+  </Folder>
 </Solution>

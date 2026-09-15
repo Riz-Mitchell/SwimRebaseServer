@@ -1,7 +1,7 @@
 using Ai.Application.Interfaces;
 using Ai.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
-using Shared.Infrastructure;
+using Shared.Application;
 
 namespace Ai.Application.Services;
 

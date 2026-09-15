@@ -4,6 +4,7 @@ using Ai.Application.Options;
 using Anthropic;
 using Anthropic.Models.Messages;
 using Microsoft.Extensions.Options;
+using Shared.Application.Storage;
 
 namespace Ai.Infrastructure.Chat;
 
@@ -12,7 +13,8 @@ namespace Ai.Infrastructure.Chat;
 /// <see cref="AnthropicStreamProcessor"/> for translation into <see cref="ChatStreamEvent"/>s.
 /// Never loops across tool calls itself - see <c>ChatTurnLoop</c> for that.
 /// </summary>
-public sealed class AnthropicChatClient(AnthropicClient client, IOptions<AiModelOptions> modelOptions) : IAiChatClient
+public sealed class AnthropicChatClient(
+    AnthropicClient client, IOptions<AiModelOptions> modelOptions, IBlobStorageService blobStorage) : IAiChatClient
 {
     public IAsyncEnumerable<ChatStreamEvent> StreamTurnAsync(ChatTurnRequest request, CancellationToken cancellationToken)
     {
@@ -23,7 +25,7 @@ public sealed class AnthropicChatClient(AnthropicClient client, IOptions<AiModel
         {
             Model = modelName,
             MaxTokens = request.MaxTokens ?? options.MaxTokens,
-            Messages = request.Messages.Select(AnthropicMessageMapper.ToMessageParam).ToList(),
+            Messages = request.Messages.Select(m => AnthropicMessageMapper.ToMessageParam(m, blobStorage)).ToList(),
             System = string.IsNullOrWhiteSpace(request.SystemPrompt) ? null : request.SystemPrompt!,
             Tools = request.Tools.Count == 0
                 ? null

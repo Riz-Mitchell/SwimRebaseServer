@@ -9,16 +9,26 @@ namespace Ai.Application.Services;
 /// </summary>
 public static class ConversationMessageFactory
 {
-    public static ConversationMessage CreateUserMessage(Guid conversationId, int sequenceNumber, string text) => new()
+    public static ConversationMessage CreateUserMessage(
+        Guid conversationId, int sequenceNumber, string text, IReadOnlyList<ImageContentBlock>? images = null)
     {
-        Id = Guid.NewGuid(),
-        ConversationId = conversationId,
-        SequenceNumber = sequenceNumber,
-        Role = MessageRole.User,
-        Content = text,
-        RawContentJson = ChatContentJson.Serialize([new TextContentBlock(text)]),
-        CreatedAt = DateTimeOffset.UtcNow,
-    };
+        var blocks = new List<ChatContentBlock> { new TextContentBlock(text) };
+        if (images is { Count: > 0 })
+        {
+            blocks.AddRange(images);
+        }
+
+        return new ConversationMessage
+        {
+            Id = Guid.NewGuid(),
+            ConversationId = conversationId,
+            SequenceNumber = sequenceNumber,
+            Role = MessageRole.User,
+            Content = text,
+            RawContentJson = ChatContentJson.Serialize(blocks),
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+    }
 
     public static ConversationMessage CreateAssistantMessage(
         Guid conversationId, int sequenceNumber, string text, string rawContentJson) => new()

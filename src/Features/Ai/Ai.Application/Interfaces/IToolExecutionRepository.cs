@@ -2,7 +2,7 @@ using Ai.Domain.Models;
 
 namespace Ai.Application.Interfaces;
 
-/// <summary>Pure query/tracking - no SaveChanges (see <see cref="Shared.Infrastructure.IUnitOfWork"/>).</summary>
+/// <summary>Pure query/tracking - no SaveChanges (see <see cref="Shared.Application.IUnitOfWork"/>).</summary>
 public interface IToolExecutionRepository
 {
     void Add(ToolExecutionRequest request);

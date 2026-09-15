@@ -2,7 +2,7 @@ using Training.Domain.Models;
 
 namespace Training.Application.Interfaces;
 
-/// <summary>Pure query/tracking against a user's focuses - no SaveChanges (see <see cref="Shared.Infrastructure.IUnitOfWork"/>).</summary>
+/// <summary>Pure query/tracking against a user's focuses - no SaveChanges (see <see cref="Shared.Application.IUnitOfWork"/>).</summary>
 public interface IFocusRepository
 {
     void Add(Focus focus);
@@ -20,7 +20,7 @@ public interface IFocusRepository
     /// <summary>
     /// Shifts the priority of every other <see cref="FocusStatus.Active"/> focus for this user whose
     /// priority falls in [<paramref name="fromPriorityInclusive"/>, <paramref name="toPriorityInclusive"/>]
-    /// by <paramref name="delta"/> - executes immediately, independent of <see cref="Shared.Infrastructure.IUnitOfWork"/>.
+    /// by <paramref name="delta"/> - executes immediately, independent of <see cref="Shared.Application.IUnitOfWork"/>.
     /// A null <paramref name="toPriorityInclusive"/> means no upper bound.
     /// </summary>
     Task ShiftPrioritiesAsync(

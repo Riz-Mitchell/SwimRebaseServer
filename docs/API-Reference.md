@@ -15,8 +15,9 @@ Start a new conversation with a message.
 
 **Body:**
 ```json
-{ "message": "string" }
+{ "message": "string", "imageIds": ["guid"] }
 ```
+`imageIds` is optional - see [Image uploads](#image-uploads) below. Each id must be an image you've already uploaded and confirmed for your own account, or the send is rejected.
 
 **Response:** `text/event-stream` (SSE) — see [Streaming response shape](#streaming-response-shape) below.
 
@@ -29,10 +30,45 @@ Continue an existing conversation.
 
 **Body:**
 ```json
-{ "message": "string" }
+{ "message": "string", "imageIds": ["guid"] }
 ```
+`imageIds` optional, same as above.
 
 **Response:** `text/event-stream` (SSE).
+
+---
+
+### Image uploads
+
+Images are uploaded directly to blob storage, not through this API - the flow is upload URL → PUT bytes → confirm → reference by id in a message.
+
+#### `POST /api/ai/images/upload-url`
+Request a presigned URL to upload one image directly to storage.
+
+**Body:**
+```json
+{ "fileName": "string", "contentType": "image/jpeg" }
+```
+`contentType` must be one of `image/jpeg`, `image/png`, `image/gif`, `image/webp`.
+
+**Response:**
+```json
+{ "imageId": "guid", "uploadUrl": "string", "expiresAt": "datetime" }
+```
+`uploadUrl` is a presigned PUT URL, valid for 15 minutes. `PUT` the raw image bytes to it directly (not through this API), with a `Content-Type` header that exactly matches the `contentType` you requested - the URL's signature is bound to that content type and the upload fails if it doesn't match.
+
+#### `POST /api/ai/images/{imageId}/confirm`
+Call this after the direct upload finishes, before referencing the image in a chat message. This is what actually verifies the bytes landed in storage - a presigned upload URL alone gives no such signal.
+
+**Path params:** `imageId` (guid)
+
+**Response:**
+- `200 OK` `{ "imageId": "guid", "status": "Confirmed", "sizeBytes": 123 }`
+- `404 Not Found` - no such image (or it isn't yours)
+- `409 Conflict` - nothing has actually been uploaded to this image's URL yet
+- `400 Bad Request` - the uploaded file exceeds the 5 MB limit (the object is deleted from storage automatically in this case)
+
+Once confirmed, pass `imageId` in `imageIds` on a `POST .../messages` call to attach it to that message. Only the permanent image id is ever sent in a chat payload - never a raw storage key or a presigned URL, both of which the server resolves internally (a fresh, short-lived presigned URL is generated from the stored key every time the image is actually sent to the model, so it never depends on a URL staying valid for the life of the conversation).
 
 ---
 

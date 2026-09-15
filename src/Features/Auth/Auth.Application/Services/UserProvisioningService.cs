@@ -1,7 +1,7 @@
 using Auth.Application.Interfaces;
 using Auth.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
-using Shared.Infrastructure;
+using Shared.Application;
 
 namespace Auth.Application.Services;
 

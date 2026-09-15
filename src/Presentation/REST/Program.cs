@@ -3,6 +3,7 @@ using Auth.Infrastructure;
 using Auth.Infrastructure.Middleware;
 using Azure.Identity;
 using Microsoft.EntityFrameworkCore;
+using Shared.Infrastructure;
 using System.Text.Json.Serialization;
 using Training.Infrastructure;
 
@@ -38,6 +39,7 @@ builder.Services.AddControllers()
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+builder.Services.AddSharedInfrastructure(builder.Configuration);
 builder.Services.AddAuthInfrastructure(builder.Configuration);
 builder.Services.AddAiInfrastructure(builder.Configuration);
 builder.Services.AddTrainingInfrastructure(builder.Configuration);

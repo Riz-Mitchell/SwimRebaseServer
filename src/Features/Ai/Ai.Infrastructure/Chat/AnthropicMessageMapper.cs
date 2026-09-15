@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
+using Ai.Application.Options;
 using Anthropic.Models.Messages;
+using Shared.Application.Storage;
 using ChatMessage = Ai.Application.Models.ChatMessage;
 
 namespace Ai.Infrastructure.Chat;
@@ -9,13 +11,13 @@ namespace Ai.Infrastructure.Chat;
 /// <summary>Converts between our provider-agnostic <see cref="ChatContentBlock"/> shape and the Anthropic SDK's request types.</summary>
 internal static class AnthropicMessageMapper
 {
-    public static MessageParam ToMessageParam(ChatMessage message) => new()
+    public static MessageParam ToMessageParam(ChatMessage message, IBlobStorageService blobStorage) => new()
     {
         Role = message.Role == ChatRole.User ? Role.User : Role.Assistant,
-        Content = message.Content.Select(ToContentBlockParam).ToList(),
+        Content = message.Content.Select(block => ToContentBlockParam(block, blobStorage)).ToList(),
     };
 
-    public static ContentBlockParam ToContentBlockParam(ChatContentBlock block) => block switch
+    public static ContentBlockParam ToContentBlockParam(ChatContentBlock block, IBlobStorageService blobStorage) => block switch
     {
         TextContentBlock text => new TextBlockParam { Text = text.Text },
         ToolUseContentBlock toolUse => new ToolUseBlockParam
@@ -29,6 +31,14 @@ internal static class AnthropicMessageMapper
             ToolUseID = toolResult.ToolUseId,
             Content = toolResult.ResultJson,
             IsError = toolResult.IsError,
+        },
+        // Resolved to a fresh presigned URL right here, at the moment of the actual API call - never
+        // stored. The permanent ObjectKey is all that's kept in conversation history (see
+        // ImageContentBlock), so this works identically whether the image was uploaded a minute ago
+        // or is being replayed as history months into a long-running conversation.
+        ImageContentBlock image => new ImageBlockParam
+        {
+            Source = new UrlImageSource { Url = blobStorage.CreatePresignedDownloadUrl(image.ObjectKey, ImageUploadOptions.DownloadUrlExpiry) },
         },
         _ => throw new NotSupportedException($"Unsupported content block '{block.GetType().Name}'."),
     };

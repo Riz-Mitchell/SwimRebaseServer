@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
+using Ai.Application.Options;
 using Ai.Application.Services;
 using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -21,7 +22,8 @@ public sealed class AiChatController(
     ICurrentUserAccessor currentUser,
     IConversationRepository conversations,
     IToolExecutionRepository toolExecutions,
-    ITokenUsageRepository tokenUsage) : ControllerBase
+    ITokenUsageRepository tokenUsage,
+    ImageUploadService imageUpload) : ControllerBase
 {
     // Two templates because an optional route parameter that isn't the final segment (this one is
     // followed by "/messages") doesn't collapse correctly when omitted - ASP.NET Core won't match
@@ -30,7 +32,7 @@ public sealed class AiChatController(
     [HttpPost("conversations/{conversationId:guid}/messages")]
     public Task SendMessage(Guid? conversationId, [FromBody] SendMessageRequest request, CancellationToken cancellationToken) =>
         StreamEventsAsync(
-            orchestrator.SendUserMessageAsync(currentUser.UserId, conversationId, request.Message, cancellationToken),
+            orchestrator.SendUserMessageAsync(currentUser.UserId, conversationId, request.Message, request.ImageIds, cancellationToken),
             cancellationToken);
 
     [HttpPost("tool-requests/{toolExecutionRequestId:guid}/resolve")]
@@ -91,6 +93,33 @@ public sealed class AiChatController(
         }));
     }
 
+    [HttpPost("images/upload-url")]
+    public async Task<IActionResult> CreateImageUploadUrl([FromBody] CreateImageUploadUrlRequest request, CancellationToken cancellationToken)
+    {
+        if (!ImageUploadOptions.AllowedContentTypes.Contains(request.ContentType))
+        {
+            return BadRequest($"Unsupported content type '{request.ContentType}'. Allowed: {string.Join(", ", ImageUploadOptions.AllowedContentTypes)}.");
+        }
+
+        var result = await imageUpload.CreateUploadUrlAsync(currentUser.UserId, request.FileName, request.ContentType, cancellationToken);
+        return Ok(new { imageId = result.ImageId, uploadUrl = result.UploadUrl, expiresAt = result.ExpiresAt });
+    }
+
+    [HttpPost("images/{imageId:guid}/confirm")]
+    public async Task<IActionResult> ConfirmImageUpload(Guid imageId, CancellationToken cancellationToken)
+    {
+        var result = await imageUpload.ConfirmUploadAsync(currentUser.UserId, imageId, cancellationToken);
+        return result.Outcome switch
+        {
+            ConfirmUploadOutcome.Confirmed => Ok(new { imageId, status = "Confirmed", sizeBytes = result.SizeBytes }),
+            ConfirmUploadOutcome.NotFound => NotFound(),
+            ConfirmUploadOutcome.UploadNotFound => Conflict("Nothing has been uploaded to this image's URL yet."),
+            ConfirmUploadOutcome.TooLarge =>
+                BadRequest($"Image is {result.SizeBytes} bytes, which exceeds the {ImageUploadOptions.MaxSizeBytes}-byte limit."),
+            _ => StatusCode(500),
+        };
+    }
+
     [HttpGet("usage")]
     public async Task<IActionResult> GetUsage(
         [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken cancellationToken)
@@ -113,6 +142,8 @@ public sealed class AiChatController(
     }
 }
 
-public sealed record SendMessageRequest(string Message);
+public sealed record SendMessageRequest(string Message, IReadOnlyList<Guid>? ImageIds = null);
 
 public sealed record ResolveToolRequestBody(bool Approve, string? DenialReason);
+
+public sealed record CreateImageUploadUrlRequest(string FileName, string ContentType);

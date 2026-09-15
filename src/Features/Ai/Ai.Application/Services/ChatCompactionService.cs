@@ -5,7 +5,7 @@ using Ai.Application.Options;
 using Ai.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Shared.Infrastructure;
+using Shared.Application;
 
 namespace Ai.Application.Services;
 

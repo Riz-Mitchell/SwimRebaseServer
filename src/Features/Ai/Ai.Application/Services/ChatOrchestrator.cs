@@ -4,7 +4,7 @@ using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
-using Shared.Infrastructure;
+using Shared.Application;
 
 namespace Ai.Application.Services;
 
@@ -16,6 +16,7 @@ namespace Ai.Application.Services;
 public sealed class ChatOrchestrator(
     IConversationRepository conversations,
     IToolExecutionRepository toolExecutions,
+    IUploadedImageRepository uploadedImages,
     [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     IChatCompactionService compaction,
     IAiUserProvisioningService aiUserProvisioning,
@@ -23,7 +24,11 @@ public sealed class ChatOrchestrator(
     ChatTurnLoop turnLoop)
 {
     public async IAsyncEnumerable<AiChatEvent> SendUserMessageAsync(
-        Guid userId, Guid? conversationId, string userMessage, [EnumeratorCancellation] CancellationToken cancellationToken)
+        Guid userId,
+        Guid? conversationId,
+        string userMessage,
+        IReadOnlyList<Guid>? imageIds,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         // The one point of contact: every other Ai entity FKs to AiUser, so it must exist before
         // GetOrCreateConversationAsync (or anything downstream) can insert a row that references it.
@@ -44,8 +49,25 @@ public sealed class ChatOrchestrator(
             yield break;
         }
 
+        List<ImageContentBlock>? imageBlocks = null;
+        if (imageIds is { Count: > 0 })
+        {
+            imageBlocks = new List<ImageContentBlock>(imageIds.Count);
+            foreach (var imageId in imageIds)
+            {
+                var image = await uploadedImages.FindAsync(userId, imageId, cancellationToken);
+                if (image is null || image.Status != UploadedImageStatus.Confirmed)
+                {
+                    yield return new AiChatError($"Image '{imageId}' is not a confirmed upload for this account.");
+                    yield break;
+                }
+
+                imageBlocks.Add(new ImageContentBlock(image.ObjectKey, image.ContentType));
+            }
+        }
+
         var sequenceNumber = await conversations.GetNextSequenceNumberAsync(conversation.Id, cancellationToken);
-        conversations.AddMessage(ConversationMessageFactory.CreateUserMessage(conversation.Id, sequenceNumber, userMessage));
+        conversations.AddMessage(ConversationMessageFactory.CreateUserMessage(conversation.Id, sequenceNumber, userMessage, imageBlocks));
         conversation.LastMessageAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

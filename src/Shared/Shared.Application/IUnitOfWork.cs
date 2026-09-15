@@ -1,11 +1,12 @@
-namespace Shared.Infrastructure;
+namespace Shared.Application;
 
 /// <summary>
 /// Owns SaveChanges and transaction boundaries. Repositories only track/query - they never call
 /// SaveChanges or open a transaction themselves; callers in an Application layer decide when a unit
-/// of work commits. Each feature registers its own keyed <see cref="UnitOfWork{TContext}"/> closure
-/// over its own DbContext (see each feature's ServiceCollectionExtensions) - consumers inject this
-/// interface with a <c>[FromKeyedServices]</c> attribute using that feature's key.
+/// of work commits. Each feature registers its own keyed <c>UnitOfWork{TContext}</c> (see
+/// Shared.Infrastructure) closure over its own DbContext (see each feature's
+/// ServiceCollectionExtensions) - consumers inject this interface with a <c>[FromKeyedServices]</c>
+/// attribute using that feature's key.
 /// </summary>
 public interface IUnitOfWork
 {

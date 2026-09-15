@@ -35,5 +35,10 @@ public sealed class AiUserConfiguration : IEntityTypeConfiguration<AiUser>
             .WithOne(t => t.AiUser)
             .HasForeignKey(t => t.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(u => u.UploadedImages)
+            .WithOne(i => i.AiUser)
+            .HasForeignKey(i => i.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

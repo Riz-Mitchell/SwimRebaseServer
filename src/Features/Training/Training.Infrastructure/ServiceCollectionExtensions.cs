@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Shared.Application;
 using Shared.Infrastructure;
 using Training.Application;
 using Training.Application.Interfaces;

@@ -20,4 +20,6 @@ public class AiUser
     public List<ToolExecutionRequest> ToolExecutionRequests { get; set; } = [];
 
     public List<TokenUsageRecord> TokenUsageRecords { get; set; } = [];
+
+    public List<UploadedImage> UploadedImages { get; set; } = [];
 }

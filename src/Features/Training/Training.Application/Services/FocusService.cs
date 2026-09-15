@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using Shared.Infrastructure;
+using Shared.Application;
 using Training.Application.Interfaces;
 using Training.Domain.Models;
 

@@ -17,6 +17,8 @@ public sealed class AiDbContext(DbContextOptions<AiDbContext> options) : DbConte
 
     public DbSet<TokenUsageRecord> TokenUsageRecords => Set<TokenUsageRecord>();
 
+    public DbSet<UploadedImage> UploadedImages => Set<UploadedImage>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AiDbContext).Assembly);

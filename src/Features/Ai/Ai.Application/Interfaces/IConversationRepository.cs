@@ -4,7 +4,7 @@ using Ai.Domain.Models;
 namespace Ai.Application.Interfaces;
 
 /// <summary>
-/// Pure query/tracking - no SaveChanges, no transactions (see <see cref="Shared.Infrastructure.IUnitOfWork"/>). Every
+/// Pure query/tracking - no SaveChanges, no transactions (see <see cref="Shared.Application.IUnitOfWork"/>). Every
 /// read is scoped to a caller-supplied user id, never re-derived from the entity itself.
 /// </summary>
 public interface IConversationRepository
@@ -35,7 +35,7 @@ public interface IConversationRepository
 
     void AddSummary(ConversationSummary summary);
 
-    /// <summary>Immediate bulk update (bypasses the change tracker) - safe to call inside an open <see cref="Shared.Infrastructure.IUnitOfWorkTransaction"/>.</summary>
+    /// <summary>Immediate bulk update (bypasses the change tracker) - safe to call inside an open <see cref="Shared.Application.IUnitOfWorkTransaction"/>.</summary>
     Task MarkMessagesCompactedAsync(IReadOnlyList<Guid> messageIds, CancellationToken cancellationToken);
 
     /// <summary>Immediate bulk update (bypasses the change tracker).</summary>
