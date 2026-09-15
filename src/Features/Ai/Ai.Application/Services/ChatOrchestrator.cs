@@ -31,6 +31,19 @@ public sealed class ChatOrchestrator(
 
         var conversation = await GetOrCreateConversationAsync(userId, conversationId, userMessage, cancellationToken);
 
+        // A gated tool call from a previous turn leaves a tool_use content block in live history with
+        // no matching tool_result until it's resolved. Sending a new message on top of that would send
+        // Anthropic an invalid message list (400: tool_use without a following tool_result) and, since
+        // the new user message is about to be persisted, permanently brick the conversation - every
+        // later send would hit the exact same dangling tool_use and fail the same way. Reject up front
+        // instead so the client gets an actionable error and nothing bad gets committed.
+        var pending = await toolExecutions.GetPendingForConversationAsync(userId, conversation.Id, cancellationToken);
+        if (pending.Count > 0)
+        {
+            yield return new AiChatError("This conversation has a tool request awaiting approval - resolve it before sending a new message.");
+            yield break;
+        }
+
         var sequenceNumber = await conversations.GetNextSequenceNumberAsync(conversation.Id, cancellationToken);
         conversations.AddMessage(ConversationMessageFactory.CreateUserMessage(conversation.Id, sequenceNumber, userMessage));
         conversation.LastMessageAt = DateTimeOffset.UtcNow;
