@@ -51,8 +51,10 @@ Approve or deny a gated tool call (a write/destructive action the AI wants to pe
 
 ---
 
-### `GET /api/ai/conversations`
-List the current user's conversations.
+### `GET /api/ai/conversations?sortBy={LastMessageAt|CreatedAt}&descending={bool}`
+List the current user's conversations. Both query params optional - default is `sortBy=LastMessageAt&descending=true` (most recently active first, which is also the shape of the existing `(UserId, LastMessageAt)` index).
+
+`title` is auto-generated from the conversation's first message (truncated to ~60 chars at a word boundary) when it's created.
 
 **Response:**
 ```json

@@ -29,10 +29,11 @@ public sealed class ChatOrchestrator(
         // GetOrCreateConversationAsync (or anything downstream) can insert a row that references it.
         await aiUserProvisioning.EnsureExistsAsync(userId, cancellationToken);
 
-        var conversation = await GetOrCreateConversationAsync(userId, conversationId, cancellationToken);
+        var conversation = await GetOrCreateConversationAsync(userId, conversationId, userMessage, cancellationToken);
 
         var sequenceNumber = await conversations.GetNextSequenceNumberAsync(conversation.Id, cancellationToken);
         conversations.AddMessage(ConversationMessageFactory.CreateUserMessage(conversation.Id, sequenceNumber, userMessage));
+        conversation.LastMessageAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         await compaction.CompactIfNeededAsync(conversation.Id, userId, cancellationToken);
@@ -72,7 +73,7 @@ public sealed class ChatOrchestrator(
     }
 
     private async Task<Conversation> GetOrCreateConversationAsync(
-        Guid userId, Guid? conversationId, CancellationToken cancellationToken)
+        Guid userId, Guid? conversationId, string initialMessage, CancellationToken cancellationToken)
     {
         if (conversationId is { } id)
         {
@@ -84,6 +85,7 @@ public sealed class ChatOrchestrator(
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            Title = ConversationTitleGenerator.Generate(initialMessage),
             CreatedAt = DateTimeOffset.UtcNow,
             LastMessageAt = DateTimeOffset.UtcNow,
         };

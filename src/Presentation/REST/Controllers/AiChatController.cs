@@ -40,9 +40,12 @@ public sealed class AiChatController(
             cancellationToken);
 
     [HttpGet("conversations")]
-    public async Task<IActionResult> ListConversations(CancellationToken cancellationToken)
+    public async Task<IActionResult> ListConversations(
+        [FromQuery] ConversationSortBy sortBy = ConversationSortBy.LastMessageAt,
+        [FromQuery] bool descending = true,
+        CancellationToken cancellationToken = default)
     {
-        var result = await conversations.ListForUserAsync(currentUser.UserId, cancellationToken);
+        var result = await conversations.ListForUserAsync(currentUser.UserId, sortBy, descending, cancellationToken);
         return Ok(result.Select(c => new { c.Id, c.Title, c.CreatedAt, c.LastMessageAt }));
     }
 

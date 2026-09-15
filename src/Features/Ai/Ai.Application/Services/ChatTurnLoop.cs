@@ -84,6 +84,7 @@ public sealed class ChatTurnLoop(
                 conversationId, assistantSequence, textBuffer.ToString(), completed.AssistantRawContentJson);
             conversations.AddMessage(assistantMessage);
             await unitOfWork.SaveChangesAsync(cancellationToken);
+            await conversations.TouchLastMessageAtAsync(conversationId, DateTimeOffset.UtcNow, cancellationToken);
 
             if (completed.ToolCalls.Count == 0)
             {
@@ -117,6 +118,7 @@ public sealed class ChatTurnLoop(
             var toolResultSequence = await conversations.GetNextSequenceNumberAsync(conversationId, cancellationToken);
             conversations.AddMessage(ConversationMessageFactory.CreateToolResultMessage(conversationId, toolResultSequence, resultBlocks));
             await unitOfWork.SaveChangesAsync(cancellationToken);
+            await conversations.TouchLastMessageAtAsync(conversationId, DateTimeOffset.UtcNow, cancellationToken);
 
             await compaction.CompactIfNeededAsync(conversationId, userId, cancellationToken);
             // Loop again - the tool results just persisted are picked up as live context above.

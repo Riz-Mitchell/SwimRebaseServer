@@ -1,4 +1,5 @@
 using Ai.Application.Interfaces;
+using Ai.Application.Models;
 using Ai.Domain.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,11 +14,22 @@ public sealed class ConversationRepository(AiDbContext db) : IConversationReposi
         return conversation is null || conversation.UserId != userId ? null : conversation;
     }
 
-    public async Task<IReadOnlyList<Conversation>> ListForUserAsync(Guid userId, CancellationToken cancellationToken) =>
-        await db.Conversations
-            .Where(c => c.UserId == userId)
-            .OrderByDescending(c => c.LastMessageAt)
-            .ToListAsync(cancellationToken);
+    public async Task<IReadOnlyList<Conversation>> ListForUserAsync(
+        Guid userId, ConversationSortBy sortBy, bool descending, CancellationToken cancellationToken)
+    {
+        var query = db.Conversations.Where(c => c.UserId == userId);
+
+        IOrderedQueryable<Conversation> ordered = (sortBy, descending) switch
+        {
+            (ConversationSortBy.CreatedAt, true) => query.OrderByDescending(c => c.CreatedAt),
+            (ConversationSortBy.CreatedAt, false) => query.OrderBy(c => c.CreatedAt),
+            (ConversationSortBy.LastMessageAt, true) => query.OrderByDescending(c => c.LastMessageAt),
+            (ConversationSortBy.LastMessageAt, false) => query.OrderBy(c => c.LastMessageAt),
+            _ => query.OrderByDescending(c => c.LastMessageAt),
+        };
+
+        return await ordered.ToListAsync(cancellationToken);
+    }
 
     public void Add(Conversation conversation) => db.Conversations.Add(conversation);
 

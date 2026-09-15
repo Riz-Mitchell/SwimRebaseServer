@@ -1,3 +1,4 @@
+using Ai.Application.Models;
 using Ai.Domain.Models;
 
 namespace Ai.Application.Interfaces;
@@ -10,7 +11,8 @@ public interface IConversationRepository
 {
     Task<Conversation?> FindAsync(Guid userId, Guid conversationId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<Conversation>> ListForUserAsync(Guid userId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Conversation>> ListForUserAsync(
+        Guid userId, ConversationSortBy sortBy, bool descending, CancellationToken cancellationToken);
 
     void Add(Conversation conversation);
 
