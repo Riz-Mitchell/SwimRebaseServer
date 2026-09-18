@@ -1,4 +1,5 @@
 using Ai.Infrastructure;
+using Analytics.Infrastructure;
 using Auth.Infrastructure;
 using Auth.Infrastructure.Middleware;
 using Azure.Identity;
@@ -40,6 +41,7 @@ builder.Services.AddControllers()
 builder.Services.AddOpenApi();
 
 builder.Services.AddSharedInfrastructure(builder.Configuration);
+builder.Services.AddAnalyticsInfrastructure(builder.Configuration);
 builder.Services.AddAuthInfrastructure(builder.Configuration);
 builder.Services.AddAiInfrastructure(builder.Configuration);
 builder.Services.AddTrainingInfrastructure(builder.Configuration);
@@ -54,6 +56,7 @@ using (var migrationScope = app.Services.CreateScope())
     foreach (var (name, migrate) in new (string, Func<Task>)[]
     {
         ("Ai", () => migrationScope.ServiceProvider.GetRequiredService<AiDbContext>().Database.MigrateAsync()),
+        ("Analytics", () => migrationScope.ServiceProvider.GetRequiredService<AnalyticsDbContext>().Database.MigrateAsync()),
         ("Auth", () => migrationScope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync()),
         ("Training", () => migrationScope.ServiceProvider.GetRequiredService<TrainingDbContext>().Database.MigrateAsync()),
     })

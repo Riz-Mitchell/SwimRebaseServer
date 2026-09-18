@@ -13,7 +13,8 @@ namespace Training.Application.Services;
 public sealed class FocusService(
     IFocusRepository focuses,
     ITrainingUserProvisioningService userProvisioning,
-    [FromKeyedServices(TrainingKeys.UnitOfWork)] IUnitOfWork unitOfWork)
+    [FromKeyedServices(TrainingKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    IEventTracker eventTracker)
 {
     public async Task<Focus> CreateAsync(
         Guid userId, FocusInput input, FocusOrigin origin, string? originalUserRequest, CancellationToken cancellationToken)
@@ -39,11 +40,12 @@ public sealed class FocusService(
             Status = FocusStatus.Active,
             Origin = origin,
             StartedAt = DateOnly.FromDateTime(DateTime.UtcNow),
-            ComparisonPoints = BuildComparisonPoints(input),
+            ComparisonPoints = BuildComparisonPoints(input.PositivePoints, input.NegativePoints),
         };
 
         focuses.Add(focus);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await eventTracker.TrackAsync(userId, EventTypes.FocusCreated, null, cancellationToken);
         return focus;
     }
 
@@ -116,18 +118,68 @@ public sealed class FocusService(
 
         focus.Status = FocusStatus.Abandoned;
         focus.EndedAt = DateOnly.FromDateTime(DateTime.UtcNow);
-        await focuses.ShiftPrioritiesAsync(userId, focus.Priority + 1, null, -1, cancellationToken);
+        await CloseActivePriorityGapAsync(userId, focus.Priority, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Replaces a focus's tagLine/prompt/totalDays and its full comparison-point list. Priority is
+    /// untouched - use <see cref="MoveToPriorityAsync"/> for that. Active-only, like every other
+    /// mutator here.
+    /// </summary>
+    public async Task<Focus?> EditAsync(Guid userId, Guid focusId, FocusEditInput input, CancellationToken cancellationToken)
+    {
+        var focus = await focuses.FindActiveAsync(userId, focusId, cancellationToken);
+        if (focus is null)
+        {
+            return null;
+        }
+
+        focus.TagLine = input.TagLine;
+        focus.Prompt = input.Prompt;
+        focus.TotalDays = input.TotalDays;
+
+        focus.ComparisonPoints.Clear();
+        focus.ComparisonPoints.AddRange(BuildComparisonPoints(input.PositivePoints, input.NegativePoints));
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await eventTracker.TrackAsync(userId, EventTypes.FocusEdited, null, cancellationToken);
+        return focus;
+    }
+
+    /// <summary>Permanently deletes a focus of any status. If it was active, closes the priority gap it leaves behind.</summary>
+    public async Task<bool> DeleteAsync(Guid userId, Guid focusId, CancellationToken cancellationToken)
+    {
+        var focus = await focuses.FindAsync(userId, focusId, cancellationToken);
+        if (focus is null)
+        {
+            return false;
+        }
+
+        if (focus.Status == FocusStatus.Active)
+        {
+            await CloseActivePriorityGapAsync(userId, focus.Priority, cancellationToken);
+        }
+
+        focuses.Remove(focus);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await eventTracker.TrackAsync(userId, EventTypes.FocusDeleted, null, cancellationToken);
         return true;
     }
 
     public Task<IReadOnlyList<Focus>> GetActiveAsync(Guid userId, CancellationToken cancellationToken) =>
         focuses.GetActiveAsync(userId, cancellationToken);
 
-    private static List<ComparisonPoint> BuildComparisonPoints(FocusInput input) =>
-        ToPoints(input.PositivePoints, ComparisonPointPolarity.Positive)
-            .Concat(ToPoints(input.NegativePoints, ComparisonPointPolarity.Negative))
+    /// <summary>Closes the priority gap an active focus leaves behind by shifting everything above it down by one.</summary>
+    private Task CloseActivePriorityGapAsync(Guid userId, int priority, CancellationToken cancellationToken) =>
+        focuses.ShiftPrioritiesAsync(userId, priority + 1, null, -1, cancellationToken);
+
+    private static List<ComparisonPoint> BuildComparisonPoints(
+        IReadOnlyList<ComparisonPointInput> positivePoints, IReadOnlyList<ComparisonPointInput> negativePoints) =>
+        ToPoints(positivePoints, ComparisonPointPolarity.Positive)
+            .Concat(ToPoints(negativePoints, ComparisonPointPolarity.Negative))
             .ToList();
 
     private static IEnumerable<ComparisonPoint> ToPoints(IReadOnlyList<ComparisonPointInput> points, ComparisonPointPolarity polarity) =>

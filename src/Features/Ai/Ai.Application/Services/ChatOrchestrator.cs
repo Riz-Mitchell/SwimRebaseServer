@@ -21,7 +21,8 @@ public sealed class ChatOrchestrator(
     IChatCompactionService compaction,
     IAiUserProvisioningService aiUserProvisioning,
     GatedToolApprovalResolver approvalResolver,
-    ChatTurnLoop turnLoop)
+    ChatTurnLoop turnLoop,
+    IEventTracker eventTracker)
 {
     public async IAsyncEnumerable<AiChatEvent> SendUserMessageAsync(
         Guid userId,
@@ -70,6 +71,7 @@ public sealed class ChatOrchestrator(
         conversations.AddMessage(ConversationMessageFactory.CreateUserMessage(conversation.Id, sequenceNumber, userMessage, imageBlocks));
         conversation.LastMessageAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await eventTracker.TrackAsync(userId, EventTypes.AiMessageSent, null, cancellationToken);
 
         await compaction.CompactIfNeededAsync(conversation.Id, userId, cancellationToken);
 

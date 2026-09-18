@@ -14,6 +14,13 @@ public sealed class FocusRepository(TrainingDbContext db) : IFocusRepository
             .Include(f => f.ComparisonPoints)
             .SingleOrDefaultAsync(f => f.UserId == userId && f.Id == focusId && f.Status == FocusStatus.Active, cancellationToken);
 
+    public Task<Focus?> FindAsync(Guid userId, Guid focusId, CancellationToken cancellationToken) =>
+        db.Focuses
+            .Include(f => f.ComparisonPoints)
+            .SingleOrDefaultAsync(f => f.UserId == userId && f.Id == focusId, cancellationToken);
+
+    public void Remove(Focus focus) => db.Focuses.Remove(focus);
+
     public async Task<IReadOnlyList<Focus>> GetActiveAsync(Guid userId, CancellationToken cancellationToken) =>
         await db.Focuses
             .Include(f => f.ComparisonPoints)

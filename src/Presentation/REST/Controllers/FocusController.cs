@@ -42,6 +42,21 @@ public sealed class FocusController(FocusService focusService, ICurrentUserAcces
         return logged ? NoContent() : NotFound();
     }
 
+    [HttpPut("{focusId:guid}")]
+    public async Task<IActionResult> Edit(Guid focusId, [FromBody] EditFocusRequest request, CancellationToken cancellationToken)
+    {
+        var input = new FocusEditInput(request.TagLine, request.Prompt, request.TotalDays, request.PositivePoints, request.NegativePoints);
+        var focus = await focusService.EditAsync(currentUser.UserId, focusId, input, cancellationToken);
+        return focus is null ? NotFound() : Ok(FocusResponse.FromEntity(focus));
+    }
+
+    [HttpDelete("{focusId:guid}")]
+    public async Task<IActionResult> Delete(Guid focusId, CancellationToken cancellationToken)
+    {
+        var deleted = await focusService.DeleteAsync(currentUser.UserId, focusId, cancellationToken);
+        return deleted ? NoContent() : NotFound();
+    }
+
     [HttpPut("{focusId:guid}/priority")]
     public async Task<IActionResult> MoveToPriority(Guid focusId, [FromBody] MoveFocusPriorityRequest request, CancellationToken cancellationToken)
     {
@@ -62,6 +77,13 @@ public sealed record CreateFocusRequest(
     string Prompt,
     int TotalDays,
     int? Priority,
+    IReadOnlyList<ComparisonPointInput> PositivePoints,
+    IReadOnlyList<ComparisonPointInput> NegativePoints);
+
+public sealed record EditFocusRequest(
+    string TagLine,
+    string Prompt,
+    int TotalDays,
     IReadOnlyList<ComparisonPointInput> PositivePoints,
     IReadOnlyList<ComparisonPointInput> NegativePoints);
 

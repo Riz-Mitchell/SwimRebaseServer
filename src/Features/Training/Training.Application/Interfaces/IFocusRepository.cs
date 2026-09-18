@@ -9,6 +9,11 @@ public interface IFocusRepository
 
     Task<Focus?> FindActiveAsync(Guid userId, Guid focusId, CancellationToken cancellationToken);
 
+    /// <summary>Finds the focus regardless of status - Delete must work on Active, Completed, or Abandoned alike.</summary>
+    Task<Focus?> FindAsync(Guid userId, Guid focusId, CancellationToken cancellationToken);
+
+    void Remove(Focus focus);
+
     Task<IReadOnlyList<Focus>> GetActiveAsync(Guid userId, CancellationToken cancellationToken);
 
     Task<int> CountActiveAsync(Guid userId, CancellationToken cancellationToken);

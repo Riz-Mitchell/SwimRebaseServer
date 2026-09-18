@@ -50,6 +50,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAiTool, UpsertTimetableSlotTool>();
         services.AddScoped<IAiTool, DeleteTimetableSlotTool>();
         services.AddScoped<IAiTool, CreateFocusTool>();
+        services.AddScoped<IAiTool, EditFocusTool>();
+        services.AddScoped<IAiTool, DeleteFocusTool>();
         services.AddScoped<IAiChatClient, AnthropicChatClient>();
         services.AddScoped<IChatCompactionService, ChatCompactionService>();
         services.AddScoped<IAiUserProvisioningService, AiUserProvisioningService>();

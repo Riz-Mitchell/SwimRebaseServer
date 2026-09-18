@@ -13,7 +13,8 @@ namespace Training.Application.Services;
 public sealed class TimetableService(
     ITimetableRepository timetable,
     ITrainingUserProvisioningService userProvisioning,
-    [FromKeyedServices(TrainingKeys.UnitOfWork)] IUnitOfWork unitOfWork)
+    [FromKeyedServices(TrainingKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    IEventTracker eventTracker)
 {
     /// <summary>
     /// Creates a new slot (<paramref name="slotId"/> null) or a new version of an existing one,
@@ -63,6 +64,7 @@ public sealed class TimetableService(
 
         timetable.Add(version);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await eventTracker.TrackAsync(userId, EventTypes.TimetableSlotUpserted, null, cancellationToken);
         return version;
     }
 
@@ -77,6 +79,7 @@ public sealed class TimetableService(
 
         current.EffectiveTo = effectiveTo;
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await eventTracker.TrackAsync(userId, EventTypes.TimetableSlotDeleted, null, cancellationToken);
         return true;
     }
 

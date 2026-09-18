@@ -214,6 +214,39 @@ Move a focus to a new priority position.
 
 ---
 
+### `PUT /api/focuses/{focusId}`
+Replace a focus's tagLine, prompt, totalDays, and comparison points. Full replacement, not a merge — include every point you want kept. Does not change priority (use the `priority` endpoint for that). Active-only — editing a completed or abandoned focus returns `404`.
+
+**Path params:** `focusId` (guid)
+
+**Body:**
+```json
+{
+  "tagLine": "string",
+  "prompt": "string",
+  "totalDays": 30,
+  "positivePoints": [
+    { "tagLine": "string", "description": "string" }
+  ],
+  "negativePoints": [
+    { "tagLine": "string", "description": "string" }
+  ]
+}
+```
+
+**Response:** `200 FocusResponse` / `404 Not Found`.
+
+---
+
+### `DELETE /api/focuses/{focusId}`
+Permanently delete a focus — active, completed, or abandoned. This is a hard delete: the focus and its check-in history are removed for good, not archived. If the focus was active, the remaining active focuses are automatically re-ranked to close the priority gap.
+
+**Path params:** `focusId` (guid)
+
+**Response:** `204 No Content` / `404 Not Found`.
+
+---
+
 ### `POST /api/focuses/{focusId}/abandon`
 Abandon a focus.
 

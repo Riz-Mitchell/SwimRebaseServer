@@ -7,7 +7,8 @@ namespace Auth.Application.Services;
 
 public sealed class UserProvisioningService(
     IUserRepository users,
-    [FromKeyedServices(AuthKeys.UnitOfWork)] IUnitOfWork unitOfWork) : IUserProvisioningService
+    [FromKeyedServices(AuthKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    IEventTracker eventTracker) : IUserProvisioningService
 {
     public async Task EnsureUserExistsAsync(Guid userId, string? email, CancellationToken cancellationToken)
     {
@@ -24,6 +25,7 @@ public sealed class UserProvisioningService(
                 LastSeenAt = now,
             });
             await unitOfWork.SaveChangesAsync(cancellationToken);
+            await eventTracker.TrackAsync(userId, EventTypes.UserSignedUp, null, cancellationToken);
             return;
         }
 

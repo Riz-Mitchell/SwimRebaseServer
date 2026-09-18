@@ -10,6 +10,11 @@
     <Project Path="src/Features/Ai/Ai.Domain/Ai.Domain.csproj" />
     <Project Path="src/Features/Ai/Ai.Infrastructure/Ai.Infrastructure.csproj" Id="12544a2d-2e0f-4249-b7c2-ca2b1f6bc0f5" />
   </Folder>
+  <Folder Name="/Features/Analytics/">
+    <Project Path="src/Features/Analytics/Analytics.Application/Analytics.Application.csproj" />
+    <Project Path="src/Features/Analytics/Analytics.Domain/Analytics.Domain.csproj" />
+    <Project Path="src/Features/Analytics/Analytics.Infrastructure/Analytics.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/Features/Auth/">
     <Project Path="src/Features/Auth/Auth.Application/Auth.Application.csproj" />
     <Project Path="src/Features/Auth/Auth.Domain/Auth.Domain.csproj" />
