@@ -9,6 +9,9 @@ public interface IAiTool
 {
     string Name { get; }
 
+    /// <summary>Short, present-tense label for streaming a live status to the client, e.g. "Creating a focus".</summary>
+    string DisplayName { get; }
+
     string Description { get; }
 
     /// <summary>Raw JSON Schema for the tool's input, e.g. {"type":"object","properties":{...}}.</summary>

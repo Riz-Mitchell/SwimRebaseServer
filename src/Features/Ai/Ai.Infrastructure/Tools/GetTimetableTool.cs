@@ -13,6 +13,8 @@ public sealed class GetTimetableTool(TimetableService timetable) : IAiTool
 {
     public string Name => "get_timetable";
 
+    public string DisplayName => "Checking your timetable";
+
     public string Description =>
         "Gets the athlete's training timetable (recurring weekly slots: Swim/Gym/Dryland/Other) as it stood on a " +
         "given date. Swim slots may carry an expectedSession (a short summary, total distance, and primary effort " +

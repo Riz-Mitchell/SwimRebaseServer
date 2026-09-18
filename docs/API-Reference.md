@@ -149,8 +149,12 @@ The two message-sending endpoints and the tool-resolve endpoint all stream Serve
 | `type` | Fields | Meaning |
 |---|---|---|
 | `text_delta` | `text` | A chunk of the assistant's reply text |
-| `permission_required` | `conversationId`, `toolExecutionRequestId`, `toolName`, `inputJson` | The AI wants to run a gated tool — needs a `resolve` call |
+| `turn_started` | `conversationId` | A new model call just started — show a "thinking" indicator until text or a tool event arrives |
+| `tool_started` | `conversationId`, `toolUseId`, `toolName`, `displayName` | A tool is about to run (auto-executed read tool, or a freshly-approved gated one) — `displayName` is the UI-friendly label, e.g. "Checking your timetable" |
+| `tool_completed` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `success` | The tool finished |
+| `permission_required` | `conversationId`, `toolExecutionRequestId`, `toolName`, `displayName`, `inputJson` | The AI wants to run a gated tool — needs a `resolve` call |
 | `permission_resolved` | `conversationId`, `toolExecutionRequestId`, `approved` | Confirms a resolve was recorded (sibling gated calls from the same turn still pending) |
+| `usage` | `conversationId`, `model`, `inputTokens`, `outputTokens`, `cacheCreationInputTokens`, `cacheReadInputTokens` | Token usage for the turn that just completed |
 | `completed` | `conversationId`, `assistantMessageId` | The turn finished normally |
 | `error` | `message` | Something went wrong mid-turn |
 

@@ -9,6 +9,8 @@ public sealed class DeleteFocusTool(FocusService focuses) : IAiTool
 {
     public string Name => "delete_focus";
 
+    public string DisplayName => "Deleting a focus";
+
     public string Description =>
         "Permanently deletes a focus - active, completed, or abandoned. This is a hard delete: the focus and its " +
         "check-in history are gone for good, not archived. If the focus was active, the remaining active focuses " +

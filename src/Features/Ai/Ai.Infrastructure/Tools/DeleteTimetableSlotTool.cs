@@ -9,6 +9,8 @@ public sealed class DeleteTimetableSlotTool(TimetableService timetable) : IAiToo
 {
     public string Name => "delete_timetable_slot";
 
+    public string DisplayName => "Removing a timetable slot";
+
     public string Description =>
         "Ends a recurring timetable slot as of a given date - no successor version is created, so the slot simply " +
         "stops occurring from that date onward. The slot's history before that date is preserved.";

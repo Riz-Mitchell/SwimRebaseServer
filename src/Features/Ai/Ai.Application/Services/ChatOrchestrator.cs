@@ -95,15 +95,20 @@ public sealed class ChatOrchestrator(
             yield break;
         }
 
-        var readyConversationId = await approvalResolver.ResolveAsync(userId, request, approve, denialReason, cancellationToken);
-        if (readyConversationId is null)
+        var resolution = new ToolApprovalResolution();
+        await foreach (var chatEvent in approvalResolver.ResolveAsync(userId, request, approve, denialReason, resolution, cancellationToken))
+        {
+            yield return chatEvent;
+        }
+
+        if (resolution.ReadyConversationId is not { } readyConversationId)
         {
             // Sibling gated calls from the same turn are still pending.
             yield return new AiChatPermissionResolved(request.ConversationId, request.Id, approve);
             yield break;
         }
 
-        await foreach (var chatEvent in turnLoop.RunAsync(userId, readyConversationId.Value, cancellationToken))
+        await foreach (var chatEvent in turnLoop.RunAsync(userId, readyConversationId, cancellationToken))
         {
             yield return chatEvent;
         }

@@ -13,6 +13,8 @@ public sealed class EditFocusTool(FocusService focuses) : IAiTool
 {
     public string Name => "edit_focus";
 
+    public string DisplayName => "Updating a focus";
+
     public string Description =>
         "Replaces an existing active focus's tagLine, prompt, totalDays, and comparison points. This is a full " +
         "replacement, not a partial update - include every positivePoint and negativePoint you want the focus to " +

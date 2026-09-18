@@ -15,6 +15,8 @@ public sealed class UpsertTimetableSlotTool(TimetableService timetable) : IAiToo
 {
     public string Name => "upsert_timetable_slot";
 
+    public string DisplayName => "Updating your timetable";
+
     public string Description =>
         "Creates a new recurring timetable slot, or a new version of an existing one (pass the same slotId to " +
         "edit it - this closes the previous version rather than overwriting it, preserving history). " +

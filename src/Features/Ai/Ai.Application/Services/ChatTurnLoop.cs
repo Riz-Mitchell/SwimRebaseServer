@@ -47,6 +47,8 @@ public sealed class ChatTurnLoop(
             TurnCompletedEvent? completed = null;
             var faulted = false;
 
+            yield return new AiChatTurnStarted(conversationId);
+
             await foreach (var evt in chatClient.StreamTurnAsync(
                 new ChatTurnRequest(chatMessages, BuildSystemPrompt(summary), tools), cancellationToken))
             {
@@ -78,6 +80,13 @@ public sealed class ChatTurnLoop(
             }
 
             tokenUsage.Add(ConversationMessageFactory.CreateUsageRecord(userId, conversationId, completed.Usage));
+            yield return new AiChatUsage(
+                conversationId,
+                completed.Usage.Model,
+                completed.Usage.InputTokens,
+                completed.Usage.OutputTokens,
+                completed.Usage.CacheCreationInputTokens,
+                completed.Usage.CacheReadInputTokens);
 
             var assistantSequence = await conversations.GetNextSequenceNumberAsync(conversationId, cancellationToken);
             var assistantMessage = ConversationMessageFactory.CreateAssistantMessage(
@@ -99,7 +108,8 @@ public sealed class ChatTurnLoop(
                 {
                     var request = ConversationMessageFactory.CreateToolExecutionRequest(conversationId, userId, assistantMessage.Id, call);
                     toolExecutions.Add(request);
-                    yield return new AiChatPermissionRequired(conversationId, request.Id, call.ToolName, call.InputJson);
+                    var displayName = toolRegistry.Find(call.ToolName)?.DisplayName ?? call.ToolName;
+                    yield return new AiChatPermissionRequired(conversationId, request.Id, call.ToolName, displayName, call.InputJson);
                 }
 
                 await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -112,7 +122,13 @@ public sealed class ChatTurnLoop(
             var resultBlocks = new List<ToolResultContentBlock>();
             foreach (var call in completed.ToolCalls)
             {
-                resultBlocks.Add(await toolExecutor.ExecuteAsync(userId, call.ToolUseId, call.ToolName, call.InputJson, cancellationToken));
+                var callDisplayName = toolRegistry.Find(call.ToolName)?.DisplayName ?? call.ToolName;
+                yield return new AiChatToolStarted(conversationId, call.ToolUseId, call.ToolName, callDisplayName);
+
+                var resultBlock = await toolExecutor.ExecuteAsync(userId, call.ToolUseId, call.ToolName, call.InputJson, cancellationToken);
+                resultBlocks.Add(resultBlock);
+
+                yield return new AiChatToolCompleted(conversationId, call.ToolUseId, call.ToolName, callDisplayName, !resultBlock.IsError);
             }
 
             var toolResultSequence = await conversations.GetNextSequenceNumberAsync(conversationId, cancellationToken);

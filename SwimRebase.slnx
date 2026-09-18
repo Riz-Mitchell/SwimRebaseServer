@@ -4,6 +4,9 @@
     <File Path="infra/main.bicep" />
     <File Path="infra/prod.bicepparam" />
   </Folder>
+  <Folder Name="/Docs/">
+    <File Path="docs/API-Reference.md" />
+  </Folder>
   <Folder Name="/Features/" />
   <Folder Name="/Features/Ai/">
     <Project Path="src/Features/Ai/Ai.Application/Ai.Application.csproj" Id="5682a429-e52b-43a2-94c0-fad755079e95" />
@@ -32,8 +35,8 @@
     <Project Path="src/Presentation/REST/REST.csproj" Id="b52430eb-1e4a-414c-8498-f9fd66b85327" />
   </Folder>
   <Folder Name="/Shared/">
-    <Project Path="src/Shared/Shared.Domain/Shared.Domain.csproj" />
     <Project Path="src/Shared/Shared.Application/Shared.Application.csproj" />
+    <Project Path="src/Shared/Shared.Domain/Shared.Domain.csproj" />
     <Project Path="src/Shared/Shared.Infrastructure/Shared.Infrastructure.csproj" />
   </Folder>
 </Solution>

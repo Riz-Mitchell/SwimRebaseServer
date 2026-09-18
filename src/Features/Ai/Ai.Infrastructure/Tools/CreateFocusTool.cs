@@ -14,6 +14,8 @@ public sealed class CreateFocusTool(FocusService focuses) : IAiTool
 {
     public string Name => "create_focus";
 
+    public string DisplayName => "Creating a focus";
+
     public string Description =>
         "Creates a new focus for the user from their own description of what they want to work on. " +
         "Write tagLine and prompt yourself based on what the user said - keep tagLine short and memorable, " +
