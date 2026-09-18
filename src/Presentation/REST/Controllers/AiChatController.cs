@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Application.Options;
@@ -128,6 +129,11 @@ public sealed class AiChatController(
         return Ok(summary);
     }
 
+    private static readonly JsonSerializerOptions SseJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
     private async Task StreamEventsAsync(IAsyncEnumerable<AiChatEvent> events, CancellationToken cancellationToken)
     {
         Response.Headers.ContentType = "text/event-stream";
@@ -135,7 +141,7 @@ public sealed class AiChatController(
 
         await foreach (var chatEvent in events.WithCancellation(cancellationToken))
         {
-            var json = JsonSerializer.Serialize<AiChatEvent>(chatEvent);
+            var json = JsonSerializer.Serialize<AiChatEvent>(chatEvent, SseJsonOptions);
             await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
         }
