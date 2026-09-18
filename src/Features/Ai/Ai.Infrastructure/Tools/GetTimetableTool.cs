@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ai.Application.Interfaces;
+using Ai.Application.Models;
 using Training.Application.Services;
 
 namespace Ai.Infrastructure.Tools;
@@ -14,6 +15,8 @@ public sealed class GetTimetableTool(TimetableService timetable) : IAiTool
     public string Name => "get_timetable";
 
     public string DisplayName => "Checking your timetable";
+
+    public ToolEffect Effect => ToolEffect.Neutral;
 
     public string Description =>
         "Gets the athlete's training timetable (recurring weekly slots: Swim/Gym/Dryland/Other) as it stood on a " +
@@ -35,7 +38,7 @@ public sealed class GetTimetableTool(TimetableService timetable) : IAiTool
         }
         """;
 
-    public async Task<string> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
     {
         var input = string.IsNullOrWhiteSpace(inputJson)
             ? new Input(null)
@@ -66,7 +69,7 @@ public sealed class GetTimetableTool(TimetableService timetable) : IAiTool
             }),
         };
 
-        return JsonSerializer.Serialize(result, ToolJsonOptions.Web);
+        return new ToolExecutionResult(JsonSerializer.Serialize(result, ToolJsonOptions.Web), entries.Count);
     }
 
     private sealed record Input(DateOnly? AsOf);

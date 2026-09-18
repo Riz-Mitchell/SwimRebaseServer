@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ai.Application.Interfaces;
+using Ai.Application.Models;
 using Training.Application.Services;
 
 namespace Ai.Infrastructure.Tools;
@@ -10,6 +11,8 @@ public sealed class DeleteTimetableSlotTool(TimetableService timetable) : IAiToo
     public string Name => "delete_timetable_slot";
 
     public string DisplayName => "Removing a timetable slot";
+
+    public ToolEffect Effect => ToolEffect.Destructive;
 
     public string Description =>
         "Ends a recurring timetable slot as of a given date - no successor version is created, so the slot simply " +
@@ -32,13 +35,13 @@ public sealed class DeleteTimetableSlotTool(TimetableService timetable) : IAiToo
         }
         """;
 
-    public async Task<string> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
     {
         var input = JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web)
             ?? throw new InvalidOperationException("Missing tool input.");
 
         var deleted = await timetable.DeleteSlotAsync(userId, input.SlotId, input.EffectiveTo, cancellationToken);
-        return JsonSerializer.Serialize(new { deleted }, ToolJsonOptions.Web);
+        return new ToolExecutionResult(JsonSerializer.Serialize(new { deleted }, ToolJsonOptions.Web), AffectedCount: deleted ? 1 : 0);
     }
 
     private sealed record Input(Guid SlotId, DateOnly EffectiveTo);

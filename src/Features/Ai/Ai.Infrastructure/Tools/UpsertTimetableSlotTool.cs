@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Ai.Application.Interfaces;
+using Ai.Application.Models;
 using Training.Application.Services;
 using Training.Domain.Models;
 
@@ -16,6 +17,10 @@ public sealed class UpsertTimetableSlotTool(TimetableService timetable) : IAiToo
     public string Name => "upsert_timetable_slot";
 
     public string DisplayName => "Updating your timetable";
+
+    // The versioned timetable model never mutates a slot in place - even "editing" an existing slot
+    // (by passing its slotId) closes the old version and inserts a new one, so this is always creative.
+    public ToolEffect Effect => ToolEffect.Creative;
 
     public string Description =>
         "Creates a new recurring timetable slot, or a new version of an existing one (pass the same slotId to " +
@@ -54,7 +59,7 @@ public sealed class UpsertTimetableSlotTool(TimetableService timetable) : IAiToo
         }
         """;
 
-    public async Task<string> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
     {
         var input = JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web)
             ?? throw new InvalidOperationException("Missing tool input.");
@@ -68,7 +73,7 @@ public sealed class UpsertTimetableSlotTool(TimetableService timetable) : IAiToo
 
         var version = await timetable.UpsertSlotAsync(userId, input.SlotId, slotInput, input.EffectiveFrom, cancellationToken);
 
-        return JsonSerializer.Serialize(
+        var resultJson = JsonSerializer.Serialize(
             new
             {
                 id = version.Id,
@@ -81,6 +86,8 @@ public sealed class UpsertTimetableSlotTool(TimetableService timetable) : IAiToo
                 effectiveFrom = version.EffectiveFrom,
             },
             ToolJsonOptions.Web);
+
+        return new ToolExecutionResult(resultJson, AffectedCount: 1);
     }
 
     private static TimeOnly ParseTime(string value) =>

@@ -58,28 +58,33 @@ public sealed class GatedToolApprovalResolver(
             yield break;
         }
 
-        var resultBlocks = new List<ToolResultContentBlock>();
+        var summaries = new List<ToolResultSummary>();
         foreach (var sibling in siblings)
         {
+            var siblingTool = toolRegistry.Find(sibling.ToolName);
+            var displayName = siblingTool?.DisplayName ?? sibling.ToolName;
+            var effect = siblingTool?.Effect ?? ToolEffect.Neutral;
+
             if (sibling.Status == ToolExecutionStatus.Denied)
             {
-                resultBlocks.Add(new ToolResultContentBlock(sibling.AnthropicToolUseId, "The user declined this action.", true));
+                summaries.Add(new ToolResultSummary(
+                    sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect, Success: false, AffectedCount: 0, "The user declined this action."));
                 continue;
             }
 
-            var displayName = toolRegistry.Find(sibling.ToolName)?.DisplayName ?? sibling.ToolName;
-            yield return new AiChatToolStarted(request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName);
+            yield return new AiChatToolStarted(request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect);
 
-            var block = await toolExecutor.ExecuteAsync(userId, sibling.AnthropicToolUseId, sibling.ToolName, sibling.InputJson, cancellationToken);
-            sibling.Status = block.IsError ? ToolExecutionStatus.Failed : ToolExecutionStatus.Executed;
-            sibling.ResultJson = block.ResultJson;
-            resultBlocks.Add(block);
+            var summary = await toolExecutor.ExecuteAsync(userId, sibling.AnthropicToolUseId, sibling.ToolName, sibling.InputJson, cancellationToken);
+            sibling.Status = summary.Success ? ToolExecutionStatus.Executed : ToolExecutionStatus.Failed;
+            sibling.ResultJson = summary.ResultJson;
+            summaries.Add(summary);
 
-            yield return new AiChatToolCompleted(request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName, !block.IsError);
+            yield return new AiChatToolCompleted(
+                request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect, summary.Success, summary.AffectedCount);
         }
 
         var sequenceNumber = await conversations.GetNextSequenceNumberAsync(request.ConversationId, cancellationToken);
-        conversations.AddMessage(ConversationMessageFactory.CreateToolResultMessage(request.ConversationId, sequenceNumber, resultBlocks));
+        conversations.AddMessage(ConversationMessageFactory.CreateToolResultMessage(request.ConversationId, sequenceNumber, summaries));
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

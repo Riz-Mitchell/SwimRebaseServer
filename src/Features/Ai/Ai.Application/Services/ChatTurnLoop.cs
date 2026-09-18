@@ -108,8 +108,9 @@ public sealed class ChatTurnLoop(
                 {
                     var request = ConversationMessageFactory.CreateToolExecutionRequest(conversationId, userId, assistantMessage.Id, call);
                     toolExecutions.Add(request);
-                    var displayName = toolRegistry.Find(call.ToolName)?.DisplayName ?? call.ToolName;
-                    yield return new AiChatPermissionRequired(conversationId, request.Id, call.ToolName, displayName, call.InputJson);
+                    var gatedTool = toolRegistry.Find(call.ToolName);
+                    yield return new AiChatPermissionRequired(
+                        conversationId, request.Id, call.ToolName, gatedTool?.DisplayName ?? call.ToolName, gatedTool?.Effect ?? ToolEffect.Neutral, call.InputJson);
                 }
 
                 await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -119,20 +120,23 @@ public sealed class ChatTurnLoop(
                 yield break;
             }
 
-            var resultBlocks = new List<ToolResultContentBlock>();
+            var summaries = new List<ToolResultSummary>();
             foreach (var call in completed.ToolCalls)
             {
-                var callDisplayName = toolRegistry.Find(call.ToolName)?.DisplayName ?? call.ToolName;
-                yield return new AiChatToolStarted(conversationId, call.ToolUseId, call.ToolName, callDisplayName);
+                var callTool = toolRegistry.Find(call.ToolName);
+                var callDisplayName = callTool?.DisplayName ?? call.ToolName;
+                var callEffect = callTool?.Effect ?? ToolEffect.Neutral;
+                yield return new AiChatToolStarted(conversationId, call.ToolUseId, call.ToolName, callDisplayName, callEffect);
 
-                var resultBlock = await toolExecutor.ExecuteAsync(userId, call.ToolUseId, call.ToolName, call.InputJson, cancellationToken);
-                resultBlocks.Add(resultBlock);
+                var toolSummary = await toolExecutor.ExecuteAsync(userId, call.ToolUseId, call.ToolName, call.InputJson, cancellationToken);
+                summaries.Add(toolSummary);
 
-                yield return new AiChatToolCompleted(conversationId, call.ToolUseId, call.ToolName, callDisplayName, !resultBlock.IsError);
+                yield return new AiChatToolCompleted(
+                    conversationId, call.ToolUseId, call.ToolName, callDisplayName, callEffect, toolSummary.Success, toolSummary.AffectedCount);
             }
 
             var toolResultSequence = await conversations.GetNextSequenceNumberAsync(conversationId, cancellationToken);
-            conversations.AddMessage(ConversationMessageFactory.CreateToolResultMessage(conversationId, toolResultSequence, resultBlocks));
+            conversations.AddMessage(ConversationMessageFactory.CreateToolResultMessage(conversationId, toolResultSequence, summaries));
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await conversations.TouchLastMessageAtAsync(conversationId, DateTimeOffset.UtcNow, cancellationToken);
 

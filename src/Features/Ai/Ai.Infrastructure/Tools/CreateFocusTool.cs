@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ai.Application.Interfaces;
+using Ai.Application.Models;
 using Training.Application.Services;
 using Training.Domain.Models;
 
@@ -15,6 +16,8 @@ public sealed class CreateFocusTool(FocusService focuses) : IAiTool
     public string Name => "create_focus";
 
     public string DisplayName => "Creating a focus";
+
+    public ToolEffect Effect => ToolEffect.Creative;
 
     public string Description =>
         "Creates a new focus for the user from their own description of what they want to work on. " +
@@ -60,7 +63,7 @@ public sealed class CreateFocusTool(FocusService focuses) : IAiTool
         }
         """;
 
-    public async Task<string> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
     {
         var input = JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web)
             ?? throw new InvalidOperationException("Missing tool input.");
@@ -75,7 +78,7 @@ public sealed class CreateFocusTool(FocusService focuses) : IAiTool
 
         var focus = await focuses.CreateAsync(userId, focusInput, FocusOrigin.Ai, input.UserRequest, cancellationToken);
 
-        return JsonSerializer.Serialize(
+        var resultJson = JsonSerializer.Serialize(
             new
             {
                 id = focus.Id,
@@ -85,6 +88,8 @@ public sealed class CreateFocusTool(FocusService focuses) : IAiTool
                 priority = focus.Priority,
             },
             ToolJsonOptions.Web);
+
+        return new ToolExecutionResult(resultJson, AffectedCount: 1);
     }
 
     private static IReadOnlyList<ComparisonPointInput> ToPoints(IReadOnlyList<PointPayload>? points) =>

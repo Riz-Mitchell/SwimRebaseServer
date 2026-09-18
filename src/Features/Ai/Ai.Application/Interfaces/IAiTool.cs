@@ -1,3 +1,5 @@
+using Ai.Application.Models;
+
 namespace Ai.Application.Interfaces;
 
 /// <summary>
@@ -11,6 +13,9 @@ public interface IAiTool
 
     /// <summary>Short, present-tense label for streaming a live status to the client, e.g. "Creating a focus".</summary>
     string DisplayName { get; }
+
+    /// <summary>Coarse classification of this tool's effect on the user's data, for UI iconography/copy.</summary>
+    ToolEffect Effect { get; }
 
     string Description { get; }
 
@@ -28,5 +33,5 @@ public interface IAiTool
     /// Executes the tool for <paramref name="userId"/>. Implementations MUST scope every data
     /// access to this user id - never trust an id embedded in <paramref name="inputJson"/>.
     /// </summary>
-    Task<string> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken);
+    Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken);
 }

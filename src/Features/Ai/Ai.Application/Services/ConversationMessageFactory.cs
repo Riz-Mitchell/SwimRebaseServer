@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Ai.Application.Models;
 using Ai.Domain.Models;
 
@@ -42,16 +44,26 @@ public static class ConversationMessageFactory
         CreatedAt = DateTimeOffset.UtcNow,
     };
 
+    /// <summary>
+    /// <see cref="ConversationMessage.RawContentJson"/> stays the pure provider-protocol blocks (never
+    /// touched by UI concerns, so replaying history back to Anthropic can't be affected); <see cref="ConversationMessage.Content"/>
+    /// becomes a UI-friendly JSON array of <paramref name="summaries"/> - name/display name/effect/count per call.
+    /// </summary>
     public static ConversationMessage CreateToolResultMessage(
-        Guid conversationId, int sequenceNumber, IReadOnlyList<ToolResultContentBlock> blocks) => new()
+        Guid conversationId, int sequenceNumber, IReadOnlyList<ToolResultSummary> summaries) => new()
     {
         Id = Guid.NewGuid(),
         ConversationId = conversationId,
         SequenceNumber = sequenceNumber,
         Role = MessageRole.Tool,
-        Content = string.Join("\n", blocks.Select(b => b.ResultJson)),
-        RawContentJson = ChatContentJson.Serialize(blocks),
+        Content = JsonSerializer.Serialize(summaries, ToolResultSummaryJsonOptions),
+        RawContentJson = ChatContentJson.Serialize(summaries.Select(s => (ChatContentBlock)s.ToContentBlock()).ToList()),
         CreatedAt = DateTimeOffset.UtcNow,
+    };
+
+    private static readonly JsonSerializerOptions ToolResultSummaryJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
     };
 
     public static ToolExecutionRequest CreateToolExecutionRequest(

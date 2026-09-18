@@ -118,6 +118,22 @@ Keyset-paginated message history for a conversation, newest-first. `before` (opt
 ```
 `nextBefore` is `null` when `hasMore` is `false`.
 
+For a `Tool`-role message, `content` is itself a JSON-encoded array (still a string field - decode it client-side), one entry per tool call resolved in that turn:
+```json
+[
+  {
+    "toolUseId": "string",
+    "toolName": "get_timetable",
+    "displayName": "Checking your timetable",
+    "effect": "Neutral",
+    "success": true,
+    "affectedCount": 6,
+    "resultJson": "string"
+  }
+]
+```
+`effect` is `Neutral`/`Creative`/`Destructive` (see `tool_started`/`tool_completed` SSE events above). `affectedCount` is tool-defined - entries fetched for a read, rows created/deleted for a write. `resultJson` is the tool's full raw output (itself a JSON string) for a details/expand view. This is a UI-friendly projection only - it's derived from, and never fed back into, the exact provider-protocol content actually replayed to the model on the next turn.
+
 ---
 
 ### `GET /api/ai/conversations/{conversationId}/tool-requests/pending`
@@ -150,9 +166,9 @@ The two message-sending endpoints and the tool-resolve endpoint all stream Serve
 |---|---|---|
 | `text_delta` | `text` | A chunk of the assistant's reply text |
 | `turn_started` | `conversationId` | A new model call just started — show a "thinking" indicator until text or a tool event arrives |
-| `tool_started` | `conversationId`, `toolUseId`, `toolName`, `displayName` | A tool is about to run (auto-executed read tool, or a freshly-approved gated one) — `displayName` is the UI-friendly label, e.g. "Checking your timetable" |
-| `tool_completed` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `success` | The tool finished |
-| `permission_required` | `conversationId`, `toolExecutionRequestId`, `toolName`, `displayName`, `inputJson` | The AI wants to run a gated tool — needs a `resolve` call |
+| `tool_started` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect` | A tool is about to run (auto-executed read tool, or a freshly-approved gated one) — `displayName` is the UI-friendly label, e.g. "Checking your timetable"; `effect` is `Neutral`/`Creative`/`Destructive` |
+| `tool_completed` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect`, `success`, `affectedCount` | The tool finished — `affectedCount` is tool-defined (e.g. sessions fetched, rows created/deleted) |
+| `permission_required` | `conversationId`, `toolExecutionRequestId`, `toolName`, `displayName`, `effect`, `inputJson` | The AI wants to run a gated tool — needs a `resolve` call |
 | `permission_resolved` | `conversationId`, `toolExecutionRequestId`, `approved` | Confirms a resolve was recorded (sibling gated calls from the same turn still pending) |
 | `usage` | `conversationId`, `model`, `inputTokens`, `outputTokens`, `cacheCreationInputTokens`, `cacheReadInputTokens` | Token usage for the turn that just completed |
 | `completed` | `conversationId`, `assistantMessageId` | The turn finished normally |
