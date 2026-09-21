@@ -38,14 +38,14 @@ public sealed class GetTimetableTool(TimetableService timetable) : IAiTool
         }
         """;
 
-    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, string inputJson, CancellationToken cancellationToken)
     {
         var input = string.IsNullOrWhiteSpace(inputJson)
             ? new Input(null)
             : JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web) ?? new Input(null);
 
         var asOf = input.AsOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var entries = await timetable.GetTimetableAsOfAsync(userId, asOf, cancellationToken);
+        var entries = await timetable.GetTimetableAsOfAsync(context.UserId, asOf, cancellationToken);
 
         var result = new
         {

@@ -31,12 +31,12 @@ public sealed class DeleteFocusTool(FocusService focuses) : IAiTool
         }
         """;
 
-    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, string inputJson, CancellationToken cancellationToken)
     {
         var input = JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web)
             ?? throw new InvalidOperationException("Missing tool input.");
 
-        var deleted = await focuses.DeleteAsync(userId, input.FocusId, cancellationToken);
+        var deleted = await focuses.DeleteAsync(context.UserId, input.FocusId, cancellationToken);
         return new ToolExecutionResult(JsonSerializer.Serialize(new { deleted }, ToolJsonOptions.Web), AffectedCount: deleted ? 1 : 0);
     }
 

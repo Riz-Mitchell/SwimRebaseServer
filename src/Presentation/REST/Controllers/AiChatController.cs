@@ -43,6 +43,20 @@ public sealed class AiChatController(
             orchestrator.ResolveToolApprovalAsync(currentUser.UserId, toolExecutionRequestId, body.Approve, body.DenialReason, cancellationToken),
             cancellationToken);
 
+    [HttpPost("tool-requests/{toolExecutionRequestId:guid}/answer")]
+    public Task AnswerToolRequest(
+        Guid toolExecutionRequestId, [FromBody] AnswerToolRequestBody body, CancellationToken cancellationToken) =>
+        StreamEventsAsync(
+            orchestrator.AnswerQuestionAsync(currentUser.UserId, toolExecutionRequestId, body.ToAnswers(), cancellationToken),
+            cancellationToken);
+
+    /// <summary>Abandons a running sub-agent (its tool call is InProgress), unblocking the chat. Whatever it was waiting on is denied.</summary>
+    [HttpPost("tool-requests/{toolExecutionRequestId:guid}/cancel")]
+    public Task CancelToolRequest(Guid toolExecutionRequestId, CancellationToken cancellationToken) =>
+        StreamEventsAsync(
+            orchestrator.CancelSubAgentAsync(currentUser.UserId, toolExecutionRequestId, cancellationToken),
+            cancellationToken);
+
     [HttpGet("conversations")]
     public async Task<IActionResult> ListConversations(
         [FromQuery] ConversationSortBy sortBy = ConversationSortBy.LastMessageAt,
@@ -87,6 +101,8 @@ public sealed class AiChatController(
         return Ok(pending.Select(t => new
         {
             t.Id,
+            t.ConversationId,
+            t.Status,
             t.AssistantMessageId,
             t.ToolName,
             t.InputJson,
@@ -151,5 +167,11 @@ public sealed class AiChatController(
 public sealed record SendMessageRequest(string Message, IReadOnlyList<Guid>? ImageIds = null);
 
 public sealed record ResolveToolRequestBody(bool Approve, string? DenialReason);
+
+/// <summary>One answer via <c>Answer</c> for a single question, or one per question (in the order asked) via <c>Answers</c> when several were asked together.</summary>
+public sealed record AnswerToolRequestBody(string? Answer, IReadOnlyList<string>? Answers)
+{
+    public IReadOnlyList<string> ToAnswers() => Answers is { Count: > 0 } ? Answers : [Answer ?? string.Empty];
+}
 
 public sealed record CreateImageUploadUrlRequest(string FileName, string ContentType);

@@ -28,6 +28,9 @@ public class ToolExecutionRequest
 
     public string? ResultJson { get; set; }
 
+    /// <summary>What the tool reported it affected. Only recorded for calls executed ahead of their turn's gated calls (see <c>ChatTurnLoop</c>), so the combined tool_result can still report it.</summary>
+    public int? AffectedCount { get; set; }
+
     public string? DenialReason { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

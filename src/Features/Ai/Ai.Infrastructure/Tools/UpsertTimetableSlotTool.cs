@@ -59,7 +59,7 @@ public sealed class UpsertTimetableSlotTool(TimetableService timetable) : IAiToo
         }
         """;
 
-    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, string inputJson, CancellationToken cancellationToken)
     {
         var input = JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web)
             ?? throw new InvalidOperationException("Missing tool input.");
@@ -71,7 +71,7 @@ public sealed class UpsertTimetableSlotTool(TimetableService timetable) : IAiToo
         var slotInput = new TimetableSlotInput(
             input.DayOfWeek, ParseTime(input.StartTime), ParseTime(input.EndTime), input.SessionType, input.Label, expectedSession);
 
-        var version = await timetable.UpsertSlotAsync(userId, input.SlotId, slotInput, input.EffectiveFrom, cancellationToken);
+        var version = await timetable.UpsertSlotAsync(context.UserId, input.SlotId, slotInput, input.EffectiveFrom, cancellationToken);
 
         var resultJson = JsonSerializer.Serialize(
             new

@@ -8,4 +8,7 @@ public enum ToolExecutionStatus
     Denied = 2,
     Executed = 3,
     Failed = 4,
+
+    /// <summary>A sub-agent tool call whose child conversation is still running (it may be waiting on the user). The parent conversation stays blocked until it resolves.</summary>
+    InProgress = 5,
 }

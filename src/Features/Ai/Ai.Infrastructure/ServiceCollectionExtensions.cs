@@ -2,8 +2,10 @@ using Ai.Application;
 using Ai.Application.Interfaces;
 using Ai.Application.Options;
 using Ai.Application.Services;
+using Ai.Application.Services.ToolInteractions;
 using Ai.Infrastructure.Chat;
 using Ai.Infrastructure.Repositories;
+using Ai.Infrastructure.SubAgents;
 using Ai.Infrastructure.Tools;
 using Anthropic;
 using Microsoft.EntityFrameworkCore;
@@ -46,21 +48,41 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenUsageRepository, TokenUsageRepository>();
         services.AddScoped<IUploadedImageRepository, UploadedImageRepository>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
-        services.AddScoped<IAiTool, GetTimetableTool>();
-        services.AddScoped<IAiTool, UpsertTimetableSlotTool>();
-        services.AddScoped<IAiTool, DeleteTimetableSlotTool>();
-        services.AddScoped<IAiTool, CreateFocusTool>();
-        services.AddScoped<IAiTool, EditFocusTool>();
-        services.AddScoped<IAiTool, DeleteFocusTool>();
+        services.AddAiTool<GetTimetableTool>();
+        services.AddAiTool<UpsertTimetableSlotTool>();
+        services.AddAiTool<DeleteTimetableSlotTool>();
+        services.AddAiTool<CreateFocusTool>();
+        services.AddAiTool<EditFocusTool>();
+        services.AddAiTool<DeleteFocusTool>();
+        services.AddAiTool<AskUserQuestionTool>();
+        services.AddAiTool<ReadSwimBoardTool>();
+        services.AddAiTool<AskSwimQuestionsTool>();
+        services.AddAiTool<DraftSessionTool>();
+        services.AddAiTool<EditDraftTool>();
+        services.AddScoped<ISubAgent, SwimBoardInterviewAgent>();
         services.AddScoped<IAiChatClient, AnthropicChatClient>();
         services.AddScoped<IChatCompactionService, ChatCompactionService>();
         services.AddScoped<IAiUserProvisioningService, AiUserProvisioningService>();
         services.AddScoped<ImageUploadService>();
         services.AddScoped<ToolExecutor>();
+        services.AddScoped<ToolTurnCloser>();
+        services.AddScoped<ConversationRunner>();
+        services.AddScoped<IAgentProfileProvider, AgentProfileProvider>();
+        services.AddScoped<IToolInteraction, ApprovalInteraction>();
+        services.AddScoped<IToolInteraction, QuestionInteraction>();
+        services.AddScoped<IToolInteraction, SubAgentInteraction>();
         services.AddScoped<GatedToolApprovalResolver>();
         services.AddScoped<ChatTurnLoop>();
         services.AddScoped<ChatOrchestrator>();
 
+        return services;
+    }
+
+    /// <summary>Registers a tool under both its own type and <see cref="IAiToolDefinition"/> (what the registry aggregates), resolving to the same scoped instance.</summary>
+    private static IServiceCollection AddAiTool<TTool>(this IServiceCollection services) where TTool : class, IAiToolDefinition
+    {
+        services.AddScoped<TTool>();
+        services.AddScoped<IAiToolDefinition>(sp => sp.GetRequiredService<TTool>());
         return services;
     }
 }

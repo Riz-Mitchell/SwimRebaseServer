@@ -21,6 +21,7 @@ public sealed class ChatCompactionService(
     ITokenUsageRepository tokenUsage,
     [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     IAiChatClient chatClient,
+    IAgentProfileProvider profiles,
     IOptions<ChatCompactionOptions> options) : IChatCompactionService
 {
     private const string SummarizationSystemPrompt =
@@ -31,6 +32,12 @@ public sealed class ChatCompactionService(
 
     public async Task CompactIfNeededAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken)
     {
+        var conversation = await conversations.FindAsync(userId, conversationId, cancellationToken);
+        if (conversation is null || !profiles.Get(conversation.Kind).Compaction)
+        {
+            return;
+        }
+
         var settings = options.Value;
         var liveMessages = await conversations.GetLiveContextMessagesAsync(conversationId, cancellationToken);
         if (liveMessages.Count <= settings.MaxLiveMessagesBeforeCompaction)

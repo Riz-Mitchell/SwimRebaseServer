@@ -73,7 +73,7 @@ Once confirmed, pass `imageId` in `imageIds` on a `POST .../messages` call to at
 ---
 
 ### `POST /api/ai/tool-requests/{toolExecutionRequestId}/resolve`
-Approve or deny a gated tool call (a write/destructive action the AI wants to perform, e.g. creating a focus or timetable slot).
+Approve or deny a gated tool call (a write/destructive action the AI wants to perform, e.g. creating a focus or timetable slot). Returns `400`-equivalent (`error` SSE event) if the request is actually an `ask_user_question` — answer those via the `/answer` endpoint below instead.
 
 **Path params:** `toolExecutionRequestId` (guid)
 
@@ -82,6 +82,33 @@ Approve or deny a gated tool call (a write/destructive action the AI wants to pe
 { "approve": true, "denialReason": null }
 ```
 `denialReason` is optional, used only when `approve` is `false`.
+
+**Response:** `text/event-stream` (SSE).
+
+---
+
+### `POST /api/ai/tool-requests/{toolExecutionRequestId}/answer`
+Answer a clarifying question the AI asked mid-turn (the `ask_user_question` tool - see the `question_asked` SSE event below). Returns an `error` SSE event if the request isn't actually a pending question.
+
+**Path params:** `toolExecutionRequestId` (guid)
+
+**Body:** one answer for a single question, or one per question (in the order asked) when a `questions_asked` event asked several at once - send exactly one of the two:
+```json
+{ "answer": "string" }
+```
+```json
+{ "answers": ["string", "string"] }
+```
+Each answer is always free text. The `question_asked` event's `options` are AI-suggested quick replies only, never an enforced/closed set - clients should render them as tappable chips *and* always offer a free-text ("Other") input, and send whatever the user picked or typed as `answer` either way.
+
+**Response:** `text/event-stream` (SSE).
+
+---
+
+### `POST /api/ai/tool-requests/{toolExecutionRequestId}/cancel`
+Abandon a running sub-agent - a tool call the main chat is blocked on while a specialist talks to the user in its own conversation (see "Sub-agents" below). Whatever the sub-agent was waiting on is denied, the tool call is settled as declined, and the main chat resumes (the model is told the user cancelled). Returns an `error` SSE event if the request is not a running sub-agent (use the `toolExecutionRequestId` from the `sub_agent_started` event, or the `InProgress` entry from `/pending` after reconnecting).
+
+**Path params:** `toolExecutionRequestId` (guid) - the *parent* request from `sub_agent_started`.
 
 **Response:** `text/event-stream` (SSE).
 
@@ -137,17 +164,17 @@ For a `Tool`-role message, `content` is itself a JSON-encoded array (still a str
 ---
 
 ### `GET /api/ai/conversations/{conversationId}/tool-requests/pending`
-List still-unresolved (`PendingApproval`) gated tool requests for a conversation, oldest first. Use this to recover a conversation's state after reconnecting (e.g. after a dropped SSE connection or a server crash mid-turn) instead of relying solely on the `permission_required` SSE event, which is only ever emitted once and is lost if the client wasn't connected to receive it.
+List still-open tool requests (`PendingApproval`, or `InProgress` for a running sub-agent) for a conversation, oldest first - including questions asked by any sub-agent the conversation started (their `conversationId` is the sub-agent's, not this one's). Use this to recover a conversation's state after reconnecting (e.g. after a dropped SSE connection or a server crash mid-turn) instead of relying solely on the `permission_required`/`question_asked` SSE events, which are only ever emitted once and are lost if the client wasn't connected to receive them.
 
 **Path params:** `conversationId` (guid)
 
 **Response:**
 ```json
 [
-  { "id": "guid", "assistantMessageId": "guid", "toolName": "string", "inputJson": "string", "createdAt": "datetime" }
+  { "id": "guid", "conversationId": "guid", "status": "PendingApproval|InProgress", "assistantMessageId": "guid", "toolName": "string", "inputJson": "string", "createdAt": "datetime" }
 ]
 ```
-Resolve each one via `POST /api/ai/tool-requests/{toolExecutionRequestId}/resolve` above. An empty array means the conversation has nothing outstanding - if the frontend appears "stuck" waiting for approval, calling this endpoint is the way to tell whether there's really a request to resolve or whether the client's local state is just out of sync.
+`toolName` is `"ask_user_question"` for a pending question (parse `question`/`options` out of `inputJson`) - resolve those via `POST /api/ai/tool-requests/{toolExecutionRequestId}/answer`. A sub-agent's question has a different `toolName` (e.g. `"ask"` for the swim-board interview - parse `questions[]` out of `inputJson`, showing everything up to and including the first `kind: "fork"`); answer it the same way, with `answers`. A running sub-agent (e.g. `"read_swim_board"`) is listed with `status: "InProgress"` - it blocks the conversation until its question is answered or it is cancelled, and its `id` is what the `/cancel` endpoint takes. Only `PendingApproval` entries are answerable/resolvable. Everything else is a gated write/destructive call - resolve via `.../resolve`. An empty array means the conversation has nothing outstanding - if the frontend appears "stuck" waiting for approval, calling this endpoint is the way to tell whether there's really a request to resolve or whether the client's local state is just out of sync.
 
 ---
 
@@ -158,9 +185,22 @@ Token usage summary for the current user. Both query params optional.
 
 ---
 
+### Sub-agents (e.g. reading a swim workout board)
+
+Some tool calls hand the conversation to a specialist that talks to the user directly, in its own conversation, while the main chat waits. Everything still streams over the same SSE connection, so the client shows it all in one chat. Today there is one: **`read_swim_board`**. The AI calls it when the user has attached a photo of a workout board (it is only offered when the conversation contains an image) and wants it logged.
+
+1. The main assistant's turn ends with `sub_agent_started` (`toolUseId` is the tool call to nest the following events under; `toolExecutionRequestId` is what `/cancel` takes; `childConversationId` is the specialist's conversation).
+2. The specialist asks about the swimmer's path through the board as `questions_asked` events (its `conversationId` is `childConversationId`). Answer each with `POST .../tool-requests/{toolExecutionRequestId}/answer` and `{ "answers": [...] }` - one entry per question in the event, in order. A question with `kind: "Fork"` is always last in its event (it decides which questions come next). Each answer is either the option's number (`"2"`) or free text. The answer's response stream continues the interview - the next `questions_asked` - or, when it is finished, `sub_agent_completed` followed by the main assistant's reply (a summary of the **draft** session, with numbered sets and computed totals).
+3. While the interview runs, the main chat is blocked: sending a message returns an `error` event. To abandon it, `POST .../tool-requests/{toolExecutionRequestId}/cancel` with the id from `sub_agent_started` (or the `InProgress` entry of `/pending` after reconnecting).
+4. The draft is not saved anywhere yet. To change it ("actually I skipped the kick set") the user just says so in the main chat; the AI edits the draft with its `edit_draft` tool.
+
+Sub-agent conversations are an implementation detail: they never appear in `GET /api/ai/conversations`, and cannot be messaged directly.
+
+---
+
 ### Streaming response shape
 
-The two message-sending endpoints and the tool-resolve endpoint all stream Server-Sent Events. Each event is JSON with a `type` discriminator:
+The two message-sending endpoints and the tool-resolve/answer endpoints all stream Server-Sent Events. Each event is JSON with a `type` discriminator:
 
 | `type` | Fields | Meaning |
 |---|---|---|
@@ -170,6 +210,10 @@ The two message-sending endpoints and the tool-resolve endpoint all stream Serve
 | `tool_completed` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect`, `success`, `affectedCount` | The tool finished — `affectedCount` is tool-defined (e.g. sessions fetched, rows created/deleted) |
 | `permission_required` | `conversationId`, `toolExecutionRequestId`, `toolName`, `displayName`, `effect`, `inputJson` | The AI wants to run a gated tool — needs a `resolve` call |
 | `permission_resolved` | `conversationId`, `toolExecutionRequestId`, `approved` | Confirms a resolve was recorded (sibling gated calls from the same turn still pending) |
+| `question_asked` | `conversationId`, `toolExecutionRequestId`, `question`, `options` | The AI is asking a clarifying question — needs an `answer` call. `options` are advisory quick-reply suggestions only; always also offer free-text entry |
+| `questions_asked` | `conversationId`, `toolExecutionRequestId`, `questions` | A sub-agent is asking several questions at once - needs an `answer` call with one entry in `answers` per question, in order. Each question is `{ text, kind, options }`; `kind` is `Detail` or `Fork`. `options` are quick-reply suggestions only (a number or typed text both work); always offer free-text entry |
+| `sub_agent_started` | `parentConversationId`, `toolExecutionRequestId`, `toolUseId`, `childConversationId`, `displayName` | A tool call started a sub-agent in its own conversation. Render everything until the matching `sub_agent_completed` as nested under that tool call (`toolUseId`) in the same chat. Its events carry `childConversationId` as their `conversationId` |
+| `sub_agent_completed` | `parentConversationId`, `toolExecutionRequestId`, `childConversationId`, `displayName`, `success` | The sub-agent finished (or was cancelled); the main chat resumes right after |
 | `usage` | `conversationId`, `model`, `inputTokens`, `outputTokens`, `cacheCreationInputTokens`, `cacheReadInputTokens` | Token usage for the turn that just completed |
 | `completed` | `conversationId`, `assistantMessageId` | The turn finished normally |
 | `error` | `message` | Something went wrong mid-turn |

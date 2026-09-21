@@ -23,10 +23,18 @@
     <Project Path="src/Features/Auth/Auth.Domain/Auth.Domain.csproj" />
     <Project Path="src/Features/Auth/Auth.Infrastructure/Auth.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/Features/SessionConversion/">
+    <Project Path="src/Features/SessionConversion/SessionConversion.Application/SessionConversion.Application.csproj" />
+    <Project Path="src/Features/SessionConversion/SessionConversion.Domain/SessionConversion.Domain.csproj" />
+    <Project Path="src/Features/SessionConversion/SessionConversion.Infrastructure/SessionConversion.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/Features/Training/">
     <Project Path="src/Features/Training/Training.Application/Training.Application.csproj" />
     <Project Path="src/Features/Training/Training.Domain/Training.Domain.csproj" />
     <Project Path="src/Features/Training/Training.Infrastructure/Training.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="tests/SwimRebase.Tests/SwimRebase.Tests.csproj" />
   </Folder>
   <Folder Name="/Misc/">
     <File Path=".gitignore" />

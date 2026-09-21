@@ -53,9 +53,21 @@ namespace Ai.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("chat")
+                        .HasColumnName("kind");
+
                     b.Property<DateTimeOffset>("LastMessageAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_message_at");
+
+                    b.Property<Guid?>("ParentToolExecutionRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_tool_execution_request_id");
 
                     b.Property<string>("Title")
                         .HasMaxLength(200)
@@ -68,6 +80,9 @@ namespace Ai.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_conversations");
+
+                    b.HasIndex("ParentToolExecutionRequestId")
+                        .HasDatabaseName("ix_conversations_parent_tool_execution_request_id");
 
                     b.HasIndex("UserId", "LastMessageAt")
                         .HasDatabaseName("ix_conversations_user_id_last_message_at");
@@ -219,6 +234,10 @@ namespace Ai.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<int?>("AffectedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("affected_count");
 
                     b.Property<string>("AnthropicToolUseId")
                         .IsRequired()

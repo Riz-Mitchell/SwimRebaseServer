@@ -61,7 +61,7 @@ public sealed class EditFocusTool(FocusService focuses) : IAiTool
         }
         """;
 
-    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, string inputJson, CancellationToken cancellationToken)
     {
         var input = JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web)
             ?? throw new InvalidOperationException("Missing tool input.");
@@ -69,7 +69,7 @@ public sealed class EditFocusTool(FocusService focuses) : IAiTool
         var editInput = new FocusEditInput(
             input.TagLine, input.Prompt, input.TotalDays, ToPoints(input.PositivePoints), ToPoints(input.NegativePoints));
 
-        var focus = await focuses.EditAsync(userId, input.FocusId, editInput, cancellationToken);
+        var focus = await focuses.EditAsync(context.UserId, input.FocusId, editInput, cancellationToken);
 
         if (focus is null)
         {

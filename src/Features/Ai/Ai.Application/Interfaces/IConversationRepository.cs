@@ -11,6 +11,10 @@ public interface IConversationRepository
 {
     Task<Conversation?> FindAsync(Guid userId, Guid conversationId, CancellationToken cancellationToken);
 
+    /// <summary>The sub-agent conversation started by the given tool call in a parent chat, if any.</summary>
+    Task<Conversation?> FindChildAsync(Guid userId, Guid parentToolExecutionRequestId, CancellationToken cancellationToken);
+
+    /// <summary>Only the user's own chats - sub-agent conversations are an implementation detail of the chat that started them.</summary>
     Task<IReadOnlyList<Conversation>> ListForUserAsync(
         Guid userId, ConversationSortBy sortBy, bool descending, CancellationToken cancellationToken);
 

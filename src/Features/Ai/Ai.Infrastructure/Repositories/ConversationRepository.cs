@@ -14,10 +14,14 @@ public sealed class ConversationRepository(AiDbContext db) : IConversationReposi
         return conversation is null || conversation.UserId != userId ? null : conversation;
     }
 
+    public async Task<Conversation?> FindChildAsync(Guid userId, Guid parentToolExecutionRequestId, CancellationToken cancellationToken) =>
+        await db.Conversations.FirstOrDefaultAsync(
+            c => c.UserId == userId && c.ParentToolExecutionRequestId == parentToolExecutionRequestId, cancellationToken);
+
     public async Task<IReadOnlyList<Conversation>> ListForUserAsync(
         Guid userId, ConversationSortBy sortBy, bool descending, CancellationToken cancellationToken)
     {
-        var query = db.Conversations.Where(c => c.UserId == userId);
+        var query = db.Conversations.Where(c => c.UserId == userId && c.Kind == ConversationKinds.Chat);
 
         IOrderedQueryable<Conversation> ordered = (sortBy, descending) switch
         {

@@ -35,12 +35,12 @@ public sealed class DeleteTimetableSlotTool(TimetableService timetable) : IAiToo
         }
         """;
 
-    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, string inputJson, CancellationToken cancellationToken)
     {
         var input = JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web)
             ?? throw new InvalidOperationException("Missing tool input.");
 
-        var deleted = await timetable.DeleteSlotAsync(userId, input.SlotId, input.EffectiveTo, cancellationToken);
+        var deleted = await timetable.DeleteSlotAsync(context.UserId, input.SlotId, input.EffectiveTo, cancellationToken);
         return new ToolExecutionResult(JsonSerializer.Serialize(new { deleted }, ToolJsonOptions.Web), AffectedCount: deleted ? 1 : 0);
     }
 

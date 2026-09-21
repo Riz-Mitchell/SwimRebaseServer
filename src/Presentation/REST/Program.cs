@@ -4,6 +4,7 @@ using Auth.Infrastructure;
 using Auth.Infrastructure.Middleware;
 using Azure.Identity;
 using Microsoft.EntityFrameworkCore;
+using SessionConversion.Infrastructure;
 using Shared.Infrastructure;
 using System.Text.Json.Serialization;
 using Training.Infrastructure;
@@ -45,6 +46,7 @@ builder.Services.AddAnalyticsInfrastructure(builder.Configuration);
 builder.Services.AddAuthInfrastructure(builder.Configuration);
 builder.Services.AddAiInfrastructure(builder.Configuration);
 builder.Services.AddTrainingInfrastructure(builder.Configuration);
+builder.Services.AddSessionConversionInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
@@ -59,6 +61,7 @@ using (var migrationScope = app.Services.CreateScope())
         ("Analytics", () => migrationScope.ServiceProvider.GetRequiredService<AnalyticsDbContext>().Database.MigrateAsync()),
         ("Auth", () => migrationScope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync()),
         ("Training", () => migrationScope.ServiceProvider.GetRequiredService<TrainingDbContext>().Database.MigrateAsync()),
+        ("SessionConversion", () => migrationScope.ServiceProvider.GetRequiredService<SessionConversionDbContext>().Database.MigrateAsync()),
     })
     {
         Console.WriteLine($"[startup] Migrating {name}Db ...");

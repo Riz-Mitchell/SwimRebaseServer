@@ -19,10 +19,15 @@ public sealed record AiToolSpec(string Name, string Description, string JsonSche
 /// <paramref name="Model"/> and <paramref name="MaxTokens"/> override the client's configured
 /// defaults (<c>AiModelOptions</c>) for this call only - used by compaction to run its
 /// summarization turn on a cheaper model than the user-facing chat model.
+/// <paramref name="PromptCaching"/> adds cache breakpoints on the system prompt and the newest message so a
+/// long, growing conversation re-reads its prefix from the provider's cache. <paramref name="RequireToolUse"/>
+/// forces the model to call exactly one tool this turn instead of answering in prose.
 /// </summary>
 public sealed record ChatTurnRequest(
     IReadOnlyList<ChatMessage> Messages,
     string? SystemPrompt,
     IReadOnlyList<AiToolSpec> Tools,
     string? Model = null,
-    int? MaxTokens = null);
+    int? MaxTokens = null,
+    bool PromptCaching = false,
+    bool RequireToolUse = false);

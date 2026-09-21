@@ -2,93 +2,109 @@ using System.Runtime.CompilerServices;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
-using Microsoft.Extensions.DependencyInjection;
-using Shared.Application;
 
 namespace Ai.Application.Services;
 
-/// <summary>Out-parameter substitute for an async-iterator method: set once <see cref="GatedToolApprovalResolver.ResolveAsync"/> finishes enumerating.</summary>
-public sealed class ToolApprovalResolution
-{
-    public Guid? ReadyConversationId { get; set; }
-}
-
 /// <summary>
-/// Records one approve/deny decision and, once every gated (write/destructive) call raised by the
-/// same assistant turn has been resolved, executes the approved ones and persists the combined
-/// tool_result message.
+/// Records how each kind of gated call was settled - approve/deny, a typed answer, a finished or cancelled sub-agent -
+/// and hands the shared "settle the turn" work to <see cref="ToolTurnCloser"/>. Every method follows the same
+/// sibling-wait rule: the model only resumes once every gated call the same assistant turn raised has been settled.
 /// </summary>
 public sealed class GatedToolApprovalResolver(
+    ToolTurnCloser closer,
     IToolExecutionRepository toolExecutions,
     IConversationRepository conversations,
     IAiToolRegistry toolRegistry,
-    [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
-    IChatCompactionService compaction,
-    ToolExecutor toolExecutor)
+    IAgentProfileProvider profiles,
+    IEnumerable<ISubAgent> subAgents)
 {
-    /// <summary>
-    /// Streams a <see cref="AiChatToolStarted"/>/<see cref="AiChatToolCompleted"/> pair for each
-    /// approved sibling actually executed. <paramref name="resolution"/>.ReadyConversationId is left
-    /// null while sibling gated calls from the same turn are still pending, and set once every gated
-    /// call in the turn has an answer so the caller can resume the model loop.
-    /// </summary>
-    public async IAsyncEnumerable<AiChatEvent> ResolveAsync(
+    public IAsyncEnumerable<AiChatEvent> ResolveAsync(
         Guid userId, ToolExecutionRequest request, bool approve, string? denialReason,
+        ToolApprovalResolution resolution, CancellationToken cancellationToken) =>
+        closer.ResolveAsync(userId, request, r =>
+        {
+            r.Status = approve ? ToolExecutionStatus.Approved : ToolExecutionStatus.Denied;
+            r.DenialReason = denialReason;
+        }, resolution, cancellationToken);
+
+    /// <summary>
+    /// Records the user's answer(s) to a question tool. The request is marked <see cref="ToolExecutionStatus.Approved"/> (there is no
+    /// approve/deny axis for a question) with the tool's formatted answer stashed in <see cref="ToolExecutionRequest.ResultJson"/>.
+    /// </summary>
+    public async IAsyncEnumerable<AiChatEvent> AnswerAsync(
+        Guid userId, ToolExecutionRequest request, IReadOnlyList<string> answers,
         ToolApprovalResolution resolution, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // Everything from here through the tool_result message insert is one transaction. Without
-        // it, a crash between the two original SaveChanges calls left the request durably
-        // Approved/Denied with no corresponding tool_result ever written - a permanently dangling
-        // tool_use block that bricks every future send to the conversation (Anthropic rejects any
-        // request whose history has a tool_use with no following tool_result). Wrapping it means a
-        // crash mid-resolve rolls the status change back too, leaving the request PendingApproval
-        // and safely re-resolvable instead of stuck half-done.
-        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var tool = toolRegistry.Find(request.ToolName) as IQuestionTool
+            ?? throw new InvalidOperationException($"Tool '{request.ToolName}' is not a question tool.");
 
-        request.Status = approve ? ToolExecutionStatus.Approved : ToolExecutionStatus.Denied;
-        request.DenialReason = denialReason;
-        request.ResolvedAt = DateTimeOffset.UtcNow;
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        var conversation = await conversations.FindAsync(userId, request.ConversationId, cancellationToken);
+        var maxTurns = conversation is null ? null : profiles.Get(conversation.Kind).MaxQuestionTurns;
+        var turn = await toolExecutions.CountForConversationAsync(request.ConversationId, request.ToolName, cancellationToken);
+        var resultJson = tool.FormatAnswer(request.InputJson, answers, new QuestionAnswerContext(turn, maxTurns));
 
-        var siblings = await toolExecutions.GetByAssistantMessageIdAsync(request.AssistantMessageId, cancellationToken);
-        if (siblings.Any(s => s.Status == ToolExecutionStatus.PendingApproval))
+        await foreach (var chatEvent in closer.ResolveAsync(userId, request, r =>
         {
-            await transaction.CommitAsync(cancellationToken);
+            r.Status = ToolExecutionStatus.Approved;
+            r.ResultJson = resultJson;
+        }, resolution, cancellationToken))
+        {
+            yield return chatEvent;
+        }
+    }
+
+    /// <summary>A sub-agent's conversation finished (or ended without a result): settle the parent tool call it was started from.</summary>
+    public async IAsyncEnumerable<AiChatEvent> CompleteSubAgentAsync(
+        Guid userId, Guid childConversationId, Guid parentRequestId, bool succeeded,
+        ToolApprovalResolution resolution, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var parent = await toolExecutions.FindAsync(userId, parentRequestId, cancellationToken);
+        if (parent is null || parent.Status != ToolExecutionStatus.InProgress)
+        {
             resolution.ReadyConversationId = null;
             yield break;
         }
 
-        var summaries = new List<ToolResultSummary>();
-        foreach (var sibling in siblings)
+        var agent = subAgents.First(a => a.ToolName == parent.ToolName);
+        var resultJson = succeeded
+            ? await agent.SummarizeAsync(new SubAgentCompletion(userId, childConversationId, parent), cancellationToken)
+            : "The session ended without producing a result.";
+
+        yield return new AiChatSubAgentCompleted(
+            parent.ConversationId, parent.Id, childConversationId, toolRegistry.Find(parent.ToolName)?.DisplayName ?? parent.ToolName, succeeded);
+
+        await foreach (var chatEvent in closer.ResolveAsync(userId, parent, r =>
         {
-            var siblingTool = toolRegistry.Find(sibling.ToolName);
-            var displayName = siblingTool?.DisplayName ?? sibling.ToolName;
-            var effect = siblingTool?.Effect ?? ToolEffect.Neutral;
+            r.Status = succeeded ? ToolExecutionStatus.Executed : ToolExecutionStatus.Failed;
+            r.ResultJson = resultJson;
+        }, resolution, cancellationToken))
+        {
+            yield return chatEvent;
+        }
+    }
 
-            if (sibling.Status == ToolExecutionStatus.Denied)
-            {
-                summaries.Add(new ToolResultSummary(
-                    sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect, Success: false, AffectedCount: 0, "The user declined this action."));
-                continue;
-            }
+    /// <summary>The user abandoned a running sub-agent: deny whatever it was waiting on and settle the parent call as declined.</summary>
+    public async IAsyncEnumerable<AiChatEvent> CancelSubAgentAsync(
+        Guid userId, ToolExecutionRequest parent, ToolApprovalResolution resolution, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        const string reason = "The user cancelled this before it finished.";
 
-            yield return new AiChatToolStarted(request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect);
-
-            var summary = await toolExecutor.ExecuteAsync(userId, sibling.AnthropicToolUseId, sibling.ToolName, sibling.InputJson, cancellationToken);
-            sibling.Status = summary.Success ? ToolExecutionStatus.Executed : ToolExecutionStatus.Failed;
-            sibling.ResultJson = summary.ResultJson;
-            summaries.Add(summary);
-
-            yield return new AiChatToolCompleted(
-                request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect, summary.Success, summary.AffectedCount);
+        var child = await conversations.FindChildAsync(userId, parent.Id, cancellationToken);
+        if (child is not null)
+        {
+            await toolExecutions.DenyOutstandingForConversationAsync(child.Id, reason, cancellationToken);
         }
 
-        var sequenceNumber = await conversations.GetNextSequenceNumberAsync(request.ConversationId, cancellationToken);
-        conversations.AddMessage(ConversationMessageFactory.CreateToolResultMessage(request.ConversationId, sequenceNumber, summaries));
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        yield return new AiChatSubAgentCompleted(
+            parent.ConversationId, parent.Id, child?.Id ?? Guid.Empty, toolRegistry.Find(parent.ToolName)?.DisplayName ?? parent.ToolName, Success: false);
 
-        await compaction.CompactIfNeededAsync(request.ConversationId, userId, cancellationToken);
-        resolution.ReadyConversationId = request.ConversationId;
+        await foreach (var chatEvent in closer.ResolveAsync(userId, parent, r =>
+        {
+            r.Status = ToolExecutionStatus.Denied;
+            r.DenialReason = reason;
+        }, resolution, cancellationToken))
+        {
+            yield return chatEvent;
+        }
     }
 }

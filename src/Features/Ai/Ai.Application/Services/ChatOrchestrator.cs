@@ -9,9 +9,11 @@ using Shared.Application;
 namespace Ai.Application.Services;
 
 /// <summary>
-/// Entry points for the Ai chat feature. Both feed the same <see cref="ChatTurnLoop"/>:
+/// Entry points for the Ai chat feature. All of them feed the same <see cref="ConversationRunner"/>:
 /// <see cref="SendUserMessageAsync"/> starts a normal turn, <see cref="ResolveToolApprovalAsync"/>
-/// resumes one after a gated (write/destructive) tool call was approved or denied.
+/// resumes one after a gated (write/destructive) tool call was approved or denied,
+/// <see cref="AnswerQuestionAsync"/> after a question was answered, and <see cref="CancelSubAgentAsync"/>
+/// after the user abandoned a running sub-agent.
 /// </summary>
 public sealed class ChatOrchestrator(
     IConversationRepository conversations,
@@ -21,7 +23,8 @@ public sealed class ChatOrchestrator(
     IChatCompactionService compaction,
     IAiUserProvisioningService aiUserProvisioning,
     GatedToolApprovalResolver approvalResolver,
-    ChatTurnLoop turnLoop,
+    ConversationRunner runner,
+    IAiToolRegistry toolRegistry,
     IEventTracker eventTracker)
 {
     public async IAsyncEnumerable<AiChatEvent> SendUserMessageAsync(
@@ -36,6 +39,11 @@ public sealed class ChatOrchestrator(
         await aiUserProvisioning.EnsureExistsAsync(userId, cancellationToken);
 
         var conversation = await GetOrCreateConversationAsync(userId, conversationId, userMessage, cancellationToken);
+        if (conversation.Kind != ConversationKinds.Chat)
+        {
+            yield return new AiChatError("This conversation belongs to a sub-agent and cannot be messaged directly.");
+            yield break;
+        }
 
         // A gated tool call from a previous turn leaves a tool_use content block in live history with
         // no matching tool_result until it's resolved. Sending a new message on top of that would send
@@ -43,10 +51,9 @@ public sealed class ChatOrchestrator(
         // the new user message is about to be persisted, permanently brick the conversation - every
         // later send would hit the exact same dangling tool_use and fail the same way. Reject up front
         // instead so the client gets an actionable error and nothing bad gets committed.
-        var pending = await toolExecutions.GetPendingForConversationAsync(userId, conversation.Id, cancellationToken);
-        if (pending.Count > 0)
+        if (await toolExecutions.HasOutstandingRequestAsync(userId, conversation.Id, cancellationToken))
         {
-            yield return new AiChatError("This conversation has a tool request awaiting approval - resolve it before sending a new message.");
+            yield return new AiChatError("This conversation has a tool request awaiting approval, an answer, or a sub-agent to finish - resolve it before sending a new message.");
             yield break;
         }
 
@@ -75,7 +82,7 @@ public sealed class ChatOrchestrator(
 
         await compaction.CompactIfNeededAsync(conversation.Id, userId, cancellationToken);
 
-        await foreach (var chatEvent in turnLoop.RunAsync(userId, conversation.Id, cancellationToken))
+        await foreach (var chatEvent in runner.RunAsync(userId, conversation.Id, cancellationToken))
         {
             yield return chatEvent;
         }
@@ -95,6 +102,19 @@ public sealed class ChatOrchestrator(
             yield break;
         }
 
+        var interaction = toolRegistry.Find(request.ToolName)?.Interaction;
+        if (interaction == ToolInteractionKind.Question)
+        {
+            yield return new AiChatError("This request is a question - resolve it via the answer endpoint, not approve/deny.");
+            yield break;
+        }
+
+        if (interaction == ToolInteractionKind.SubAgent)
+        {
+            yield return new AiChatError("This request is a running sub-agent - answer its questions, or cancel it via the cancel endpoint.");
+            yield break;
+        }
+
         var resolution = new ToolApprovalResolution();
         await foreach (var chatEvent in approvalResolver.ResolveAsync(userId, request, approve, denialReason, resolution, cancellationToken))
         {
@@ -108,7 +128,75 @@ public sealed class ChatOrchestrator(
             yield break;
         }
 
-        await foreach (var chatEvent in turnLoop.RunAsync(userId, readyConversationId, cancellationToken))
+        await foreach (var chatEvent in runner.RunAsync(userId, readyConversationId, cancellationToken))
+        {
+            yield return chatEvent;
+        }
+    }
+
+    public async IAsyncEnumerable<AiChatEvent> AnswerQuestionAsync(
+        Guid userId,
+        Guid toolExecutionRequestId,
+        IReadOnlyList<string> answers,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var request = await toolExecutions.FindAsync(userId, toolExecutionRequestId, cancellationToken);
+        if (request is null || request.Status != ToolExecutionStatus.PendingApproval)
+        {
+            yield return new AiChatError("This request is no longer pending approval.");
+            yield break;
+        }
+
+        if (toolRegistry.Find(request.ToolName)?.Interaction != ToolInteractionKind.Question)
+        {
+            yield return new AiChatError("This request is not a question - resolve it via approve/deny, not the answer endpoint.");
+            yield break;
+        }
+
+        var resolution = new ToolApprovalResolution();
+        await foreach (var chatEvent in approvalResolver.AnswerAsync(userId, request, answers, resolution, cancellationToken))
+        {
+            yield return chatEvent;
+        }
+
+        if (resolution.ReadyConversationId is not { } readyConversationId)
+        {
+            // Sibling gated calls from the same turn are still pending.
+            yield break;
+        }
+
+        await foreach (var chatEvent in runner.RunAsync(userId, readyConversationId, cancellationToken))
+        {
+            yield return chatEvent;
+        }
+    }
+
+    /// <summary>The user abandoned a running sub-agent (e.g. walked away from an interview): settles its tool call as declined so the chat is unblocked.</summary>
+    public async IAsyncEnumerable<AiChatEvent> CancelSubAgentAsync(
+        Guid userId,
+        Guid toolExecutionRequestId,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var request = await toolExecutions.FindAsync(userId, toolExecutionRequestId, cancellationToken);
+        if (request is null || request.Status != ToolExecutionStatus.InProgress
+            || toolRegistry.Find(request.ToolName)?.Interaction != ToolInteractionKind.SubAgent)
+        {
+            yield return new AiChatError("This request is not a running sub-agent.");
+            yield break;
+        }
+
+        var resolution = new ToolApprovalResolution();
+        await foreach (var chatEvent in approvalResolver.CancelSubAgentAsync(userId, request, resolution, cancellationToken))
+        {
+            yield return chatEvent;
+        }
+
+        if (resolution.ReadyConversationId is not { } readyConversationId)
+        {
+            yield break;
+        }
+
+        await foreach (var chatEvent in runner.RunAsync(userId, readyConversationId, cancellationToken))
         {
             yield return chatEvent;
         }

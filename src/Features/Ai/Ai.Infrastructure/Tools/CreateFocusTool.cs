@@ -63,7 +63,7 @@ public sealed class CreateFocusTool(FocusService focuses) : IAiTool
         }
         """;
 
-    public async Task<ToolExecutionResult> ExecuteAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    public async Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, string inputJson, CancellationToken cancellationToken)
     {
         var input = JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web)
             ?? throw new InvalidOperationException("Missing tool input.");
@@ -76,7 +76,7 @@ public sealed class CreateFocusTool(FocusService focuses) : IAiTool
             ToPoints(input.PositivePoints),
             ToPoints(input.NegativePoints));
 
-        var focus = await focuses.CreateAsync(userId, focusInput, FocusOrigin.Ai, input.UserRequest, cancellationToken);
+        var focus = await focuses.CreateAsync(context.UserId, focusInput, FocusOrigin.Ai, input.UserRequest, cancellationToken);
 
         var resultJson = JsonSerializer.Serialize(
             new

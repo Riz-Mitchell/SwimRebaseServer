@@ -44,6 +44,32 @@ internal static class AnthropicMessageMapper
     };
 
     /// <summary>
+    /// Puts a cache breakpoint on the last block of the newest message. Anthropic caches everything up to and including a
+    /// breakpoint, so a conversation that grows by one exchange per turn re-reads all earlier turns from cache and pays full price only for the new ones.
+    /// </summary>
+    public static void MarkLastBlockForCaching(List<MessageParam> messages)
+    {
+        if (messages.Count == 0 || messages[^1].Content.Value is not List<ContentBlockParam> blocks || blocks.Count == 0)
+        {
+            return;
+        }
+
+        var last = blocks[^1];
+        if (last.TryPickText(out var text))
+        {
+            blocks[^1] = text with { CacheControl = new CacheControlEphemeral() };
+        }
+        else if (last.TryPickToolResult(out var result))
+        {
+            blocks[^1] = result with { CacheControl = new CacheControlEphemeral() };
+        }
+        else if (last.TryPickImage(out var image))
+        {
+            blocks[^1] = image with { CacheControl = new CacheControlEphemeral() };
+        }
+    }
+
+    /// <summary>
     /// Parses our tool's raw JSON Schema string into the SDK's typed <see cref="InputSchema"/>.
     /// The tool list is identical on every turn of a conversation (see <c>ChatTurnLoop</c>), so the
     /// last tool gets a cache breakpoint - Anthropic caches everything up to and including it.
@@ -51,30 +77,14 @@ internal static class AnthropicMessageMapper
     public static ToolUnion ToToolUnion(AiToolSpec spec, bool cache = false)
     {
         using var schema = JsonDocument.Parse(spec.JsonSchema);
-        var root = schema.RootElement;
 
-        var properties = new Dictionary<string, JsonElement>();
-        if (root.TryGetProperty("properties", out var propsElement))
-        {
-            foreach (var property in propsElement.EnumerateObject())
-            {
-                properties[property.Name] = property.Value.Clone();
-            }
-        }
-
-        var required = root.TryGetProperty("required", out var requiredElement)
-            ? requiredElement.EnumerateArray().Select(e => e.GetString()!).ToList()
-            : [];
-
+        // Passed through whole (not just properties/required) so schemas that use $defs/$ref survive - a recursive
+        // structure such as a tree of sets can only be described that way.
         return new Tool
         {
             Name = spec.Name,
             Description = spec.Description,
-            InputSchema = new InputSchema
-            {
-                Properties = properties,
-                Required = required,
-            },
+            InputSchema = InputSchema.FromRawUnchecked(schema.RootElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone())),
             CacheControl = cache ? new CacheControlEphemeral() : null,
         };
     }

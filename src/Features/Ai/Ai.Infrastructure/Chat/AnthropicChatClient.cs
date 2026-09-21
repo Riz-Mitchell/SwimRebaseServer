@@ -21,12 +21,18 @@ public sealed class AnthropicChatClient(
         var options = modelOptions.Value;
         var modelName = request.Model ?? options.ChatModel;
 
+        var messages = request.Messages.Select(m => AnthropicMessageMapper.ToMessageParam(m, blobStorage)).ToList();
+        if (request.PromptCaching)
+        {
+            AnthropicMessageMapper.MarkLastBlockForCaching(messages);
+        }
+
         var parameters = new MessageCreateParams
         {
             Model = modelName,
             MaxTokens = request.MaxTokens ?? options.MaxTokens,
-            Messages = request.Messages.Select(m => AnthropicMessageMapper.ToMessageParam(m, blobStorage)).ToList(),
-            System = string.IsNullOrWhiteSpace(request.SystemPrompt) ? null : request.SystemPrompt!,
+            Messages = messages,
+            System = ToSystem(request),
             Tools = request.Tools.Count == 0
                 ? null
                 : request.Tools
@@ -34,7 +40,26 @@ public sealed class AnthropicChatClient(
                     .ToList(),
         };
 
+        if (request.RequireToolUse && request.Tools.Count > 0)
+        {
+            // One tool call per turn: a forced tool call plus parallel calls would leave several tool_uses to answer at once.
+            parameters = parameters with { ToolChoice = new ToolChoiceAny { DisableParallelToolUse = true } };
+        }
+
         var events = client.Messages.CreateStreaming(parameters);
         return new AnthropicStreamProcessor(modelName, request.Tools).ProcessAsync(events, cancellationToken);
+    }
+
+    private static MessageCreateParamsSystem? ToSystem(ChatTurnRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.SystemPrompt))
+        {
+            return null;
+        }
+
+        // A cached system prompt has to be sent as a text block so it can carry the cache marker.
+        return request.PromptCaching
+            ? new List<TextBlockParam> { new() { Text = request.SystemPrompt, CacheControl = new CacheControlEphemeral() } }
+            : request.SystemPrompt;
     }
 }
