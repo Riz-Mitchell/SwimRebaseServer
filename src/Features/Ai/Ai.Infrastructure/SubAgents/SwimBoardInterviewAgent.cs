@@ -2,6 +2,7 @@ using System.Text.Json;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
+using Sessions.Application.Metrics;
 using SessionConversion.Application.Interview;
 using SessionConversion.Application.Services;
 
@@ -33,8 +34,10 @@ public sealed class SwimBoardInterviewAgent(SessionDraftService drafts, IToolExe
     public string? MainChatPromptAddendum =>
         $"When the user attaches a photo of a swim workout board and wants it logged or converted, call {InterviewTools.ReadSwimBoard}. It interviews " +
         "the user directly and returns a DRAFT of what they swam, with numbered sets and computed totals. Show them the result briefly and ask if it looks " +
-        $"right. To change it, call {InterviewTools.EditDraft} with the draft id and small edits - never re-type the whole session. Saving sessions is not " +
-        "available yet: say so if asked, and never claim a session was saved.";
+        $"right. To change it, call {InterviewTools.EditDraft} with the draft id and small edits - never re-type the whole session. Once they are happy, " +
+        $"save it with {InterviewTools.SaveSession} (it needs the date they swam and the pool course - ask if they have not said; the user confirms before it is saved). " +
+        "Until it has been saved with that tool, never claim a session was saved. For questions about how much they have swum (a stroke, an intensity, a " +
+        $"period), call {MetricsTool.Name} instead of estimating.";
 
     public string BuildOpeningMessage(string toolInputJson)
     {
@@ -53,7 +56,7 @@ public sealed class SwimBoardInterviewAgent(SessionDraftService drafts, IToolExe
         var transcript = InterviewTranscript.Build(
             asked.Where(a => a.Status == ToolExecutionStatus.Approved).Select(a => (a.InputJson, a.ResultJson)));
 
-        return $"Draft id: {draft.Id} (version {draft.Version}). This is a DRAFT: it has not been saved anywhere.\n\n" +
+        return $"Draft id: {draft.Id} (version {draft.Version}). This is a DRAFT: it has not been saved to the user's log yet ({InterviewTools.SaveSession} does that).\n\n" +
                $"What the swimmer told the interviewer:\n{(transcript.Length == 0 ? "(nothing was asked)" : transcript)}\n\n" +
                $"Draft (edit sets by their [index]):\n{draft.Outline}";
     }

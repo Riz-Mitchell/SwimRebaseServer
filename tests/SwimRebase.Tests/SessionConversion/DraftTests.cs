@@ -1,7 +1,9 @@
 using System.Text.Json;
+using Sessions.Application.Metrics;
+using Sessions.Application.Services;
+using Sessions.Domain.Models;
 using SessionConversion.Application.Interview;
 using SessionConversion.Application.Services;
-using SessionConversion.Domain.Models;
 
 namespace SwimRebase.Tests.SessionConversion;
 
@@ -10,14 +12,17 @@ public class DraftTests
     /// <summary>Roughly what the interviewer emits: properties in any order, enums as lowercase strings.</summary>
     internal const string ModelSession = """
         {"group":"Lane 2","sets":[
-          {"reps":4,"dist":100,"strokes":["free"],"kind":"item","rest":20},
+          {"reps":4,"parts":[{"dist":100,"stroke":"free","effort":"easy"}],"kind":"item","timing":{"kind":"sendOff","seconds":90}},
           {"kind":"group","repeat":3,"items":[
-            {"kind":"item","reps":1,"dist":200,"strokes":["free"],"mode":"kick"},
-            {"kind":"item","reps":2,"dist":50,"strokes":["fly"],"equip":["fins"]}]},
-          {"kind":"item","reps":1,"dist":400,"strokes":["im"]}]}
+            {"kind":"item","reps":1,"parts":[{"dist":200,"stroke":"free","mode":"kick"}]},
+            {"kind":"item","reps":2,"parts":[{"dist":50,"stroke":"fly","equip":["fins"],"effort":"hard"}]}]},
+          {"kind":"item","reps":1,"parts":[{"dist":400,"stroke":"im"}]}]}
         """;
 
     private static SwimSession Sample() => SessionJson.Deserialize<SwimSession>(ModelSession);
+
+    /// <summary>The way a draft is stored: read, intensity mapped from the effort words, validated.</summary>
+    private static SwimSession Prepared() => TestSessions.Ingest().Prepare(Sample());
 
     [Fact]
     public void A_model_shaped_session_deserializes_with_out_of_order_kind()
@@ -26,11 +31,12 @@ public class DraftTests
 
         Assert.Equal("Lane 2", session.Group);
         Assert.Equal(3, session.Sets.Count);
-        Assert.IsType<SetItem>(session.Sets[0]);
+        var first = Assert.IsType<SetItem>(session.Sets[0]);
+        Assert.Equal(new Timing { Kind = TimingKind.SendOff, Seconds = 90 }, first.Timing);
         var group = Assert.IsType<SetGroup>(session.Sets[1]);
         Assert.Equal(2, group.Items.Count);
-        Assert.Equal(SwimMode.Kick, ((SetItem)group.Items[0]).Mode);
-        Assert.Equal(new[] { Stroke.Im }, ((SetItem)session.Sets[2]).Strokes);
+        Assert.Equal(SwimMode.Kick, ((SetItem)group.Items[0]).Parts[0].Mode);
+        Assert.Equal(Stroke.Im, ((SetItem)session.Sets[2]).Parts[0].Stroke);
     }
 
     [Fact]
@@ -44,31 +50,45 @@ public class DraftTests
     [Fact]
     public void Outline_numbers_sets_and_nested_items_and_shows_totals()
     {
-        var outline = SessionText.Outline(Sample());
+        var outline = SessionText.Outline(Prepared());
 
         Assert.Contains("Group: Lane 2", outline);
         Assert.Contains("Distance: 1700", outline);
-        Assert.Contains("[0] 4 x 100 free, rest 20s", outline);
+        Assert.Contains("[0] 4 x 100 free - easy (2/10), on 1:30", outline);
         Assert.Contains("[1] 3 rounds", outline);
         Assert.Contains("[1.0] 1 x 200 free kick", outline);
-        Assert.Contains("[1.1] 2 x 50 fly with fins", outline);
+        Assert.Contains("[1.1] 2 x 50 fly with fins - hard (8/10)", outline);
         Assert.Contains("[2] 1 x 400 im", outline);
+        Assert.Contains("intensity", outline);
+    }
+
+    [Fact]
+    public void Outline_lists_the_parts_of_a_mixed_rep_and_marks_unmapped_effort()
+    {
+        var session = new SwimSession
+        {
+            Sets = [new SetItem { Reps = 4, Parts = [new Part { Dist = 25, Stroke = Stroke.Fly, Effort = "descend 1-4" }, new Part { Dist = 75, Stroke = Stroke.Free }] }],
+        };
+
+        var outline = SessionText.Outline(TestSessions.Ingest().Prepare(session));
+
+        Assert.Contains("[0] 4 x 100 (25 fly - descend 1-4 (intensity unspecified) + 75 free)", outline);
     }
 
     [Fact]
     public void Remove_replace_and_insert_address_top_level_and_nested_sets()
     {
-        var edited = DraftEditor.Apply(Sample(),
+        var edited = SessionEditor.Apply(Sample(),
         [
-            new DraftEdit(DraftEditOps.Remove, "1.0", null, null),
-            new DraftEdit(DraftEditOps.Replace, "0", new SetItem { Reps = 5, Dist = 100, Strokes = [Stroke.Free] }, null),
-            new DraftEdit(DraftEditOps.Insert, "3", new SetItem { Reps = 1, Dist = 200, Strokes = [Stroke.Free] }, null),
+            new SessionEdit(SessionEditOps.Remove, "1.0", null, null),
+            new SessionEdit(SessionEditOps.Replace, "0", new SetItem { Reps = 5, Parts = [new Part { Dist = 100, Stroke = Stroke.Free }] }, null),
+            new SessionEdit(SessionEditOps.Insert, "3", new SetItem { Reps = 1, Parts = [new Part { Dist = 200, Stroke = Stroke.Free }] }, null),
         ]);
 
         Assert.Equal(4, edited.Sets.Count);
         Assert.Equal(5, ((SetItem)edited.Sets[0]).Reps);
         Assert.Single(((SetGroup)edited.Sets[1]).Items);
-        Assert.Equal(200, ((SetItem)edited.Sets[3]).Dist);
+        Assert.Equal(200, ((SetItem)edited.Sets[3]).RepDistance);
     }
 
     [Fact]
@@ -77,7 +97,7 @@ public class DraftTests
         var original = Sample();
         var before = SessionJson.Serialize(original);
 
-        DraftEditor.Apply(original, [new DraftEdit(DraftEditOps.Remove, "0", null, null)]);
+        SessionEditor.Apply(original, [new SessionEdit(SessionEditOps.Remove, "0", null, null)]);
 
         Assert.Equal(before, SessionJson.Serialize(original));
     }
@@ -85,8 +105,8 @@ public class DraftTests
     [Fact]
     public void Set_group_changes_or_clears_the_group()
     {
-        Assert.Equal("Lane 1", DraftEditor.Apply(Sample(), [new DraftEdit(DraftEditOps.SetGroup, null, null, " Lane 1 ")]).Group);
-        Assert.Null(DraftEditor.Apply(Sample(), [new DraftEdit(DraftEditOps.SetGroup, null, null, "")]).Group);
+        Assert.Equal("Lane 1", SessionEditor.Apply(Sample(), [new SessionEdit(SessionEditOps.SetGroup, null, null, " Lane 1 ")]).Group);
+        Assert.Null(SessionEditor.Apply(Sample(), [new SessionEdit(SessionEditOps.SetGroup, null, null, "")]).Group);
     }
 
     [Theory]
@@ -98,7 +118,7 @@ public class DraftTests
     [InlineData("explode", "0")]
     public void Bad_edits_are_rejected_with_a_message_for_the_model(string op, string path)
     {
-        var ex = Assert.Throws<InvalidDraftEditException>(() => DraftEditor.Apply(Sample(), [new DraftEdit(op, path, null, null)]));
+        var ex = Assert.Throws<InvalidSessionEditException>(() => SessionEditor.Apply(Sample(), [new SessionEdit(op, path, null, null)]));
 
         Assert.StartsWith("edit 0 (", ex.Message);
     }
@@ -110,7 +130,7 @@ public class DraftTests
         var json = $$$"""
             {"draftId":"{{{id}}}","edits":[
               {"op":"remove","path":"1.0"},
-              {"op":"replace","path":"0","node":{"kind":"item","reps":6,"dist":50}},
+              {"op":"replace","path":"0","node":{"kind":"item","reps":6,"parts":[{"dist":50,"stroke":"free"}]}},
               {"op":"set_group","group":"Lane 3"}]}
             """;
 
@@ -125,17 +145,17 @@ public class DraftTests
     [Fact]
     public void An_edit_request_without_a_valid_draft_id_is_rejected()
     {
-        Assert.Throws<InvalidDraftEditException>(() => DraftEditRequest.Parse("""{"draftId":"nope","edits":[]}"""));
+        Assert.Throws<InvalidSessionEditException>(() => DraftEditRequest.Parse("""{"draftId":"nope","edits":[]}"""));
     }
 
     [Fact]
     public async Task Creating_a_draft_stores_it_and_editing_bumps_the_version()
     {
-        var service = new SessionDraftService(new InMemoryDraftRepository(), new NoOpUnitOfWork());
+        var service = new SessionDraftService(new InMemoryDraftRepository(), TestSessions.Ingest(), new NoOpUnitOfWork());
         var userId = Guid.NewGuid();
 
         var created = await service.CreateAsync(userId, Guid.NewGuid(), ModelSession, CancellationToken.None);
-        var edited = await service.EditAsync(userId, created.Id, [new DraftEdit(DraftEditOps.Remove, "0", null, null)], CancellationToken.None);
+        var edited = await service.EditAsync(userId, created.Id, [new SessionEdit(SessionEditOps.Remove, "0", null, null)], CancellationToken.None);
 
         Assert.Equal(1, created.Version);
         Assert.Equal(2, edited.Version);
@@ -146,10 +166,10 @@ public class DraftTests
     public async Task An_invalid_session_is_never_stored()
     {
         var repository = new InMemoryDraftRepository();
-        var service = new SessionDraftService(repository, new NoOpUnitOfWork());
+        var service = new SessionDraftService(repository, TestSessions.Ingest(), new NoOpUnitOfWork());
 
         var ex = await Assert.ThrowsAsync<InvalidSessionException>(() =>
-            service.CreateAsync(Guid.NewGuid(), null, """{"sets":[{"kind":"item","reps":0,"dist":100}]}""", CancellationToken.None));
+            service.CreateAsync(Guid.NewGuid(), null, """{"sets":[{"kind":"item","reps":0,"parts":[{"dist":100,"stroke":"free"}]}]}""", CancellationToken.None));
 
         Assert.Contains("reps must be >= 1", ex.Message);
         Assert.Empty(repository.Drafts);
@@ -158,17 +178,17 @@ public class DraftTests
     [Fact]
     public async Task A_draft_belongs_to_its_user()
     {
-        var service = new SessionDraftService(new InMemoryDraftRepository(), new NoOpUnitOfWork());
+        var service = new SessionDraftService(new InMemoryDraftRepository(), TestSessions.Ingest(), new NoOpUnitOfWork());
         var created = await service.CreateAsync(Guid.NewGuid(), null, ModelSession, CancellationToken.None);
 
         await Assert.ThrowsAsync<DraftNotFoundException>(() =>
-            service.EditAsync(Guid.NewGuid(), created.Id, [new DraftEdit(DraftEditOps.Remove, "0", null, null)], CancellationToken.None));
+            service.EditAsync(Guid.NewGuid(), created.Id, [new SessionEdit(SessionEditOps.Remove, "0", null, null)], CancellationToken.None));
     }
 
     [Fact]
     public void The_model_facing_schemas_are_valid_json_with_shared_definitions()
     {
-        foreach (var schema in new[] { InterviewTools.AskSchema, InterviewTools.DraftSessionSchema, InterviewTools.EditDraftSchema, InterviewTools.ReadSwimBoardSchema })
+        foreach (var schema in new[] { InterviewTools.AskSchema, InterviewTools.DraftSessionSchema, InterviewTools.EditDraftSchema, InterviewTools.ReadSwimBoardSchema, InterviewTools.SaveSessionSchema, MetricsTool.Schema })
         {
             using var document = JsonDocument.Parse(schema);
             Assert.Equal("object", document.RootElement.GetProperty("type").GetString());

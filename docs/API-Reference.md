@@ -192,7 +192,8 @@ Some tool calls hand the conversation to a specialist that talks to the user dir
 1. The main assistant's turn ends with `sub_agent_started` (`toolUseId` is the tool call to nest the following events under; `toolExecutionRequestId` is what `/cancel` takes; `childConversationId` is the specialist's conversation).
 2. The specialist asks about the swimmer's path through the board as `questions_asked` events (its `conversationId` is `childConversationId`). Answer each with `POST .../tool-requests/{toolExecutionRequestId}/answer` and `{ "answers": [...] }` - one entry per question in the event, in order. A question with `kind: "Fork"` is always last in its event (it decides which questions come next). Each answer is either the option's number (`"2"`) or free text. The answer's response stream continues the interview - the next `questions_asked` - or, when it is finished, `sub_agent_completed` followed by the main assistant's reply (a summary of the **draft** session, with numbered sets and computed totals).
 3. While the interview runs, the main chat is blocked: sending a message returns an `error` event. To abandon it, `POST .../tool-requests/{toolExecutionRequestId}/cancel` with the id from `sub_agent_started` (or the `InProgress` entry of `/pending` after reconnecting).
-4. The draft is not saved anywhere yet. To change it ("actually I skipped the kick set") the user just says so in the main chat; the AI edits the draft with its `edit_draft` tool.
+4. The result is a **draft**: it is not in the user's log yet. To change it ("actually I skipped the kick set") the user just says so in the main chat; the AI edits the draft with its `edit_draft` tool.
+5. Once the user is happy, the AI saves it with its `save_session` tool (it asks for the date swum and the pool course if the user has not said). That is a gated tool: a `permission_required` event with `toolName: "save_session"` and `inputJson` `{ draftId, performedOn, course, title? }` - approve it with `.../resolve`. The result carries the new `sessionId`; the saved session is then available under `/api/sessions`. Saving the same draft twice returns the same session.
 
 Sub-agent conversations are an implementation detail: they never appear in `GET /api/ai/conversations`, and cannot be messaged directly.
 
@@ -337,6 +338,57 @@ Abandon a focus.
   "negativePoints": [{ "order": 1, "tagLine": "string", "description": "string" }]
 }
 ```
+
+---
+
+## Sessions — `/api/sessions`
+
+Saved swims: a record of what was swum, logged after the fact. Today they are created by the AI's `save_session` tool (see Sub-agents above); these endpoints read them, correct them, and add them up. Distances are always computed from the session's structure, never entered.
+
+A session's `content` is a tree. `sets` holds **items** (`{ kind: "item", reps, timing?, parts, note? }` - `parts` is what one rep is made of, each `{ dist, stroke, mode, equip, effort, intensity? }`) and **groups** (`{ kind: "group", repeat, items }`, nesting at most 3 deep). `stroke` is `free | back | breast | fly | im | choice`; an `im` part counts as a quarter of each stroke. `intensity` is `{ level, scale }` on one global 1-10 scale, mapped from `effort` (words like "easy"/"hard" or a percentage); it is absent when the effort could not be mapped.
+
+### `GET /api/sessions?from={date}&to={date}&limit={int}&offset={int}`
+Newest first. All parameters optional (`limit` 1-100, default 50).
+
+**Response:** array of `{ id, performedOn, title, course, unit, source, totalDistance, createdAt }`. `course` is `Scy | Scm | Lcm`, `unit` is `Yards | Metres` (yards for `Scy`), `source` is `Ai | Logged`.
+
+### `GET /api/sessions/{id}`
+**Response:** the summary fields above plus `content` (the tree) and `outline` (numbered text). `404` if it is not the caller's.
+
+### `POST /api/sessions/{id}/edits`
+Changes a session with small path-addressed edits; the total and the per-part facts are rebuilt with it.
+
+```json
+{ "edits": [
+  { "op": "insert", "path": "3", "node": { "kind": "item", "reps": 8, "parts": [{ "dist": 25, "stroke": "free", "mode": "kick", "effort": "fast" }] } },
+  { "op": "remove", "path": "1.0" }
+] }
+```
+
+`op` is `remove` (path) | `replace` (path, node) | `insert` (path = position to insert at, `node`) | `set_group` (`group`; empty clears it). `path` is dot-separated indexes into the outline: `"2"` is the third set, `"1.0"` the first item inside the second. Edits apply in order, each seeing the result of the ones before.
+
+**Response:** the updated session (as for `GET`). `400` with `{ error }` (and `problems` for a session that would be invalid) if an edit is malformed or the result fails validation; nothing is changed.
+
+### `GET /api/sessions/metrics`
+Filter, group and measure what was swum. All parameters optional; repeat a parameter for several values (`strokes=fly&strokes=back`).
+
+| Parameter | Meaning |
+|---|---|
+| `from`, `to` | Date range (yyyy-MM-dd), inclusive |
+| `strokes` | `free | back | breast | fly | im | choice` (an IM part counts towards fly, back, breast and free) |
+| `modes` | `swim | kick | pull | drill | scull` |
+| `minIntensity`, `maxIntensity` | Bounds on the 1-10 scale. Setting either leaves out distance with no intensity |
+| `groupBy` | Up to 2 of `stroke | mode | intensity | day | week | month | session` (weeks start Monday and are named by that date) |
+| `measure` | `distance` (default), `sessions`, or `avgIntensity` (weighted by distance) |
+
+Examples: `?strokes=fly&groupBy=month` (how much fly per month), `?minIntensity=8&groupBy=week` (distance at hard effort per week), `?measure=avgIntensity&groupBy=month`.
+
+**Response:**
+```json
+{ "measure": "Distance", "groupBy": ["Stroke"], "totalDistance": 1600, "units": ["Metres"],
+  "rows": [ { "keys": ["fly"], "value": 600 }, { "keys": ["free"], "value": 500 } ] }
+```
+`rows` reads in date/intensity order when grouped by time or intensity, otherwise biggest first. `units` lists every distance unit present; more than one means metres and yards are mixed - nothing is converted. `value` is `null` when the measure does not apply (an average with no intensity). `400` with `{ error }` for a question that cannot be answered (e.g. more than 2 `groupBy`).
 
 ---
 

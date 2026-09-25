@@ -28,6 +28,11 @@
     <Project Path="src/Features/SessionConversion/SessionConversion.Domain/SessionConversion.Domain.csproj" />
     <Project Path="src/Features/SessionConversion/SessionConversion.Infrastructure/SessionConversion.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/Features/Sessions/">
+    <Project Path="src/Features/Sessions/Sessions.Application/Sessions.Application.csproj" />
+    <Project Path="src/Features/Sessions/Sessions.Domain/Sessions.Domain.csproj" />
+    <Project Path="src/Features/Sessions/Sessions.Infrastructure/Sessions.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/Features/Training/">
     <Project Path="src/Features/Training/Training.Application/Training.Application.csproj" />
     <Project Path="src/Features/Training/Training.Domain/Training.Domain.csproj" />

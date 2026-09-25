@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace SessionConversion.Domain.Models;
+namespace Sessions.Domain.Models;
 
 /// <summary>Serialization for <see cref="SwimSession"/>: camelCase, enums as camelCase strings, and tolerant of what a model emits (any property order, any case).</summary>
 public static class SessionJson

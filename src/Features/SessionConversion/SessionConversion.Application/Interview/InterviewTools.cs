@@ -12,6 +12,9 @@ public static class InterviewTools
     /// <summary>The main chat's tool for changing a draft afterwards.</summary>
     public const string EditDraft = "edit_draft";
 
+    /// <summary>The main chat's tool for saving a draft as a session.</summary>
+    public const string SaveSession = "save_session";
+
     /// <summary>Interviewer-only: ask the swimmer questions.</summary>
     public const string Ask = "ask";
 
@@ -58,9 +61,17 @@ public static class InterviewTools
         {"type":"object","properties":{"draftId":{"type":"string"},"edits":{"type":"array","minItems":1,"items":{"type":"object","properties":{"op":{"type":"string","enum":["remove","replace","insert","set_group"]},"path":{"type":"string"},"node":{"$ref":"#/$defs/node"},"group":{"type":"string"}},"required":["op"]}}},"required":["draftId","edits"],"$defs":{__DEFS__}}
         """);
 
+    public const string SaveSessionDescription =
+        "Saves a draft made by read_swim_board as the user's session, once they are happy with it. Needs the date they swam and the pool course; " +
+        "ask if they have not said. Saving the same draft twice is safe. The user is asked to confirm before it is saved.";
+
+    public const string SaveSessionSchema = """
+        {"type":"object","properties":{"draftId":{"type":"string"},"performedOn":{"type":"string","description":"date swum, yyyy-MM-dd"},"course":{"type":"string","enum":["scy","scm","lcm"]},"title":{"type":"string"}},"required":["draftId","performedOn","course"]}
+        """;
+
     private const string NodeDefs = """
-        "node":{"type":"object","properties":{"kind":{"type":"string","enum":["item","group"]},"reps":{"type":"integer"},"dist":{"type":"integer","description":"per rep"},"strokes":{"type":"array","items":{"type":"string","enum":["free","back","breast","fly","im","choice"]}},"mode":{"type":"string","enum":["swim","kick","pull","drill","scull"]},"equip":{"type":"array","items":{"type":"string"}},"effort":{"type":"string"},"rest":{"type":"integer","description":"seconds"},"parts":{"type":"array","items":{"$ref":"#/$defs/part"}},"note":{"type":"string"},"repeat":{"type":"integer"},"items":{"type":"array","items":{"$ref":"#/$defs/node"}}},"required":["kind"]},
-        "part":{"type":"object","properties":{"dist":{"type":"integer"},"stroke":{"type":"string","enum":["free","back","breast","fly","im","choice"]},"mode":{"type":"string","enum":["swim","kick","pull","drill","scull"]},"equip":{"type":"array","items":{"type":"string"}},"effort":{"type":"string"}},"required":["dist"]}
+        "node":{"type":"object","properties":{"kind":{"type":"string","enum":["item","group"]},"reps":{"type":"integer"},"timing":{"type":"object","properties":{"kind":{"type":"string","enum":["rest","sendOff"]},"seconds":{"type":"integer"}},"required":["kind","seconds"]},"parts":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/part"},"description":"one rep"},"note":{"type":"string"},"repeat":{"type":"integer"},"items":{"type":"array","items":{"$ref":"#/$defs/node"}}},"required":["kind"]},
+        "part":{"type":"object","properties":{"dist":{"type":"integer"},"stroke":{"type":"string","enum":["free","back","breast","fly","im","choice"]},"mode":{"type":"string","enum":["swim","kick","pull","drill","scull"]},"equip":{"type":"array","items":{"type":"string"}},"effort":{"type":"string"}},"required":["dist","stroke"]}
         """;
 
     private static string WithDefs(string schema) => schema.Replace("__DEFS__", NodeDefs.Trim());

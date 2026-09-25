@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SessionConversion.Domain\SessionConversion.Domain.csproj" />
+    <ProjectReference Include="..\..\Sessions\Sessions.Application\Sessions.Application.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Application\Shared.Application.csproj" />
   </ItemGroup>
 

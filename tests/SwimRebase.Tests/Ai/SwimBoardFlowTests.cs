@@ -7,6 +7,7 @@ using Ai.Infrastructure.SubAgents;
 using Ai.Infrastructure.Tools;
 using SessionConversion.Application.Interview;
 using SessionConversion.Application.Services;
+using Sessions.Domain.Models;
 using SwimRebase.Tests.SessionConversion;
 
 namespace SwimRebase.Tests.Ai;
@@ -27,6 +28,7 @@ public class SwimBoardFlowTests
         public readonly InMemoryConversationRepository Conversations = new();
         public readonly InMemoryToolExecutionRepository ToolExecutions;
         public readonly InMemoryDraftRepository Drafts = new();
+        public readonly InMemorySessionRepository Sessions = new();
         public readonly ScriptedChatClient Client;
         public readonly ConversationRunner Runner;
         public readonly GatedToolApprovalResolver Resolver;
@@ -38,12 +40,13 @@ public class SwimBoardFlowTests
             ToolExecutions = new InMemoryToolExecutionRepository(Conversations);
             Client = new ScriptedChatClient(script);
             var unitOfWork = new NoOpUnitOfWork();
-            var draftService = new SessionDraftService(Drafts, unitOfWork);
+            var draftService = new SessionDraftService(Drafts, TestSessions.Ingest(), unitOfWork);
 
             Registry = new AiToolRegistry(
             [
                 new AskUserQuestionTool(), new ReadSwimBoardTool(), new EditDraftTool(draftService),
                 new AskSwimQuestionsTool(), new DraftSessionTool(draftService),
+                new SaveSessionTool(new SessionPromotionService(draftService, TestSessions.Service(Sessions))),
             ]);
 
             var agent = new SwimBoardInterviewAgent(draftService, ToolExecutions);
@@ -243,7 +246,7 @@ public class SwimBoardFlowTests
     {
         var h = new Harness(
             withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion),
-            ScriptedReply.Call(InterviewTools.DraftSession, """{"sets":[{"kind":"item","reps":0,"dist":100}]}"""),
+            ScriptedReply.Call(InterviewTools.DraftSession, """{"sets":[{"kind":"item","reps":0,"parts":[{"dist":100,"stroke":"free"}]}]}"""),
             ScriptedReply.Call(InterviewTools.DraftSession, DraftTests.ModelSession),
             ScriptedReply.Say("done"));
 
@@ -324,5 +327,47 @@ public class SwimBoardFlowTests
         Assert.Contains("[1] 3 rounds", result.ResultJson);
         Assert.DoesNotContain("1 x 200 free kick", result.ResultJson);
         Assert.Equal(2, draft.Version);
+    }
+
+    [Fact]
+    public async Task Saving_the_draft_is_gated_and_then_stores_a_session_the_chat_can_refer_to()
+    {
+        var h = new Harness(
+            withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion),
+            ScriptedReply.Call(InterviewTools.DraftSession, DraftTests.ModelSession), ScriptedReply.Say("done"));
+        await h.RunAsync(h.Chat.Id);
+        await h.AnswerAsync("2");
+        var draft = Assert.Single(h.Drafts.Drafts);
+
+        var save = (IAiTool)h.Registry.Find(InterviewTools.SaveSession)!;
+        Assert.True(save.RequiresApproval);
+        Assert.Equal(ToolInteractionKind.Approval, save.Interaction);
+        Assert.Empty(h.Sessions.Sessions);
+
+        var input = $$"""{"draftId":"{{draft.Id}}","performedOn":"2026-09-21","course":"scy","title":"Monday lane 2"}""";
+        var result = await save.ExecuteAsync(new ToolExecutionContext(UserId, h.Chat.Id, "toolu_save"), input, CancellationToken.None);
+        var again = await save.ExecuteAsync(new ToolExecutionContext(UserId, h.Chat.Id, "toolu_save2"), input, CancellationToken.None);
+
+        var session = Assert.Single(h.Sessions.Sessions);
+        Assert.Equal(SessionSource.Ai, session.Source);
+        Assert.Equal(PoolCourse.Scy, session.Course);
+        Assert.Equal(new DateOnly(2026, 9, 21), session.PerformedOn);
+        Assert.Equal(1700, session.TotalDistance);
+        Assert.Contains(session.Id.ToString(), result.ResultJson);
+        Assert.Equal(result.ResultJson, again.ResultJson);
+        Assert.Equal(1700, h.Sessions.Facts.Sum(f => f.Distance));
+    }
+
+    [Theory]
+    [InlineData("""{"draftId":"nope","performedOn":"2026-09-21","course":"scy"}""")]
+    [InlineData("""{"draftId":"00000000-0000-0000-0000-000000000000","performedOn":"2026-09-21","course":"olympic"}""")]
+    public async Task Saving_with_a_bad_draft_id_or_course_is_an_error_the_model_can_correct(string input)
+    {
+        var h = new Harness(withImage: false);
+        var save = (IAiTool)h.Registry.Find(InterviewTools.SaveSession)!;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            save.ExecuteAsync(new ToolExecutionContext(UserId, h.Chat.Id, "toolu_x"), input, CancellationToken.None));
+        Assert.Empty(h.Sessions.Sessions);
     }
 }

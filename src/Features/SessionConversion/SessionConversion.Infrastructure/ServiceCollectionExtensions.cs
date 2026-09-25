@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<SessionConversionDbContext>>(SessionConversionKeys.UnitOfWork);
         services.AddScoped<ISessionDraftRepository, SessionDraftRepository>();
         services.AddScoped<SessionDraftService>();
+        services.AddScoped<SessionPromotionService>();
 
         return services;
     }
