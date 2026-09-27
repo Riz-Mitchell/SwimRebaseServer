@@ -24,7 +24,8 @@ public sealed class AiChatController(
     IConversationRepository conversations,
     IToolExecutionRepository toolExecutions,
     ITokenUsageRepository tokenUsage,
-    ImageUploadService imageUpload) : ControllerBase
+    ImageUploadService imageUpload,
+    ConversationManagementService conversationManagement) : ControllerBase
 {
     // Two templates because an optional route parameter that isn't the final segment (this one is
     // followed by "/messages") doesn't collapse correctly when omitted - ASP.NET Core won't match
@@ -61,10 +62,39 @@ public sealed class AiChatController(
     public async Task<IActionResult> ListConversations(
         [FromQuery] ConversationSortBy sortBy = ConversationSortBy.LastMessageAt,
         [FromQuery] bool descending = true,
+        [FromQuery] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
-        var result = await conversations.ListForUserAsync(currentUser.UserId, sortBy, descending, cancellationToken);
-        return Ok(result.Select(c => new { c.Id, c.Title, c.CreatedAt, c.LastMessageAt }));
+        var result = await conversations.ListForUserAsync(currentUser.UserId, sortBy, descending, includeArchived, cancellationToken);
+        return Ok(result.Select(c => new { c.Id, c.Title, c.CreatedAt, c.LastMessageAt, c.IsArchived }));
+    }
+
+    [HttpPatch("conversations/{conversationId:guid}")]
+    public async Task<IActionResult> RenameConversation(
+        Guid conversationId, [FromBody] RenameConversationRequest request, CancellationToken cancellationToken)
+    {
+        var result = await conversationManagement.RenameAsync(currentUser.UserId, conversationId, request.Title, cancellationToken);
+        return result switch
+        {
+            ConversationManagementResult.NotFound => NotFound(),
+            ConversationManagementResult.InvalidTitle => BadRequest("Title cannot be empty."),
+            _ => NoContent(),
+        };
+    }
+
+    /// <summary>Archives the conversation and its whole sub-agent tree, and auto-denies any tool requests still awaiting approval anywhere in it.</summary>
+    [HttpPost("conversations/{conversationId:guid}/archive")]
+    public async Task<IActionResult> ArchiveConversation(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var result = await conversationManagement.ArchiveAsync(currentUser.UserId, conversationId, cancellationToken);
+        return result == ConversationManagementResult.NotFound ? NotFound() : NoContent();
+    }
+
+    [HttpPost("conversations/{conversationId:guid}/unarchive")]
+    public async Task<IActionResult> UnarchiveConversation(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var result = await conversationManagement.UnarchiveAsync(currentUser.UserId, conversationId, cancellationToken);
+        return result == ConversationManagementResult.NotFound ? NotFound() : NoContent();
     }
 
     [HttpGet("conversations/{conversationId:guid}/messages")]
@@ -175,3 +205,5 @@ public sealed record AnswerToolRequestBody(string? Answer, IReadOnlyList<string>
 }
 
 public sealed record CreateImageUploadUrlRequest(string FileName, string ContentType);
+
+public sealed record RenameConversationRequest(string Title);

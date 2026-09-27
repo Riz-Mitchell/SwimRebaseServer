@@ -16,7 +16,14 @@ public interface IConversationRepository
 
     /// <summary>Only the user's own chats - sub-agent conversations are an implementation detail of the chat that started them.</summary>
     Task<IReadOnlyList<Conversation>> ListForUserAsync(
-        Guid userId, ConversationSortBy sortBy, bool descending, CancellationToken cancellationToken);
+        Guid userId, ConversationSortBy sortBy, bool descending, bool includeArchived, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The conversation's own id plus every sub-agent conversation nested under it, however deep - found by
+    /// walking <see cref="Conversation.ParentToolExecutionRequestId"/> outward through each level's
+    /// <see cref="ToolExecutionRequest"/> ids (that link has no FK, so it can't be a normal EF include).
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetConversationTreeIdsAsync(Guid conversationId, CancellationToken cancellationToken);
 
     void Add(Conversation conversation);
 
@@ -44,4 +51,10 @@ public interface IConversationRepository
 
     /// <summary>Immediate bulk update (bypasses the change tracker).</summary>
     Task TouchLastMessageAtAsync(Guid conversationId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Immediate bulk update (bypasses the change tracker): archives every conversation in <paramref name="conversationIds"/>.</summary>
+    Task ArchiveAsync(IReadOnlyList<Guid> conversationIds, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Immediate bulk update (bypasses the change tracker). Only the given conversation - unarchiving does not cascade to its sub-agent tree.</summary>
+    Task UnarchiveAsync(Guid conversationId, CancellationToken cancellationToken);
 }

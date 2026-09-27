@@ -19,6 +19,10 @@ public class Conversation
 
     public DateTimeOffset LastMessageAt { get; set; }
 
+    public bool IsArchived { get; set; }
+
+    public DateTimeOffset? ArchivedAt { get; set; }
+
     public AiUser? AiUser { get; set; }
 
     public List<ConversationMessage> Messages { get; set; } = [];

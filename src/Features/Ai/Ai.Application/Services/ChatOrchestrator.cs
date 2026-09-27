@@ -39,6 +39,12 @@ public sealed class ChatOrchestrator(
         await aiUserProvisioning.EnsureExistsAsync(userId, cancellationToken);
 
         var conversation = await GetOrCreateConversationAsync(userId, conversationId, userMessage, cancellationToken);
+        if (conversation.IsArchived)
+        {
+            yield return new AiChatError("This conversation is archived - unarchive it before sending new messages.");
+            yield break;
+        }
+
         if (conversation.Kind != ConversationKinds.Chat)
         {
             yield return new AiChatError("This conversation belongs to a sub-agent and cannot be messaged directly.");

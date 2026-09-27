@@ -33,4 +33,7 @@ public interface IToolExecutionRepository
 
     /// <summary>Immediate bulk update (bypasses the change tracker): denies every still-pending call in the conversation, e.g. when its sub-agent is cancelled.</summary>
     Task DenyOutstandingForConversationAsync(Guid conversationId, string reason, CancellationToken cancellationToken);
+
+    /// <summary>Immediate bulk update (bypasses the change tracker): denies every still-pending call across all given conversations, e.g. when a conversation tree is archived.</summary>
+    Task DenyOutstandingForConversationsAsync(IReadOnlyList<Guid> conversationIds, string reason, CancellationToken cancellationToken);
 }

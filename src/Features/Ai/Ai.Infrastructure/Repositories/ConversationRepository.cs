@@ -19,9 +19,13 @@ public sealed class ConversationRepository(AiDbContext db) : IConversationReposi
             c => c.UserId == userId && c.ParentToolExecutionRequestId == parentToolExecutionRequestId, cancellationToken);
 
     public async Task<IReadOnlyList<Conversation>> ListForUserAsync(
-        Guid userId, ConversationSortBy sortBy, bool descending, CancellationToken cancellationToken)
+        Guid userId, ConversationSortBy sortBy, bool descending, bool includeArchived, CancellationToken cancellationToken)
     {
         var query = db.Conversations.Where(c => c.UserId == userId && c.Kind == ConversationKinds.Chat);
+        if (!includeArchived)
+        {
+            query = query.Where(c => !c.IsArchived);
+        }
 
         IOrderedQueryable<Conversation> ordered = (sortBy, descending) switch
         {
@@ -36,6 +40,36 @@ public sealed class ConversationRepository(AiDbContext db) : IConversationReposi
     }
 
     public void Add(Conversation conversation) => db.Conversations.Add(conversation);
+
+    public async Task<IReadOnlyList<Guid>> GetConversationTreeIdsAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var allConversationIds = new HashSet<Guid> { conversationId };
+        var frontier = new List<Guid> { conversationId };
+
+        while (frontier.Count > 0)
+        {
+            var toolExecutionRequestIds = await db.ToolExecutionRequests
+                .Where(t => frontier.Contains(t.ConversationId))
+                .Select(t => t.Id)
+                .ToListAsync(cancellationToken);
+
+            if (toolExecutionRequestIds.Count == 0) break;
+
+            var childIds = await db.Conversations
+                .Where(c => c.ParentToolExecutionRequestId != null
+                    && toolExecutionRequestIds.Contains(c.ParentToolExecutionRequestId!.Value)
+                    && !allConversationIds.Contains(c.Id))
+                .Select(c => c.Id)
+                .ToListAsync(cancellationToken);
+
+            if (childIds.Count == 0) break;
+
+            allConversationIds.UnionWith(childIds);
+            frontier = childIds;
+        }
+
+        return allConversationIds.ToList();
+    }
 
     public async Task<IReadOnlyList<ConversationMessage>> GetLiveContextMessagesAsync(
         Guid conversationId, CancellationToken cancellationToken) =>
@@ -86,4 +120,18 @@ public sealed class ConversationRepository(AiDbContext db) : IConversationReposi
         db.Conversations
             .Where(c => c.Id == conversationId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.LastMessageAt, at), cancellationToken);
+
+    public Task ArchiveAsync(IReadOnlyList<Guid> conversationIds, DateTimeOffset at, CancellationToken cancellationToken) =>
+        db.Conversations
+            .Where(c => conversationIds.Contains(c.Id))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.IsArchived, true)
+                .SetProperty(c => c.ArchivedAt, at), cancellationToken);
+
+    public Task UnarchiveAsync(Guid conversationId, CancellationToken cancellationToken) =>
+        db.Conversations
+            .Where(c => c.Id == conversationId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.IsArchived, false)
+                .SetProperty(c => c.ArchivedAt, (DateTimeOffset?)null), cancellationToken);
 }
