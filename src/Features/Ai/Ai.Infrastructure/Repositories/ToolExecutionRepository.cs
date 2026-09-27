@@ -54,4 +54,12 @@ public sealed class ToolExecutionRepository(AiDbContext db) : IToolExecutionRepo
                 .SetProperty(t => t.Status, ToolExecutionStatus.Denied)
                 .SetProperty(t => t.DenialReason, reason)
                 .SetProperty(t => t.ResolvedAt, DateTimeOffset.UtcNow), cancellationToken);
+
+    public Task DenyOutstandingForConversationsAsync(IReadOnlyList<Guid> conversationIds, string reason, CancellationToken cancellationToken) =>
+        db.ToolExecutionRequests
+            .Where(t => conversationIds.Contains(t.ConversationId) && t.Status == ToolExecutionStatus.PendingApproval)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(t => t.Status, ToolExecutionStatus.Denied)
+                .SetProperty(t => t.DenialReason, reason)
+                .SetProperty(t => t.ResolvedAt, DateTimeOffset.UtcNow), cancellationToken);
 }

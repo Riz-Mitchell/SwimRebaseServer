@@ -49,9 +49,19 @@ namespace Ai.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTimeOffset?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archived_at");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<bool>("IsArchived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_archived");
 
                     b.Property<string>("Kind")
                         .IsRequired()
@@ -84,8 +94,8 @@ namespace Ai.Infrastructure.Migrations
                     b.HasIndex("ParentToolExecutionRequestId")
                         .HasDatabaseName("ix_conversations_parent_tool_execution_request_id");
 
-                    b.HasIndex("UserId", "LastMessageAt")
-                        .HasDatabaseName("ix_conversations_user_id_last_message_at");
+                    b.HasIndex("UserId", "IsArchived", "LastMessageAt")
+                        .HasDatabaseName("ix_conversations_user_id_is_archived_last_message_at");
 
                     b.ToTable("conversations", (string)null);
                 });

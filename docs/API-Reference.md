@@ -1,6 +1,6 @@
 # SwimRebase REST API Reference
 
-_Last updated: 14/09/2026_
+_Last updated: 27/09/2026_
 
 Base URL: `https://swimrebase-pro.azurewebsites.net` (production) / `https://swimrebase-dev.azurewebsites.net` (staging)
 
@@ -114,17 +114,46 @@ Abandon a running sub-agent - a tool call the main chat is blocked on while a sp
 
 ---
 
-### `GET /api/ai/conversations?sortBy={LastMessageAt|CreatedAt}&descending={bool}`
-List the current user's conversations. Both query params optional - default is `sortBy=LastMessageAt&descending=true` (most recently active first, which is also the shape of the existing `(UserId, LastMessageAt)` index).
+### `GET /api/ai/conversations?sortBy={LastMessageAt|CreatedAt}&descending={bool}&includeArchived={bool}`
+List the current user's conversations. All query params optional - default is `sortBy=LastMessageAt&descending=true&includeArchived=false` (most recently active first, archived chats excluded, which is also the shape of the `(UserId, IsArchived, LastMessageAt)` index). Pass `includeArchived=true` to also list archived chats.
 
-`title` is auto-generated from the conversation's first message (truncated to ~60 chars at a word boundary) when it's created.
+`title` is auto-generated from the conversation's first message (truncated to ~60 chars at a word boundary) when it's created, and can be changed afterwards via the rename endpoint below.
 
 **Response:**
 ```json
 [
-  { "id": "guid", "title": "string|null", "createdAt": "datetime", "lastMessageAt": "datetime" }
+  { "id": "guid", "title": "string|null", "createdAt": "datetime", "lastMessageAt": "datetime", "isArchived": false }
 ]
 ```
+
+---
+
+### `PATCH /api/ai/conversations/{conversationId}`
+Renames a conversation.
+
+**Path params:** `conversationId` (guid)
+
+**Body:** `{ "title": "string" }`
+
+**Response:** `204 No Content`, or `404` if the conversation doesn't exist (or belongs to someone else), or `400` if `title` is empty/whitespace.
+
+---
+
+### `POST /api/ai/conversations/{conversationId}/archive`
+Archives a conversation and its entire sub-agent tree (recursively, however deep), and auto-denies any tool request still awaiting approval anywhere in that tree (with `denialReason: "Conversation archived"`), so nothing is left silently blocked. Archived conversations are excluded from `GET /api/ai/conversations` by default, and can no longer be sent new messages (`POST .../messages` returns an `error` event) - existing history is still readable.
+
+**Path params:** `conversationId` (guid)
+
+**Response:** `204 No Content`, or `404` if the conversation doesn't exist (or belongs to someone else).
+
+---
+
+### `POST /api/ai/conversations/{conversationId}/unarchive`
+Restores a single archived conversation (does not cascade to its sub-agent tree, and does not reverse any auto-denials from when it was archived).
+
+**Path params:** `conversationId` (guid)
+
+**Response:** `204 No Content`, or `404` if the conversation doesn't exist (or belongs to someone else).
 
 ---
 

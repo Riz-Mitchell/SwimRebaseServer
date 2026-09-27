@@ -42,14 +42,41 @@ internal sealed class InMemoryConversationRepository : IConversationRepository
 
     public List<ConversationMessage> Messages { get; } = [];
 
+    /// <summary>Wired up by <see cref="InMemoryToolExecutionRepository"/>'s constructor so tree-walking has access to both lists.</summary>
+    public List<ToolExecutionRequest> ToolExecutionRequests { get; set; } = [];
+
     public Task<Conversation?> FindAsync(Guid userId, Guid conversationId, CancellationToken cancellationToken) =>
         Task.FromResult(Conversations.FirstOrDefault(c => c.Id == conversationId && c.UserId == userId));
 
     public Task<Conversation?> FindChildAsync(Guid userId, Guid parentToolExecutionRequestId, CancellationToken cancellationToken) =>
         Task.FromResult(Conversations.FirstOrDefault(c => c.UserId == userId && c.ParentToolExecutionRequestId == parentToolExecutionRequestId));
 
-    public Task<IReadOnlyList<Conversation>> ListForUserAsync(Guid userId, ConversationSortBy sortBy, bool descending, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<Conversation>>(Conversations.Where(c => c.UserId == userId && c.Kind == ConversationKinds.Chat).ToList());
+    public Task<IReadOnlyList<Conversation>> ListForUserAsync(Guid userId, ConversationSortBy sortBy, bool descending, bool includeArchived, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Conversation>>(
+            Conversations.Where(c => c.UserId == userId && c.Kind == ConversationKinds.Chat && (includeArchived || !c.IsArchived)).ToList());
+
+    public Task<IReadOnlyList<Guid>> GetConversationTreeIdsAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var allIds = new HashSet<Guid> { conversationId };
+        var frontier = new List<Guid> { conversationId };
+
+        while (frontier.Count > 0)
+        {
+            var childIds = Conversations
+                .Where(c => c.ParentToolExecutionRequestId != null
+                    && frontier.Any(f => ToolExecutionRequests.Any(r => r.Id == c.ParentToolExecutionRequestId && r.ConversationId == f))
+                    && !allIds.Contains(c.Id))
+                .Select(c => c.Id)
+                .ToList();
+
+            if (childIds.Count == 0) break;
+
+            allIds.UnionWith(childIds);
+            frontier = childIds;
+        }
+
+        return Task.FromResult<IReadOnlyList<Guid>>(allIds.ToList());
+    }
 
     public void Add(Conversation conversation) => Conversations.Add(conversation);
 
@@ -72,10 +99,41 @@ internal sealed class InMemoryConversationRepository : IConversationRepository
     public Task MarkMessagesCompactedAsync(IReadOnlyList<Guid> messageIds, CancellationToken cancellationToken) => throw new NotSupportedException();
 
     public Task TouchLastMessageAtAsync(Guid conversationId, DateTimeOffset at, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task ArchiveAsync(IReadOnlyList<Guid> conversationIds, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        foreach (var conversation in Conversations.Where(c => conversationIds.Contains(c.Id)))
+        {
+            conversation.IsArchived = true;
+            conversation.ArchivedAt = at;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task UnarchiveAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        var conversation = Conversations.FirstOrDefault(c => c.Id == conversationId);
+        if (conversation is not null)
+        {
+            conversation.IsArchived = false;
+            conversation.ArchivedAt = null;
+        }
+
+        return Task.CompletedTask;
+    }
 }
 
-internal sealed class InMemoryToolExecutionRepository(InMemoryConversationRepository conversations) : IToolExecutionRepository
+internal sealed class InMemoryToolExecutionRepository : IToolExecutionRepository
 {
+    private readonly InMemoryConversationRepository _conversations;
+
+    public InMemoryToolExecutionRepository(InMemoryConversationRepository conversations)
+    {
+        _conversations = conversations;
+        conversations.ToolExecutionRequests = Requests;
+    }
+
     public List<ToolExecutionRequest> Requests { get; } = [];
 
     public void Add(ToolExecutionRequest request) => Requests.Add(request);
@@ -90,7 +148,7 @@ internal sealed class InMemoryToolExecutionRepository(InMemoryConversationReposi
     {
         bool InFamily(Guid id) =>
             id == conversationId
-            || conversations.Conversations.Any(c => c.Id == id
+            || _conversations.Conversations.Any(c => c.Id == id
                 && Requests.Any(parent => parent.Id == c.ParentToolExecutionRequestId && parent.ConversationId == conversationId));
 
         return Task.FromResult<IReadOnlyList<ToolExecutionRequest>>(
@@ -120,6 +178,18 @@ internal sealed class InMemoryToolExecutionRepository(InMemoryConversationReposi
 
         return Task.CompletedTask;
     }
+
+    public Task DenyOutstandingForConversationsAsync(IReadOnlyList<Guid> conversationIds, string reason, CancellationToken cancellationToken)
+    {
+        foreach (var request in Requests.Where(r => conversationIds.Contains(r.ConversationId) && r.Status == ToolExecutionStatus.PendingApproval))
+        {
+            request.Status = ToolExecutionStatus.Denied;
+            request.DenialReason = reason;
+            request.ResolvedAt = DateTimeOffset.UtcNow;
+        }
+
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class InMemoryTokenUsageRepository : ITokenUsageRepository
@@ -135,6 +205,26 @@ internal sealed class InMemoryTokenUsageRepository : ITokenUsageRepository
 internal sealed class NoOpCompaction : IChatCompactionService
 {
     public Task CompactIfNeededAsync(Guid conversationId, Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+internal sealed class NoOpEventTracker : IEventTracker
+{
+    public Task TrackAsync(Guid userId, string eventType, string? metadataJson, CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+internal sealed class NoOpAiUserProvisioningService : IAiUserProvisioningService
+{
+    public Task EnsureExistsAsync(Guid userId, CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+internal sealed class InMemoryUploadedImageRepository : IUploadedImageRepository
+{
+    public List<UploadedImage> Images { get; } = [];
+
+    public void Add(UploadedImage image) => Images.Add(image);
+
+    public Task<UploadedImage?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Images.FirstOrDefault(i => i.Id == id && i.UserId == userId));
 }
 
 /// <summary>What the scripted model does on one turn: optional prose, then zero or more tool calls.</summary>

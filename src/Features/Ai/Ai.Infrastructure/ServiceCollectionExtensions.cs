@@ -66,6 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IChatCompactionService, ChatCompactionService>();
         services.AddScoped<IAiUserProvisioningService, AiUserProvisioningService>();
         services.AddScoped<ImageUploadService>();
+        services.AddScoped<ConversationManagementService>();
         services.AddScoped<ToolExecutor>();
         services.AddScoped<ToolTurnCloser>();
         services.AddScoped<ConversationRunner>();
