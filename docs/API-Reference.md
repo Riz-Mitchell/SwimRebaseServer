@@ -1,6 +1,6 @@
 # SwimRebase REST API Reference
 
-_Last updated: 14/09/2026_
+_Last updated: 27/09/2026_
 
 Base URL: `https://swimrebase-pro.azurewebsites.net` (production) / `https://swimrebase-dev.azurewebsites.net` (staging)
 
