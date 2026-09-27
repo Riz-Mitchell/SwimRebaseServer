@@ -188,6 +188,111 @@ namespace Sessions.Infrastructure.Migrations
                     b.ToTable("session_facts", (string)null);
                 });
 
+            modelBuilder.Entity("Sessions.Domain.Models.TimedSwim", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Course")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("course");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("Dist")
+                        .HasColumnType("integer")
+                        .HasColumnName("dist");
+
+                    b.Property<string>("Effort")
+                        .HasColumnType("text")
+                        .HasColumnName("effort");
+
+                    b.Property<string>("Finish")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("finish");
+
+                    b.Property<bool>("IncludeInMetrics")
+                        .HasColumnType("boolean")
+                        .HasColumnName("include_in_metrics");
+
+                    b.Property<int?>("Intensity")
+                        .HasColumnType("integer")
+                        .HasColumnName("intensity");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("mode");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<DateOnly>("PerformedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("performed_on");
+
+                    b.Property<string>("ResistanceLoad")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("resistance_load");
+
+                    b.Property<string>("ResistanceType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("resistance_type");
+
+                    b.Property<double>("Seconds")
+                        .HasColumnType("double precision")
+                        .HasColumnName("seconds");
+
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("SplitsJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("splits_json");
+
+                    b.Property<string>("StartType")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("start_type");
+
+                    b.Property<string>("Stroke")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("stroke");
+
+                    b.Property<double?>("StrokeRateCyclesPerMinute")
+                        .HasColumnType("double precision")
+                        .HasColumnName("stroke_rate_cycles_per_minute");
+
+                    b.HasKey("Id")
+                        .HasName("pk_timed_swims");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_timed_swims_session_id");
+
+                    b.HasIndex("OwnerId", "PerformedOn")
+                        .HasDatabaseName("ix_timed_swims_owner_id_performed_on");
+
+                    b.HasIndex("OwnerId", "Dist", "Stroke", "PerformedOn")
+                        .HasDatabaseName("ix_timed_swims_owner_id_dist_stroke_performed_on");
+
+                    b.ToTable("timed_swims", (string)null);
+                });
+
             modelBuilder.Entity("Sessions.Domain.Models.SessionFact", b =>
                 {
                     b.HasOne("Sessions.Domain.Models.Session", null)
@@ -196,6 +301,15 @@ namespace Sessions.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_session_facts_sessions_session_id");
+                });
+
+            modelBuilder.Entity("Sessions.Domain.Models.TimedSwim", b =>
+                {
+                    b.HasOne("Sessions.Domain.Models.Session", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_timed_swims_sessions_session_id");
                 });
 #pragma warning restore 612, 618
         }
