@@ -7,6 +7,8 @@ public interface IUploadedImageRepository
 {
     void Add(UploadedImage image);
 
+    void Remove(UploadedImage image);
+
     /// <summary>Scoped to <paramref name="userId"/> - returns null if the image belongs to someone else.</summary>
     Task<UploadedImage?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken);
 }

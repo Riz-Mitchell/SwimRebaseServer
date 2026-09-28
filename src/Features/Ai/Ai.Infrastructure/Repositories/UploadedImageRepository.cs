@@ -9,6 +9,8 @@ public sealed class UploadedImageRepository(AiDbContext db) : IUploadedImageRepo
 {
     public void Add(UploadedImage image) => db.UploadedImages.Add(image);
 
+    public void Remove(UploadedImage image) => db.UploadedImages.Remove(image);
+
     public async Task<UploadedImage?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
         await db.UploadedImages.FirstOrDefaultAsync(i => i.Id == id && i.UserId == userId, cancellationToken);
 }

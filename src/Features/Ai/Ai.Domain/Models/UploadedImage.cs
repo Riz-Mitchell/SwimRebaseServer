@@ -27,5 +27,8 @@ public class UploadedImage
 
     public DateTimeOffset? ConfirmedAt { get; set; }
 
+    /// <summary>Set once this image has actually been attached to a sent message - blocks deletion from then on.</summary>
+    public DateTimeOffset? UsedAt { get; set; }
+
     public AiUser? AiUser { get; set; }
 }
