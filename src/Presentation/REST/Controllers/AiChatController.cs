@@ -167,6 +167,19 @@ public sealed class AiChatController(
         };
     }
 
+    [HttpDelete("images/{imageId:guid}")]
+    public async Task<IActionResult> DeleteImage(Guid imageId, CancellationToken cancellationToken)
+    {
+        var outcome = await imageUpload.DeleteImageAsync(currentUser.UserId, imageId, cancellationToken);
+        return outcome switch
+        {
+            DeleteImageOutcome.Deleted => NoContent(),
+            DeleteImageOutcome.NotFound => NotFound(),
+            DeleteImageOutcome.AlreadyUsed => Conflict("This image has already been sent in a message and can no longer be deleted."),
+            _ => StatusCode(500),
+        };
+    }
+
     [HttpGet("usage")]
     public async Task<IActionResult> GetUsage(
         [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken cancellationToken)

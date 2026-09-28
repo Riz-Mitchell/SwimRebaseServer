@@ -75,6 +75,26 @@ public sealed class ImageUploadService(
 
         return new ConfirmUploadResult(ConfirmUploadOutcome.Confirmed, metadata.SizeBytes);
     }
+
+    public async Task<DeleteImageOutcome> DeleteImageAsync(Guid userId, Guid imageId, CancellationToken cancellationToken)
+    {
+        var image = await images.FindAsync(userId, imageId, cancellationToken);
+        if (image is null)
+        {
+            return DeleteImageOutcome.NotFound;
+        }
+
+        if (image.UsedAt is not null)
+        {
+            return DeleteImageOutcome.AlreadyUsed;
+        }
+
+        await blobStorage.DeleteAsync(image.ObjectKey, cancellationToken);
+        images.Remove(image);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return DeleteImageOutcome.Deleted;
+    }
 }
 
 public sealed record CreateUploadUrlResult(Guid ImageId, string UploadUrl, DateTimeOffset ExpiresAt);
@@ -93,3 +113,14 @@ public enum ConfirmUploadOutcome
 }
 
 public sealed record ConfirmUploadResult(ConfirmUploadOutcome Outcome, long? SizeBytes);
+
+public enum DeleteImageOutcome
+{
+    Deleted,
+
+    /// <summary>No UploadedImage row with this id, or it belongs to someone else.</summary>
+    NotFound,
+
+    /// <summary>Already attached to a sent message - deleting it would break that message's image forever.</summary>
+    AlreadyUsed,
+}

@@ -223,6 +223,8 @@ internal sealed class InMemoryUploadedImageRepository : IUploadedImageRepository
 
     public void Add(UploadedImage image) => Images.Add(image);
 
+    public void Remove(UploadedImage image) => Images.Remove(image);
+
     public Task<UploadedImage?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Images.FirstOrDefault(i => i.Id == id && i.UserId == userId));
 }

@@ -76,6 +76,7 @@ public sealed class ChatOrchestrator(
                     yield break;
                 }
 
+                image.UsedAt = DateTimeOffset.UtcNow;
                 imageBlocks.Add(new ImageContentBlock(image.ObjectKey, image.ContentType));
             }
         }
