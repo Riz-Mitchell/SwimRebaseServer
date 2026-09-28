@@ -1,6 +1,6 @@
 # SwimRebase REST API Reference
 
-_Last updated: 27/09/2026_
+_Last updated: 28/09/2026_
 
 Base URL: `https://swimrebase-pro.azurewebsites.net` (production) / `https://swimrebase-dev.azurewebsites.net` (staging)
 
@@ -69,6 +69,16 @@ Call this after the direct upload finishes, before referencing the image in a ch
 - `400 Bad Request` - the uploaded file exceeds the 5 MB limit (the object is deleted from storage automatically in this case)
 
 Once confirmed, pass `imageId` in `imageIds` on a `POST .../messages` call to attach it to that message. Only the permanent image id is ever sent in a chat payload - never a raw storage key or a presigned URL, both of which the server resolves internally (a fresh, short-lived presigned URL is generated from the stored key every time the image is actually sent to the model, so it never depends on a URL staying valid for the life of the conversation).
+
+#### `DELETE /api/ai/images/{imageId}`
+Delete an uploaded image - removes both the blob from storage and the record of it. Only possible before the image has ever been sent in a message; once attached to a message its storage key is baked permanently into that message's content, so deleting it would break that message's image forever.
+
+**Path params:** `imageId` (guid)
+
+**Response:**
+- `204 No Content` - deleted
+- `404 Not Found` - no such image (or it isn't yours)
+- `409 Conflict` - the image has already been sent in a message and can no longer be deleted
 
 ---
 
