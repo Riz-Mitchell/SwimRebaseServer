@@ -15,6 +15,7 @@ namespace Ai.Application.Models;
 /// <param name="PromptCaching">Adds cache breakpoints on the system prompt and the newest message, for conversations that re-read a big prefix every turn.</param>
 /// <param name="TerminalToolName">When this tool succeeds the conversation is finished and the loop stops.</param>
 /// <param name="MaxQuestionTurns">Cap on question turns; the answer to the last one tells the model to finish.</param>
+/// <param name="Effort">Thinking-depth setting (low, medium, high, xhigh, max) sent with every turn; null leaves the model's default. Thinking is billed as output, so mechanical agents should not run at the default.</param>
 public sealed record AgentProfile(
     string Kind,
     string SystemPrompt,
@@ -25,7 +26,8 @@ public sealed record AgentProfile(
     string? TerminalToolName = null,
     int? MaxQuestionTurns = null,
     string? Model = null,
-    int? MaxTokens = null)
+    int? MaxTokens = null,
+    string? Effort = null)
 {
     public const string ChatSystemPrompt =
         "You are the SwimRebase assistant. You can freely read the current user's own swim data to " +
@@ -34,7 +36,7 @@ public sealed record AgentProfile(
         "it has actually been approved and executed.";
 
     public static AgentProfile Chat(string systemPrompt = ChatSystemPrompt) =>
-        new(ConversationKinds.Chat, systemPrompt, IncludesSharedTools: true);
+        new(ConversationKinds.Chat, systemPrompt, IncludesSharedTools: true, PromptCaching: true);
 
     public bool Includes(IAiToolDefinition tool) =>
         tool.ScopedToAgent is null ? IncludesSharedTools : tool.ScopedToAgent == Kind;

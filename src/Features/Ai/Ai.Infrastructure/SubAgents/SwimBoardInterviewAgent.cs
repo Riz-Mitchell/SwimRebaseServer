@@ -27,7 +27,8 @@ public sealed class SwimBoardInterviewAgent(SessionDraftService drafts, IToolExe
         RequireToolUse: true,
         PromptCaching: true,
         TerminalToolName: InterviewTools.DraftSession,
-        MaxQuestionTurns: InterviewTools.MaxQuestionTurns);
+        MaxQuestionTurns: InterviewTools.MaxQuestionTurns,
+        Effort: InterviewTools.InterviewEffort);
 
     public string ConversationTitle => "Swim board import";
 

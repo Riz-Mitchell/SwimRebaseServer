@@ -54,6 +54,11 @@ public sealed class AnthropicChatClient(
             parameters = parameters with { ToolChoice = new ToolChoiceAuto { DisableParallelToolUse = true } };
         }
 
+        if (request.Effort is { } effort)
+        {
+            parameters = parameters with { OutputConfig = new OutputConfig { Effort = Enum.Parse<Effort>(effort, ignoreCase: true) } };
+        }
+
         return parameters;
     }
 

@@ -47,8 +47,13 @@ public sealed class ChatTurnLoop(
         {
             var summary = await conversations.GetLatestSummaryAsync(conversationId, cancellationToken);
             var liveMessages = await conversations.GetLiveContextMessagesAsync(conversationId, cancellationToken);
-            var chatMessages = ChatContextMapper.ToChatMessages(liveMessages);
-            var hasImage = chatMessages.Any(m => m.Content.Any(b => b is ImageContentBlock));
+            // Read from the stored history, not the model's context: the context swaps a finished board's image for a
+            // placeholder, but the board tool must stay offered (and the tool list stable) so a re-read is still possible.
+            var storedMessages = ChatContextMapper.ToChatMessages(liveMessages);
+            var hasImage = storedMessages.Any(m => m.Content.Any(b => b is ImageContentBlock));
+            var chatMessages = profile.Kind == ConversationKinds.Chat
+                ? ChatContextMapper.ReplaceFinishedImages(storedMessages, toolRegistry.GetAll().Where(t => t.Requires == ToolRequirement.ImageAttachment).Select(t => t.Name).ToHashSet())
+                : storedMessages;
             var tools = toolRegistry.GetAll()
                 .Where(profile.Includes)
                 .Where(t => t.Requires != ToolRequirement.ImageAttachment || hasImage)
@@ -65,7 +70,7 @@ public sealed class ChatTurnLoop(
                 new ChatTurnRequest(
                     chatMessages, BuildSystemPrompt(profile, summary), tools,
                     Model: profile.Model, MaxTokens: profile.MaxTokens,
-                    PromptCaching: profile.PromptCaching, RequireToolUse: profile.RequireToolUse),
+                    PromptCaching: profile.PromptCaching, RequireToolUse: profile.RequireToolUse, Effort: profile.Effort),
                 cancellationToken))
             {
                 switch (evt)

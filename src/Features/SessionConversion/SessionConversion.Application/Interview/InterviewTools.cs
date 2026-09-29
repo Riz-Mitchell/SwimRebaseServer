@@ -26,6 +26,12 @@ public static class InterviewTools
 
     public const int MaxQuestionTurns = 12;
 
+    /// <summary>
+    /// Thinking effort for the interview's turns. The turns are mostly mechanical (read the board, ask the next question), and thinking
+    /// tokens are billed as output, so this stays below the model's default. Raise it if draft quality drops.
+    /// </summary>
+    public const string InterviewEffort = "medium";
+
     public const string AskDescription =
         "Ask the swimmer questions about the path they swam. Questions in board order. kind=fork: a branch to completely different sets " +
         "(group/lane, A/B/C, sprint vs distance); a fork must be the LAST question and ends your turn. kind=detail: a choice inside one set. " +

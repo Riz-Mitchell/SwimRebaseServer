@@ -31,4 +31,5 @@ public sealed record ChatTurnRequest(
     string? Model = null,
     int? MaxTokens = null,
     bool PromptCaching = false,
-    bool RequireToolUse = false);
+    bool RequireToolUse = false,
+    string? Effort = null);

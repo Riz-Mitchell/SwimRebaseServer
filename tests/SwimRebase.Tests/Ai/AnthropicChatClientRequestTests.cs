@@ -38,6 +38,17 @@ public class AnthropicChatClientRequestTests
     }
 
     [Fact]
+    public void Effort_is_sent_when_the_request_sets_it_and_omitted_otherwise()
+    {
+        var withEffort = AnthropicChatClient.BuildParameters(
+            new ChatTurnRequest(Messages, "system", [Tool], Effort: "medium"), new AiModelOptions(), null!);
+        var without = Build(requireToolUse: false, Tool);
+
+        Assert.Equal(Effort.Medium, withEffort.OutputConfig!.Effort!.Value());
+        Assert.Null(without.OutputConfig);
+    }
+
+    [Fact]
     public void Tool_choice_is_omitted_when_tool_use_is_not_required()
     {
         Assert.Null(Build(requireToolUse: false, Tool).ToolChoice);
