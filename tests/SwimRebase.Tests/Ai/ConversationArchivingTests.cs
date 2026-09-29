@@ -190,7 +190,7 @@ public class ConversationArchivingTests
         IToolInteraction[] interactions = [new ApprovalInteraction(), new QuestionInteraction()];
         var loop = new ChatTurnLoop(
             conversations, toolExecutions, new InMemoryTokenUsageRepository(), unitOfWork, new ScriptedChatClient(), registry,
-            new NoOpCompaction(), executor, closer, profiles, interactions);
+            new NoOpCompaction(), executor, closer, profiles, interactions, Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatTurnLoop>.Instance);
         var runner = new ConversationRunner(loop, resolver);
         var orchestrator = new ChatOrchestrator(
             conversations, toolExecutions, uploadedImages, unitOfWork, new NoOpCompaction(), new NoOpAiUserProvisioningService(),

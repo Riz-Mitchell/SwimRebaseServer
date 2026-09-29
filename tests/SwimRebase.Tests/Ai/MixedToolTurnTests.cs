@@ -58,7 +58,7 @@ public class MixedToolTurnTests
             IToolInteraction[] interactions = [new ApprovalInteraction(), new QuestionInteraction()];
             var loop = new ChatTurnLoop(
                 Conversations, ToolExecutions, new InMemoryTokenUsageRepository(), unitOfWork, Client, registry,
-                new NoOpCompaction(), executor, closer, profiles, interactions);
+                new NoOpCompaction(), executor, closer, profiles, interactions, Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatTurnLoop>.Instance);
             Runner = new ConversationRunner(loop, Resolver);
 
             Conversations.Add(new Conversation { Id = ChatId, UserId = UserId, CreatedAt = DateTimeOffset.UtcNow, LastMessageAt = DateTimeOffset.UtcNow });

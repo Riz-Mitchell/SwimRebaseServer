@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Shared.Application;
 
 namespace Ai.Application.Services;
@@ -26,7 +28,8 @@ public sealed class ChatTurnLoop(
     ToolExecutor toolExecutor,
     ToolTurnCloser turnCloser,
     IAgentProfileProvider profiles,
-    IEnumerable<IToolInteraction> interactions)
+    IEnumerable<IToolInteraction> interactions,
+    ILogger<ChatTurnLoop> logger)
 {
     private const int MaxLoopIterations = 8;
 
@@ -66,6 +69,8 @@ public sealed class ChatTurnLoop(
 
             yield return new AiChatTurnStarted(conversationId);
 
+            var turnStartedAt = Stopwatch.GetTimestamp();
+
             await foreach (var evt in chatClient.StreamTurnAsync(
                 new ChatTurnRequest(
                     chatMessages, BuildSystemPrompt(profile, summary), tools,
@@ -100,6 +105,8 @@ public sealed class ChatTurnLoop(
                 yield break;
             }
 
+            LogTurn(profile, conversationId, iteration, chatMessages, tools, completed, Stopwatch.GetElapsedTime(turnStartedAt));
+
             tokenUsage.Add(ConversationMessageFactory.CreateUsageRecord(userId, conversationId, completed.Usage));
             yield return new AiChatUsage(
                 conversationId,
@@ -118,6 +125,13 @@ public sealed class ChatTurnLoop(
 
             if (completed.ToolCalls.Count == 0)
             {
+                if (profile.RequireToolUse)
+                {
+                    logger.LogWarning(
+                        "AI {Kind} conversation {ConversationId} answered in prose although its profile requires a tool call (stop={StopReason}, {OutputTokens} output tokens)",
+                        profile.Kind, conversationId, completed.StopReason, completed.Usage.OutputTokens);
+                }
+
                 outcome.EndedWithoutToolCall = true;
                 yield return new AiChatCompleted(conversationId, assistantMessage.Id);
                 yield break;
@@ -136,7 +150,9 @@ public sealed class ChatTurnLoop(
                     var plainEffect = plainTool?.Effect ?? ToolEffect.Neutral;
                     yield return new AiChatToolStarted(conversationId, call.ToolUseId, call.ToolName, plainName, plainEffect);
 
+                    var plainStartedAt = Stopwatch.GetTimestamp();
                     var plainSummary = await toolExecutor.ExecuteAsync(userId, conversationId, call.ToolUseId, call.ToolName, call.InputJson, cancellationToken);
+                    LogToolResult(profile, conversationId, call, plainSummary, Stopwatch.GetElapsedTime(plainStartedAt));
                     var settledRequest = ConversationMessageFactory.CreateToolExecutionRequest(conversationId, userId, assistantMessage.Id, call);
                     settledRequest.Status = plainSummary.Success ? ToolExecutionStatus.Executed : ToolExecutionStatus.Failed;
                     settledRequest.ResultJson = plainSummary.ResultJson;
@@ -194,7 +210,9 @@ public sealed class ChatTurnLoop(
                 var callEffect = callTool?.Effect ?? ToolEffect.Neutral;
                 yield return new AiChatToolStarted(conversationId, call.ToolUseId, call.ToolName, callDisplayName, callEffect);
 
+                var toolStartedAt = Stopwatch.GetTimestamp();
                 var toolSummary = await toolExecutor.ExecuteAsync(userId, conversationId, call.ToolUseId, call.ToolName, call.InputJson, cancellationToken);
+                LogToolResult(profile, conversationId, call, toolSummary, Stopwatch.GetElapsedTime(toolStartedAt));
                 summaries.Add(toolSummary);
 
                 yield return new AiChatToolCompleted(
@@ -208,6 +226,9 @@ public sealed class ChatTurnLoop(
 
             if (profile.TerminalToolName is { } terminal && summaries.Any(s => s.ToolName == terminal && s.Success))
             {
+                logger.LogInformation(
+                    "AI {Kind} conversation {ConversationId} finished with {Terminal} after {Iterations} model turns in this run",
+                    profile.Kind, conversationId, terminal, iteration + 1);
                 outcome.TerminalToolCompleted = true;
                 yield break;
             }
@@ -216,8 +237,47 @@ public sealed class ChatTurnLoop(
             // Loop again - the tool results just persisted are picked up as live context above.
         }
 
+        logger.LogWarning("AI {Kind} conversation {ConversationId} hit the {Max}-iteration cap", profile.Kind, conversationId, MaxLoopIterations);
         yield return new AiChatError("Stopped after too many tool-use iterations.");
     }
+
+    /// <summary>
+    /// One line per model turn, with everything needed to see where tokens and time go: what was sent (history size, images still in
+    /// context, tool and system prompt size) and what came back (tokens by kind, stop reason, tool calls). Search by conversation id to
+    /// follow one conversion; the interview and the chat that started it are separate conversations.
+    /// </summary>
+    private void LogTurn(
+        AgentProfile profile, Guid conversationId, int iteration, IReadOnlyList<ChatMessage> messages, IReadOnlyList<AiToolSpec> tools,
+        TurnCompletedEvent completed, TimeSpan elapsed)
+    {
+        var usage = completed.Usage;
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "AI turn {Kind} conv={ConversationId} iter={Iteration} model={Model} effort={Effort} stop={StopReason} " +
+                "in={InputTokens} out={OutputTokens} cacheWrite={CacheWriteTokens} cacheRead={CacheReadTokens} " +
+                "msgs={Messages} imagesInContext={Images} tools={ToolCount} toolSchemaChars={ToolSchemaChars} systemChars={SystemChars} " +
+                "calls=[{ToolCalls}] ms={ElapsedMs}",
+                profile.Kind, conversationId, iteration, usage.Model, profile.Effort ?? "default", completed.StopReason,
+                usage.InputTokens, usage.OutputTokens, usage.CacheCreationInputTokens, usage.CacheReadInputTokens,
+                messages.Count, messages.Sum(m => m.Content.Count(b => b is ImageContentBlock)),
+                tools.Count, tools.Sum(t => t.Name.Length + t.Description.Length + t.JsonSchema.Length), profile.SystemPrompt.Length,
+                string.Join(",", completed.ToolCalls.Select(c => c.ToolName)), (long)elapsed.TotalMilliseconds);
+        }
+
+        if (completed.StopReason is not ("end_turn" or "tool_use"))
+        {
+            logger.LogWarning(
+                "AI {Kind} conversation {ConversationId} turn ended with stop reason {StopReason} ({OutputTokens} output tokens)",
+                profile.Kind, conversationId, completed.StopReason, usage.OutputTokens);
+        }
+    }
+
+    private void LogToolResult(AgentProfile profile, Guid conversationId, ToolCallRequestedEvent call, ToolResultSummary summary, TimeSpan elapsed) =>
+        logger.LogInformation(
+            "AI tool {Tool} {Outcome} {Kind} conv={ConversationId} inputChars={InputChars} resultChars={ResultChars} ms={ElapsedMs}",
+            call.ToolName, summary.Success ? "ok" : "FAILED", profile.Kind, conversationId,
+            call.InputJson.Length, summary.ResultJson.Length, (long)elapsed.TotalMilliseconds);
 
     private static string BuildSystemPrompt(AgentProfile profile, ConversationSummary? summary) => summary is null
         ? profile.SystemPrompt

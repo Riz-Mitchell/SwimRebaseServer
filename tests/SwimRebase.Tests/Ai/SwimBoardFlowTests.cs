@@ -57,7 +57,7 @@ public class SwimBoardFlowTests
             IToolInteraction[] interactions = [new ApprovalInteraction(), new QuestionInteraction(), new SubAgentInteraction(Conversations, [agent])];
             var loop = new ChatTurnLoop(
                 Conversations, ToolExecutions, new InMemoryTokenUsageRepository(), unitOfWork, Client, Registry,
-                new NoOpCompaction(), executor, closer, profiles, interactions);
+                new NoOpCompaction(), executor, closer, profiles, interactions, Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatTurnLoop>.Instance);
             Runner = new ConversationRunner(loop, Resolver);
 
             Chat = new Conversation { Id = Guid.NewGuid(), UserId = UserId, Title = "chat", CreatedAt = DateTimeOffset.UtcNow, LastMessageAt = DateTimeOffset.UtcNow };
