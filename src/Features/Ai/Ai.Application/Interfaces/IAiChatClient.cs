@@ -21,7 +21,8 @@ public sealed record AiToolSpec(string Name, string Description, string JsonSche
 /// summarization turn on a cheaper model than the user-facing chat model.
 /// <paramref name="PromptCaching"/> adds cache breakpoints on the system prompt and the newest message so a
 /// long, growing conversation re-reads its prefix from the provider's cache. <paramref name="RequireToolUse"/>
-/// forces the model to call exactly one tool this turn instead of answering in prose.
+/// asks the model to call at most one tool this turn instead of answering in prose (the system prompt has to
+/// say so; the provider no longer lets us force it).
 /// </summary>
 public sealed record ChatTurnRequest(
     IReadOnlyList<ChatMessage> Messages,

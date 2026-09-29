@@ -20,6 +20,13 @@ public sealed class AnthropicChatClient(
     {
         var options = modelOptions.Value;
         var modelName = request.Model ?? options.ChatModel;
+        var events = client.Messages.CreateStreaming(BuildParameters(request, options, blobStorage));
+        return new AnthropicStreamProcessor(modelName, request.Tools).ProcessAsync(events, cancellationToken);
+    }
+
+    public static MessageCreateParams BuildParameters(ChatTurnRequest request, AiModelOptions options, IBlobStorageService blobStorage)
+    {
+        var modelName = request.Model ?? options.ChatModel;
 
         var messages = request.Messages.Select(m => AnthropicMessageMapper.ToMessageParam(m, blobStorage)).ToList();
         if (request.PromptCaching)
@@ -42,12 +49,12 @@ public sealed class AnthropicChatClient(
 
         if (request.RequireToolUse && request.Tools.Count > 0)
         {
-            // One tool call per turn: a forced tool call plus parallel calls would leave several tool_uses to answer at once.
-            parameters = parameters with { ToolChoice = new ToolChoiceAny { DisableParallelToolUse = true } };
+            // Forced tool_choice (any/tool) is rejected by newer models, so steer with the prompt instead. One tool call per turn:
+            // parallel calls would leave several tool_uses to answer at once.
+            parameters = parameters with { ToolChoice = new ToolChoiceAuto { DisableParallelToolUse = true } };
         }
 
-        var events = client.Messages.CreateStreaming(parameters);
-        return new AnthropicStreamProcessor(modelName, request.Tools).ProcessAsync(events, cancellationToken);
+        return parameters;
     }
 
     private static MessageCreateParamsSystem? ToSystem(ChatTurnRequest request)

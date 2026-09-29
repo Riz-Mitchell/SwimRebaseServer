@@ -11,7 +11,7 @@ namespace Ai.Application.Models;
 /// <param name="Kind">Matches <see cref="Conversation.Kind"/>.</param>
 /// <param name="IncludesSharedTools">Whether tools with no <see cref="IAiToolDefinition.ScopedToAgent"/> are offered.</param>
 /// <param name="Compaction">Whether long history is folded into a rolling summary.</param>
-/// <param name="RequireToolUse">Forces every model turn to call a tool - no prose answers.</param>
+/// <param name="RequireToolUse">Steers every model turn toward a single tool call - no prose answers (the prompt must say so; the API cannot force it).</param>
 /// <param name="PromptCaching">Adds cache breakpoints on the system prompt and the newest message, for conversations that re-read a big prefix every turn.</param>
 /// <param name="TerminalToolName">When this tool succeeds the conversation is finished and the loop stops.</param>
 /// <param name="MaxQuestionTurns">Cap on question turns; the answer to the last one tells the model to finish.</param>
