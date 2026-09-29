@@ -94,6 +94,7 @@ public sealed record SessionSummaryResponse(
         new(s.Id, s.PerformedOn, s.Title, s.Course, s.Unit, s.Source, s.TotalDistance, s.CreatedAt);
 }
 
+
 public sealed record SessionResponse(
     Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, SwimSession Content, string Outline)
 {
