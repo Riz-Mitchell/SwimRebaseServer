@@ -17,6 +17,18 @@ public class ImageContentBlockTests
     }
 
     [Fact]
+    public void Content_json_with_the_discriminator_not_first_deserializes()
+    {
+        var imageId = Guid.NewGuid();
+        var jsonb = $$"""[{"Text": "hi", "$type": "text"}, {"ImageId": "{{imageId}}", "$type": "image", "ObjectKey": "k", "ContentType": "image/png"}]""";
+
+        var blocks = ChatContentJson.Deserialize(jsonb);
+
+        Assert.Equal("hi", Assert.IsType<TextContentBlock>(blocks[0]).Text);
+        Assert.Equal(imageId, Assert.IsType<ImageContentBlock>(blocks[1]).ImageId);
+    }
+
+    [Fact]
     public void Content_json_stored_before_ImageId_existed_still_deserializes()
     {
         const string legacy = """[{"$type":"image","ObjectKey":"boards/a.png","ContentType":"image/png"}]""";
