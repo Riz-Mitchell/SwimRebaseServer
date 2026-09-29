@@ -175,13 +175,29 @@ public class SwimBoardFlowTests
     }
 
     [Fact]
-    public async Task Without_an_image_the_board_tool_is_not_offered()
+    public async Task The_board_tool_is_offered_whether_or_not_an_image_is_attached_so_the_cached_tool_list_never_changes()
     {
-        var h = new Harness(withImage: false, ScriptedReply.Say("Send me a photo of the board."));
+        var withImage = new Harness(withImage: true, ScriptedReply.Say("Sure."));
+        var withoutImage = new Harness(withImage: false, ScriptedReply.Say("Send me a photo of the board."));
+
+        await withImage.RunAsync(withImage.Chat.Id);
+        await withoutImage.RunAsync(withoutImage.Chat.Id);
+
+        Assert.Equal(withImage.Client.Requests[0].Tools.Select(t => t.Name), withoutImage.Client.Requests[0].Tools.Select(t => t.Name));
+        Assert.Contains(withoutImage.Client.Requests[0].Tools, t => t.Name == InterviewTools.ReadSwimBoard);
+    }
+
+    [Fact]
+    public async Task Calling_the_board_tool_without_an_image_fails_cleanly_and_the_chat_carries_on()
+    {
+        var h = new Harness(withImage: false, StartBoard(), ScriptedReply.Say("Send me a photo of the board."));
 
         await h.RunAsync(h.Chat.Id);
 
-        Assert.DoesNotContain(h.Client.Requests[0].Tools, t => t.Name == InterviewTools.ReadSwimBoard);
+        Assert.Equal(ToolExecutionStatus.Failed, h.ParentRequest.Status);
+        Assert.Contains("no image", h.ToolResultsIn(h.Chat.Id).Single(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, h.Client.Requests.Count);
+        Assert.DoesNotContain(h.Conversations.Conversations, c => c.Kind == InterviewTools.AgentKind);
     }
 
     [Fact]

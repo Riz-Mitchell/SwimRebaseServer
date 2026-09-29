@@ -46,22 +46,22 @@ public sealed class ChatTurnLoop(
         var profile = profiles.Get(conversation.Kind);
         outcome.ParentToolExecutionRequestId = conversation.ParentToolExecutionRequestId;
 
+        // The same for every turn of every conversation of this kind: the tool list is the start of the prompt the provider caches,
+        // so it must not depend on what the conversation holds (an attached image, say) or the cache is rewritten when that changes.
+        var tools = toolRegistry.GetAll()
+            .Where(profile.Includes)
+            .Select(t => new AiToolSpec(t.Name, t.Description, t.JsonSchema, t.RequiresApproval))
+            .ToList();
+        var imageToolNames = toolRegistry.GetAll().Where(t => t.Requires == ToolRequirement.ImageAttachment).Select(t => t.Name).ToHashSet();
+
         for (var iteration = 0; iteration < MaxLoopIterations; iteration++)
         {
             var summary = await conversations.GetLatestSummaryAsync(conversationId, cancellationToken);
             var liveMessages = await conversations.GetLiveContextMessagesAsync(conversationId, cancellationToken);
-            // Read from the stored history, not the model's context: the context swaps a finished board's image for a
-            // placeholder, but the board tool must stay offered (and the tool list stable) so a re-read is still possible.
             var storedMessages = ChatContextMapper.ToChatMessages(liveMessages);
-            var hasImage = storedMessages.Any(m => m.Content.Any(b => b is ImageContentBlock));
             var chatMessages = profile.Kind == ConversationKinds.Chat
-                ? ChatContextMapper.ReplaceFinishedImages(storedMessages, toolRegistry.GetAll().Where(t => t.Requires == ToolRequirement.ImageAttachment).Select(t => t.Name).ToHashSet())
+                ? ChatContextMapper.ReplaceFinishedImages(storedMessages, imageToolNames)
                 : storedMessages;
-            var tools = toolRegistry.GetAll()
-                .Where(profile.Includes)
-                .Where(t => t.Requires != ToolRequirement.ImageAttachment || hasImage)
-                .Select(t => new AiToolSpec(t.Name, t.Description, t.JsonSchema, t.RequiresApproval))
-                .ToList();
 
             var textBuffer = new StringBuilder();
             TurnCompletedEvent? completed = null;

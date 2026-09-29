@@ -18,12 +18,12 @@ public enum ToolInteractionKind
     SubAgent,
 }
 
-/// <summary>Something that must be true of the conversation for a tool to be offered to the model.</summary>
+/// <summary>What a tool needs from the conversation to do its job. It is not a condition for offering the tool: the tool list is part of the cached prompt prefix and stays the same on every turn, so a tool called without what it needs fails with a message the model can act on.</summary>
 public enum ToolRequirement
 {
     None,
 
-    /// <summary>The live conversation contains at least one attached image.</summary>
+    /// <summary>Reads an image attached to the conversation. Once it has answered, the image is replaced by a placeholder in the model's context.</summary>
     ImageAttachment,
 }
 
