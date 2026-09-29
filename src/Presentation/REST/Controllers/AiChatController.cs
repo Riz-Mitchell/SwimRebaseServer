@@ -4,9 +4,11 @@ using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Application.Options;
 using Ai.Application.Services;
+using Ai.Domain.Models;
 using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Shared.Application.Storage;
 
 namespace REST.Controllers;
 
@@ -25,6 +27,7 @@ public sealed class AiChatController(
     IToolExecutionRepository toolExecutions,
     ITokenUsageRepository tokenUsage,
     ImageUploadService imageUpload,
+    IBlobStorageService blobStorage,
     ConversationManagementService conversationManagement) : ControllerBase
 {
     // Two templates because an optional route parameter that isn't the final segment (this one is
@@ -115,11 +118,22 @@ public sealed class AiChatController(
 
         return Ok(new
         {
-            items = items.Select(m => new { m.Id, m.SequenceNumber, m.Role, m.Content, m.CreatedAt }),
+            items = items.Select(m => new { m.Id, m.SequenceNumber, m.Role, m.Content, images = ImagesFor(m), m.CreatedAt }),
             hasMore,
             nextBefore = hasMore ? items[^1].SequenceNumber : (int?)null,
         });
     }
+
+    private IReadOnlyList<object> ImagesFor(ConversationMessage message) =>
+        ChatContentJson.Deserialize(message.RawContentJson)
+            .OfType<ImageContentBlock>()
+            .Select(b => (object)new
+            {
+                imageId = b.ImageId,
+                contentType = b.ContentType,
+                url = blobStorage.CreatePresignedDownloadUrl(b.ObjectKey, ImageUploadOptions.DownloadUrlExpiry),
+            })
+            .ToList();
 
     [HttpGet("conversations/{conversationId:guid}/tool-requests/pending")]
     public async Task<IActionResult> GetPendingToolRequests(Guid conversationId, CancellationToken cancellationToken)

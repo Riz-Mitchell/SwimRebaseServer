@@ -30,4 +30,4 @@ public sealed record ToolResultContentBlock(string ToolUseId, string ResultJson,
 /// actually sent to the model (see AnthropicMessageMapper), so this block never goes stale sitting in
 /// stored conversation history the way a baked-in URL eventually would.
 /// </summary>
-public sealed record ImageContentBlock(string ObjectKey, string ContentType) : ChatContentBlock;
+public sealed record ImageContentBlock(string ObjectKey, string ContentType, Guid? ImageId = null) : ChatContentBlock;
