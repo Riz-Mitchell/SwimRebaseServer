@@ -49,7 +49,14 @@ internal static class AnthropicMessageMapper
     /// </summary>
     public static void MarkLastBlockForCaching(List<MessageParam> messages)
     {
-        if (messages.Count == 0 || messages[^1].Content.Value is not List<ContentBlockParam> blocks || blocks.Count == 0)
+        // The SDK keeps a message's content as an immutable array, so the blocks are copied out, changed, and put back on a new message.
+        if (messages.Count == 0 || messages[^1].Content.Value is not IEnumerable<ContentBlockParam> existing)
+        {
+            return;
+        }
+
+        var blocks = existing.ToList();
+        if (blocks.Count == 0)
         {
             return;
         }
@@ -67,6 +74,12 @@ internal static class AnthropicMessageMapper
         {
             blocks[^1] = image with { CacheControl = new CacheControlEphemeral() };
         }
+        else
+        {
+            return;
+        }
+
+        messages[^1] = messages[^1] with { Content = blocks };
     }
 
     /// <summary>

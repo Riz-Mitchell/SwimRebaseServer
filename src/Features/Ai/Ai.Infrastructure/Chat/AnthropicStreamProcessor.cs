@@ -116,7 +116,7 @@ internal sealed class AnthropicStreamProcessor(string modelName, IReadOnlyList<A
         {
             if (messageDelta.Delta.StopReason is { } sr)
             {
-                _stopReason = sr.ToString()!;
+                _stopReason = sr.Raw();
             }
 
             _outputTokens = messageDelta.Usage.OutputTokens;
