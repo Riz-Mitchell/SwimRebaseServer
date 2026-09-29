@@ -55,6 +55,12 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
           name: 'ASPNETCORE_ENVIRONMENT'
           value: aspNetCoreEnvironment
         }
+        // Runs the app from the deployed zip, mounted read-only, so a deploy swaps the whole package instead of overwriting DLLs the
+        // running process has open (which surfaced as BadImageFormatException on requests that landed mid-deploy).
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: '1'
+        }
       ]
     }
   }
