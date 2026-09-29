@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using SessionConversion.Application.Interview;
@@ -25,6 +26,20 @@ public sealed class AskSwimQuestionsTool : IQuestionTool
     public ToolInteractionKind Interaction => ToolInteractionKind.Question;
 
     public string? ScopedToAgent => InterviewTools.AgentKind;
+
+    public string? Rejection(string inputJson)
+    {
+        try
+        {
+            return InterviewQuestions.Asked(inputJson).Count > 0
+                ? null
+                : "No questions received: `questions` must be a JSON array of {q, kind, opts} objects, not a string. If the path is complete call draft_session; otherwise ask again.";
+        }
+        catch (JsonException)
+        {
+            return "The input was not valid JSON. Ask again with `questions` as a JSON array of {q, kind, opts} objects.";
+        }
+    }
 
     public AiChatEvent CreateQuestionEvent(Guid conversationId, Guid toolExecutionRequestId, string inputJson) =>
         new AiChatQuestionsAsked(

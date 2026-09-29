@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
+using Ai.Application.Services;
 using Anthropic.Models.Messages;
 
 namespace Ai.Infrastructure.Chat;
@@ -104,7 +105,15 @@ internal sealed class AnthropicStreamProcessor(string modelName, IReadOnlyList<A
         else if (current.TryPickContentBlockStop(out var blockStop) && _pendingToolMeta.TryGetValue(blockStop.Index, out var meta))
         {
             var inputJson = _pendingToolInputs.TryGetValue(blockStop.Index, out var sb) ? sb.ToString() : string.Empty;
-            _assistantBlocks.Add(new ToolUseContentBlock(meta.Id, meta.Name, string.IsNullOrWhiteSpace(inputJson) ? "{}" : inputJson));
+            inputJson = string.IsNullOrWhiteSpace(inputJson) ? "{}" : inputJson;
+
+            // Repaired here, before the call is stored, so the corrected input is also what later turns replay to the model.
+            if (tools.FirstOrDefault(t => t.Name == meta.Name) is { } spec)
+            {
+                inputJson = ToolInputRepair.Repair(inputJson, spec.JsonSchema);
+            }
+
+            _assistantBlocks.Add(new ToolUseContentBlock(meta.Id, meta.Name, inputJson));
         }
         else if (current.TryPickStart(out var messageStart))
         {

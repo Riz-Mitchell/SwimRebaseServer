@@ -81,6 +81,13 @@ public sealed record ToolExecutionContext(Guid UserId, Guid ConversationId, stri
 /// <summary>A <see cref="ToolInteractionKind.Question"/> tool: knows how to present its input to the user and how to turn their answers into the tool_result.</summary>
 public interface IQuestionTool : IAiToolDefinition
 {
+    /// <summary>
+    /// Why this call cannot be shown to the user (no questions in it, an empty question), or null when it can. A rejected call is settled
+    /// straight away with this text as its result and the model asks again - waiting on a person for a question that is not there would
+    /// leave them stuck with nothing to answer.
+    /// </summary>
+    string? Rejection(string inputJson) => null;
+
     /// <summary>The event that asks the user this call's question(s).</summary>
     AiChatEvent CreateQuestionEvent(Guid conversationId, Guid toolExecutionRequestId, string inputJson);
 

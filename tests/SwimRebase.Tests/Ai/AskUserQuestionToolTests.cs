@@ -31,6 +31,29 @@ public class AskUserQuestionToolTests
     }
 
     [Fact]
+    public void A_question_with_no_text_is_rejected_so_the_user_is_never_left_with_nothing_to_answer()
+    {
+        var tool = new AskUserQuestionTool();
+
+        Assert.Null(tool.Rejection(Input));
+        Assert.NotNull(tool.Rejection("""{"question":"  "}"""));
+        Assert.NotNull(tool.Rejection("{}"));
+        Assert.NotNull(tool.Rejection("""{"question":"Which day?","options":"Mon,Tue"}"""));
+    }
+
+    [Fact]
+    public void An_interview_call_with_no_readable_questions_is_rejected()
+    {
+        var tool = new AskSwimQuestionsTool();
+        var stringified = System.Text.Json.JsonSerializer.Serialize(new { questions = """[{"q":"Which lane?","kind":"fork","opts":[]}]""" });
+
+        Assert.Null(tool.Rejection("""{"questions":[{"q":"Which lane?","kind":"fork","opts":[]}]}"""));
+        Assert.Contains("JSON array", tool.Rejection(stringified));
+        Assert.NotNull(tool.Rejection("""{"questions":[]}"""));
+        Assert.NotNull(tool.Rejection("{not json"));
+    }
+
+    [Fact]
     public void It_is_a_question_that_waits_on_the_user_and_belongs_to_the_main_chat()
     {
         IAiToolDefinition tool = new AskUserQuestionTool();

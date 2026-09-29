@@ -43,6 +43,20 @@ public sealed class AskUserQuestionTool : IQuestionTool
         }
         """;
 
+    public string? Rejection(string inputJson)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(AskUserQuestionInput.Parse(inputJson).Question)
+                ? "The question was empty. Call again with the question to ask, or carry on without asking."
+                : null;
+        }
+        catch (JsonException)
+        {
+            return "The input was not valid. Call again with `question` as a string and `options` as an array of strings.";
+        }
+    }
+
     public AiChatEvent CreateQuestionEvent(Guid conversationId, Guid toolExecutionRequestId, string inputJson)
     {
         var input = AskUserQuestionInput.Parse(inputJson);

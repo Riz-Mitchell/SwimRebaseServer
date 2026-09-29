@@ -175,6 +175,26 @@ public class SwimBoardFlowTests
     }
 
     [Fact]
+    public async Task An_ask_call_with_no_readable_questions_is_handed_back_to_the_model_instead_of_leaving_the_user_stuck()
+    {
+        var stringified = System.Text.Json.JsonSerializer.Serialize(new { questions = """[{"q":"Which lane?","kind":"fork","opts":["Lane 1","Lane 2"]}]""" });
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, stringified), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion));
+
+        var events = await h.RunAsync(h.Chat.Id);
+
+        // Only the valid second call reaches the user, and the model was asked again without anyone answering the first.
+        var asked = Assert.Single(events.OfType<AiChatQuestionsAsked>());
+        Assert.Equal("Which lane?", Assert.Single(asked.Questions).Text);
+        Assert.Equal(3, h.Client.Requests.Count);
+
+        var rejected = h.ToolExecutions.Requests.First(r => r.ToolName == InterviewTools.Ask);
+        Assert.Equal(ToolExecutionStatus.Failed, rejected.Status);
+        Assert.Contains("JSON array", rejected.ResultJson);
+        Assert.Contains(h.ToolResultsIn(h.Child.Id), r => r.Contains("JSON array"));
+        Assert.Equal(h.OpenQuestion.Id, h.ToolExecutions.Requests.Last(r => r.ToolName == InterviewTools.Ask).Id);
+    }
+
+    [Fact]
     public async Task The_board_tool_is_offered_whether_or_not_an_image_is_attached_so_the_cached_tool_list_never_changes()
     {
         var withImage = new Harness(withImage: true, ScriptedReply.Say("Sure."));
