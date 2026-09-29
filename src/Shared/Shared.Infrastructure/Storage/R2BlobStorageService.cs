@@ -13,6 +13,8 @@ namespace Shared.Infrastructure.Storage;
 /// </summary>
 public sealed class R2BlobStorageService(IAmazonS3 s3, IOptions<CloudflareR2Options> options) : IBlobStorageService
 {
+    private readonly DownloadUrlMemo _downloadUrls = new(TimeProvider.System);
+
     private string BucketName => options.Value.BucketName;
 
     public PresignedUploadUrl CreatePresignedUploadUrl(string objectKey, string contentType, TimeSpan expiry)
@@ -31,13 +33,14 @@ public sealed class R2BlobStorageService(IAmazonS3 s3, IOptions<CloudflareR2Opti
     }
 
     public string CreatePresignedDownloadUrl(string objectKey, TimeSpan expiry) =>
-        s3.GetPreSignedURL(new GetPreSignedUrlRequest
-        {
-            BucketName = BucketName,
-            Key = objectKey,
-            Verb = HttpVerb.GET,
-            Expires = DateTime.UtcNow.Add(expiry),
-        });
+        _downloadUrls.GetOrCreate(objectKey, expiry, () =>
+            s3.GetPreSignedURL(new GetPreSignedUrlRequest
+            {
+                BucketName = BucketName,
+                Key = objectKey,
+                Verb = HttpVerb.GET,
+                Expires = DateTime.UtcNow.Add(expiry),
+            }));
 
     public async Task<BlobMetadata?> TryGetMetadataAsync(string objectKey, CancellationToken cancellationToken)
     {

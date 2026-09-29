@@ -16,9 +16,10 @@ public interface IBlobStorageService
     PresignedUploadUrl CreatePresignedUploadUrl(string objectKey, string contentType, TimeSpan expiry);
 
     /// <summary>
-    /// A presigned URL to read the object, valid for <paramref name="expiry"/>. Generated fresh on
-    /// every use (e.g. once per model turn) rather than stored, so storage of the URL itself never
-    /// goes stale - only the permanent <paramref name="objectKey"/> needs to be kept.
+    /// A presigned URL to read the object, valid for <paramref name="expiry"/>. Never stored, so it
+    /// never goes stale - only the permanent <paramref name="objectKey"/> needs to be kept. The same
+    /// URL is returned for most of its lifetime rather than a new one per call: a model prompt that
+    /// embeds it must stay byte-identical from turn to turn for the provider's prompt cache to hit.
     /// </summary>
     string CreatePresignedDownloadUrl(string objectKey, TimeSpan expiry);
 
