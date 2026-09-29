@@ -176,13 +176,17 @@ Keyset-paginated message history for a conversation, newest-first. `before` (opt
 ```json
 {
   "items": [
-    { "id": "guid", "sequenceNumber": 12, "role": "User|Assistant|Tool", "content": "string", "createdAt": "datetime" }
+    { "id": "guid", "sequenceNumber": 12, "role": "User|Assistant|Tool", "content": "string",
+      "images": [{ "imageId": "guid", "contentType": "image/jpeg", "url": "string" }],
+      "createdAt": "datetime" }
   ],
   "hasMore": true,
   "nextBefore": 8
 }
 ```
 `nextBefore` is `null` when `hasMore` is `false`.
+
+`images` lists the images attached to that message (empty when there are none). `url` is a presigned download URL generated fresh on every request, valid for 15 minutes - render it directly, and refetch the history if it has expired. `imageId` is `null` only for images attached before ids were stored on messages.
 
 For a `Tool`-role message, `content` is itself a JSON-encoded array (still a string field - decode it client-side), one entry per tool call resolved in that turn:
 ```json
