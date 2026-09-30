@@ -101,3 +101,10 @@ public sealed record QuestionAnswerContext(int QuestionTurn, int? MaxQuestionTur
 {
     public bool IsLastChance => MaxQuestionTurns is { } max && QuestionTurn >= max;
 }
+
+/// <summary>A gated tool that can show what approving its call would do, so the user decides on the result and not just the arguments.</summary>
+public interface IToolPreview : IAiToolDefinition
+{
+    /// <summary>Readable text for the call, or null when there is nothing to show (an unknown draft, unreadable input). Never throws for bad input.</summary>
+    Task<string?> PreviewAsync(Guid userId, string inputJson, CancellationToken cancellationToken);
+}

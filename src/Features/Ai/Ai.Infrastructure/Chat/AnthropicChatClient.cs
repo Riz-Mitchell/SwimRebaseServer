@@ -54,9 +54,20 @@ public sealed class AnthropicChatClient(
             parameters = parameters with { ToolChoice = new ToolChoiceAuto { DisableParallelToolUse = true } };
         }
 
-        if (request.Effort is { } effort)
+        if (request.Effort is not null || request.OutputSchema is not null)
         {
-            parameters = parameters with { OutputConfig = new OutputConfig { Effort = Enum.Parse<Effort>(effort, ignoreCase: true) } };
+            var outputConfig = new OutputConfig();
+            if (request.Effort is { } effort)
+            {
+                outputConfig = outputConfig with { Effort = Enum.Parse<Effort>(effort, ignoreCase: true) };
+            }
+
+            if (request.OutputSchema is { } schema)
+            {
+                outputConfig = outputConfig with { Format = AnthropicMessageMapper.ToOutputFormat(schema) };
+            }
+
+            parameters = parameters with { OutputConfig = outputConfig };
         }
 
         return parameters;

@@ -11,7 +11,7 @@ namespace Ai.Infrastructure.Tools;
 /// Saves a draft from the swim-board import as one of the user's sessions. Always gated: it adds to their training log. Saving the
 /// same draft twice returns the session the first save made, so a retried or repeated call is harmless.
 /// </summary>
-public sealed class SaveSessionTool(SessionPromotionService promotion) : IAiTool
+public sealed class SaveSessionTool(SessionPromotionService promotion, SessionDraftService drafts) : IAiTool, IToolPreview
 {
     public string Name => InterviewTools.SaveSession;
 
@@ -55,6 +55,24 @@ public sealed class SaveSessionTool(SessionPromotionService promotion) : IAiTool
             ToolJsonOptions.Web);
 
         return new ToolExecutionResult(resultJson, AffectedCount: 1);
+    }
+
+    public async Task<string?> PreviewAsync(Guid userId, string inputJson, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var input = JsonSerializer.Deserialize<Input>(inputJson, ToolJsonOptions.Web);
+            if (input is null || !Guid.TryParse(input.DraftId, out var draftId))
+            {
+                return null;
+            }
+
+            return (await drafts.GetAsync(userId, draftId, cancellationToken)).Outline;
+        }
+        catch (Exception ex) when (ex is JsonException or DraftNotFoundException)
+        {
+            return null;
+        }
     }
 
     private sealed record Input(string? DraftId, DateOnly PerformedOn, string? Course, string? Title);

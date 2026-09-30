@@ -49,6 +49,20 @@ public class AnthropicChatClientRequestTests
     }
 
     [Fact]
+    public void An_output_schema_constrains_the_reply_alongside_effort_and_without_tools()
+    {
+        var parameters = AnthropicChatClient.BuildParameters(
+            new ChatTurnRequest(Messages, "system", [], Effort: "medium", OutputSchema: """{"type":"object","properties":{"a":{"type":"string"}},"required":["a"],"additionalProperties":false}"""),
+            new AiModelOptions(),
+            null!);
+
+        Assert.NotNull(parameters.OutputConfig!.Format);
+        Assert.Equal(Effort.Medium, parameters.OutputConfig.Effort!.Value());
+        Assert.Null(parameters.Tools);
+        Assert.Null(parameters.ToolChoice);
+    }
+
+    [Fact]
     public void Tool_choice_is_omitted_when_tool_use_is_not_required()
     {
         Assert.Null(Build(requireToolUse: false, Tool).ToolChoice);

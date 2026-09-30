@@ -57,11 +57,11 @@ public static class ServiceCollectionExtensions
         services.AddAiTool<AskUserQuestionTool>();
         services.AddAiTool<ReadSwimBoardTool>();
         services.AddAiTool<AskSwimQuestionsTool>();
-        services.AddAiTool<DraftSessionTool>();
         services.AddAiTool<EditDraftTool>();
         services.AddAiTool<SaveSessionTool>();
         services.AddAiTool<GetTrainingMetricsTool>();
         services.AddScoped<ISubAgent, SwimBoardInterviewAgent>();
+        services.AddScoped<IConversationDriver, SwimBoardConversionDriver>();
         services.AddScoped<IAiChatClient, AnthropicChatClient>();
         services.AddScoped<IChatCompactionService, ChatCompactionService>();
         services.AddScoped<IAiUserProvisioningService, AiUserProvisioningService>();
@@ -69,6 +69,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ConversationManagementService>();
         services.AddScoped<ToolExecutor>();
         services.AddScoped<ToolTurnCloser>();
+        services.AddScoped<SubAgentFollowUp>();
         services.AddScoped<ConversationRunner>();
         services.AddScoped<IAgentProfileProvider, AgentProfileProvider>();
         services.AddScoped<IToolInteraction, ApprovalInteraction>();

@@ -34,8 +34,10 @@ public sealed record AiChatToolStarted(Guid ConversationId, string ToolUseId, st
 public sealed record AiChatToolCompleted(
     Guid ConversationId, string ToolUseId, string ToolName, string DisplayName, ToolEffect Effect, bool Success, int AffectedCount) : AiChatEvent;
 
+/// <param name="Preview">A readable rendering of what approving would do (a drafted session's outline, say) for tools that can offer one; null otherwise.</param>
 public sealed record AiChatPermissionRequired(
-    Guid ConversationId, Guid ToolExecutionRequestId, string ToolName, string DisplayName, ToolEffect Effect, string InputJson) : AiChatEvent;
+    Guid ConversationId, Guid ToolExecutionRequestId, string ToolName, string DisplayName, ToolEffect Effect, string InputJson,
+    string? Preview = null) : AiChatEvent;
 
 public sealed record AiChatPermissionResolved(Guid ConversationId, Guid ToolExecutionRequestId, bool Approved) : AiChatEvent;
 
@@ -56,14 +58,25 @@ public enum AskedQuestionKind
     /// <summary>A choice inside one set of questions - several can be asked together.</summary>
     Detail,
 
-    /// <summary>Branches to entirely different follow-up questions, so it is always the last one asked in a turn.</summary>
+    /// <summary>Branches to entirely different follow-up questions: questions that depend on its answer carry a <see cref="AskedQuestionCondition"/>.</summary>
     Fork,
+
+    /// <summary>A value the app itself asks for (a date, a pool): <see cref="AskedQuestion.FieldType"/> says which input to show.</summary>
+    Field,
 }
 
-public sealed record AskedQuestion(string Text, AskedQuestionKind Kind, IReadOnlyList<string> Options);
+/// <summary>The question is shown only when the earlier question <paramref name="QuestionId"/> was answered with <paramref name="Option"/>.</summary>
+public sealed record AskedQuestionCondition(string QuestionId, string Option);
+
+/// <param name="Id">Stable within the questionnaire; conditions refer to it. Null for a single ad-hoc question.</param>
+/// <param name="ShowIf">When set, hide the question unless its condition holds. A hidden question is answered with an empty string.</param>
+/// <param name="FieldType">For <see cref="AskedQuestionKind.Field"/>: "date" (yyyy-MM-dd) or "course" (one of the options).</param>
+public sealed record AskedQuestion(
+    string Text, AskedQuestionKind Kind, IReadOnlyList<string> Options,
+    string? Id = null, AskedQuestionCondition? ShowIf = null, string? FieldType = null);
 
 /// <summary>
-/// Several questions asked together; the client answers them all at once (one answer per question, in order) via the same
+/// Several questions asked together; the client answers them all at once (one answer per question, in order, empty for a hidden one) via the same
 /// answer endpoint. As with <see cref="AiChatQuestionAsked"/>, <c>Options</c> are quick-reply suggestions and the user may type anything.
 /// </summary>
 public sealed record AiChatQuestionsAsked(

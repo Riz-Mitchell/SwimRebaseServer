@@ -8,15 +8,17 @@ public sealed class ApprovalInteraction : IToolInteraction
 {
     public ToolInteractionKind Kind => ToolInteractionKind.Approval;
 
-    public Task<IReadOnlyList<AiChatEvent>> RaiseAsync(ToolRaiseContext context, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AiChatEvent>> RaiseAsync(ToolRaiseContext context, CancellationToken cancellationToken)
     {
         var name = context.Call.ToolName;
-        IReadOnlyList<AiChatEvent> events =
+        var preview = context.Tool is IToolPreview previewer
+            ? await previewer.PreviewAsync(context.UserId, context.Call.InputJson, cancellationToken)
+            : null;
+        return
         [
             new AiChatPermissionRequired(
                 context.ConversationId, context.Request.Id, name,
-                context.Tool?.DisplayName ?? name, context.Tool?.Effect ?? ToolEffect.Neutral, context.Call.InputJson),
+                context.Tool?.DisplayName ?? name, context.Tool?.Effect ?? ToolEffect.Neutral, context.Call.InputJson, preview),
         ];
-        return Task.FromResult(events);
     }
 }

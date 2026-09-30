@@ -188,14 +188,14 @@ public class DraftTests
     [Fact]
     public void The_model_facing_schemas_are_valid_json_with_shared_definitions()
     {
-        foreach (var schema in new[] { InterviewTools.AskSchema, InterviewTools.DraftSessionSchema, InterviewTools.EditDraftSchema, InterviewTools.ReadSwimBoardSchema, InterviewTools.SaveSessionSchema, MetricsTool.Schema })
+        foreach (var schema in new[] { InterviewTools.AskSchema, ConversionSchemas.Session, InterviewTools.EditDraftSchema, InterviewTools.ReadSwimBoardSchema, InterviewTools.SaveSessionSchema, MetricsTool.Schema })
         {
             using var document = JsonDocument.Parse(schema);
             Assert.Equal("object", document.RootElement.GetProperty("type").GetString());
         }
 
-        using var draft = JsonDocument.Parse(InterviewTools.DraftSessionSchema);
-        Assert.True(draft.RootElement.GetProperty("$defs").TryGetProperty("node", out _));
+        using var conversion = JsonDocument.Parse(ConversionSchemas.Session);
+        Assert.True(conversion.RootElement.GetProperty("$defs").TryGetProperty("item", out _));
         using var edit = JsonDocument.Parse(InterviewTools.EditDraftSchema);
         Assert.True(edit.RootElement.GetProperty("$defs").TryGetProperty("part", out _));
     }

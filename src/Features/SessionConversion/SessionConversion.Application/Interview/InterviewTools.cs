@@ -15,38 +15,24 @@ public static class InterviewTools
     /// <summary>The main chat's tool for saving a draft as a session.</summary>
     public const string SaveSession = "save_session";
 
-    /// <summary>Interviewer-only: ask the swimmer questions.</summary>
+    /// <summary>Records the questionnaire the swimmer is asked and, once answered, their answers. Never offered to a model: the interview's own driver raises it.</summary>
     public const string Ask = "ask";
-
-    /// <summary>Interviewer-only, and its terminal tool: write the draft session.</summary>
-    public const string DraftSession = "draft_session";
 
     /// <summary>The <c>ConversationKind</c> of the interviewer's own conversation, and the scope of its tools.</summary>
     public const string AgentKind = "swim_board_interview";
 
-    public const int MaxQuestionTurns = 12;
-
     /// <summary>
-    /// Thinking effort for the interview's turns. The turns are mostly mechanical (read the board, ask the next question), and thinking
-    /// tokens are billed as output, so this stays below the model's default. Raise it if draft quality drops.
+    /// Thinking effort for the interview's two model calls. Reading a board is mostly mechanical, and thinking tokens are billed as
+    /// output, so this stays below the model's default. Raise it if draft quality drops.
     /// </summary>
     public const string InterviewEffort = "medium";
 
-    public const string AskDescription =
-        "Ask the swimmer questions about the path they swam. Questions in board order. kind=fork: a branch to completely different sets " +
-        "(group/lane, A/B/C, sprint vs distance); a fork must be the LAST question and ends your turn. kind=detail: a choice inside one set. " +
-        "opts: 0-5 short answers (the swimmer may type anything).";
+    /// <summary>Room for the whole session in one reply: a big board is a few thousand tokens of JSON.</summary>
+    public const int ConversionMaxTokens = 16000;
 
-    public const string AskSchema = """
-        {"type":"object","properties":{"questions":{"type":"array","minItems":1,"items":{"type":"object","properties":{"q":{"type":"string"},"kind":{"type":"string","enum":["fork","detail"]},"opts":{"type":"array","items":{"type":"string"}}},"required":["q","kind","opts"]}}},"required":["questions"]}
-        """;
+    public const string AskDescription = "The swimmer's questionnaire about the path they swam, and their answers.";
 
-    public const string DraftSessionDescription =
-        "Write the session the swimmer actually swam (skipped sets omitted, added sets included). Call once nothing is left to ask.";
-
-    public static readonly string DraftSessionSchema = WithDefs("""
-        {"type":"object","properties":{"group":{"type":"string"},"sets":{"type":"array","items":{"$ref":"#/$defs/node"}}},"required":["sets"],"$defs":{__DEFS__}}
-        """);
+    public static readonly string AskSchema = ConversionSchemas.Questionnaire;
 
     public const string ReadSwimBoardDescription =
         "Reads a photo of a swim workout board attached to this conversation and works out what the user actually swam by interviewing them " +

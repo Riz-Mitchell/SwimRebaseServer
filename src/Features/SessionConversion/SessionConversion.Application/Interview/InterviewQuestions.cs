@@ -1,13 +1,45 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace SessionConversion.Application.Interview;
 
-/// <param name="IsFork">A branch to completely different sets (group/lane, A/B/C). Its answer decides which later questions exist.</param>
-/// <param name="Options">Quick-reply suggestions; the swimmer can always type anything.</param>
-public sealed record InterviewQuestion(string Text, bool IsFork, IReadOnlyList<string> Options);
+public enum InterviewQuestionKind
+{
+    /// <summary>A choice inside one set.</summary>
+    Detail,
 
-/// <summary>Reads the interviewer's <c>ask</c> input and turns the swimmer's answers into the tool_result text.</summary>
+    /// <summary>A branch to completely different sets; later questions can depend on its answer.</summary>
+    Fork,
+
+    /// <summary>A value the app asks for itself (the date, the pool) rather than one the model wrote.</summary>
+    Field,
+}
+
+/// <summary>Shown only when the earlier question <paramref name="QuestionId"/> was answered with <paramref name="Option"/>.</summary>
+public sealed record QuestionCondition(string QuestionId, string Option);
+
+/// <param name="Options">Quick-reply suggestions; the swimmer can always type anything.</param>
+/// <param name="FieldType">For <see cref="InterviewQuestionKind.Field"/> questions: which input the client shows (see <see cref="InterviewFields"/>).</param>
+public sealed record InterviewQuestion(
+    string Id, string Text, InterviewQuestionKind Kind, IReadOnlyList<string> Options, QuestionCondition? ShowIf = null, string? FieldType = null)
+{
+    public bool IsFork => Kind == InterviewQuestionKind.Fork;
+}
+
+public static class InterviewFields
+{
+    public const string ChangedId = "changed";
+    public const string DateId = "performedOn";
+    public const string CourseId = "course";
+
+    public const string DateType = "date";
+    public const string CourseType = "course";
+
+    public static readonly string[] Courses = ["scy", "scm", "lcm"];
+}
+
+/// <summary>Reads the swimmer's questionnaire and turns their answers into text.</summary>
 public static class InterviewQuestions
 {
     public static IReadOnlyList<InterviewQuestion> Parse(string inputJson)
@@ -27,55 +59,111 @@ public static class InterviewQuestions
                 continue;
             }
 
-            var isFork = question.TryGetProperty("kind", out var kind) && kind.GetString() == "fork";
+            var id = question.TryGetProperty("id", out var idElement) && idElement.GetString() is { Length: > 0 } given ? given : $"q{result.Count + 1}";
+            var kind = (question.TryGetProperty("kind", out var kindElement) ? kindElement.GetString() : null) switch
+            {
+                "fork" => InterviewQuestionKind.Fork,
+                "field" => InterviewQuestionKind.Field,
+                _ => InterviewQuestionKind.Detail,
+            };
             var options = question.TryGetProperty("opts", out var opts) && opts.ValueKind == JsonValueKind.Array
                 ? opts.EnumerateArray().Select(o => o.GetString() ?? string.Empty).Where(o => o.Length > 0).ToList()
                 : [];
-            result.Add(new InterviewQuestion(text, isFork, options));
+            var fieldType = question.TryGetProperty("fieldType", out var fieldElement) && fieldElement.ValueKind == JsonValueKind.String ? fieldElement.GetString() : null;
+
+            result.Add(new InterviewQuestion(id, text, kind, options, ReadCondition(question), fieldType));
         }
 
         return result;
     }
 
     /// <summary>
-    /// A fork ends the turn: later questions depend on its answer, so anything after the first fork is held back
-    /// (and the model is told to ask again next turn if it is still relevant).
+    /// The stored questionnaire: what the model wrote, with any condition that points at an unknown or later question dropped (so the
+    /// question is asked rather than never shown), then the fixed questions this app adds.
     /// </summary>
-    public static (IReadOnlyList<InterviewQuestion> Asked, int HeldBack) SplitAtFork(IReadOnlyList<InterviewQuestion> questions)
+    public static string Compose(string modelJson)
     {
-        var fork = questions.ToList().FindIndex(q => q.IsFork);
-        var asked = fork >= 0 ? questions.Take(fork + 1).ToList() : questions.ToList();
-        return (asked, questions.Count - asked.Count);
+        var asked = new List<InterviewQuestion>();
+        var seen = new HashSet<string>();
+        foreach (var question in Parse(modelJson))
+        {
+            var id = seen.Add(question.Id) ? question.Id : $"{question.Id}_{asked.Count + 1}";
+            seen.Add(id);
+            var condition = question.ShowIf is { } c && asked.Any(a => a.Id == c.QuestionId) ? question.ShowIf : null;
+            asked.Add(question with { Id = id, ShowIf = condition, Kind = question.Kind == InterviewQuestionKind.Field ? InterviewQuestionKind.Detail : question.Kind });
+        }
+
+        asked.Add(new InterviewQuestion(
+            InterviewFields.ChangedId, "Did you do everything as written, or skip, shorten, change or add anything?", InterviewQuestionKind.Detail,
+            ["Everything as written", "I changed something"]));
+        asked.Add(new InterviewQuestion(
+            InterviewFields.DateId, "What date did you swim?", InterviewQuestionKind.Field, [], FieldType: InterviewFields.DateType));
+        asked.Add(new InterviewQuestion(
+            InterviewFields.CourseId, "Which pool?", InterviewQuestionKind.Field, InterviewFields.Courses, FieldType: InterviewFields.CourseType));
+
+        var array = new JsonArray();
+        foreach (var question in asked)
+        {
+            var node = new JsonObject
+            {
+                ["id"] = question.Id,
+                ["q"] = question.Text,
+                ["kind"] = question.Kind.ToString().ToLowerInvariant(),
+                ["opts"] = new JsonArray(question.Options.Select(o => (JsonNode)JsonValue.Create(o)!).ToArray()),
+            };
+            if (question.ShowIf is { } condition)
+            {
+                node["showIf"] = new JsonObject { ["qid"] = condition.QuestionId, ["opt"] = condition.Option };
+            }
+
+            if (question.FieldType is not null)
+            {
+                node["fieldType"] = question.FieldType;
+            }
+
+            array.Add(node);
+        }
+
+        return new JsonObject { ["questions"] = array }.ToJsonString();
     }
 
-    /// <summary>The questions the swimmer is actually shown for this call.</summary>
-    public static IReadOnlyList<InterviewQuestion> Asked(string inputJson) => SplitAtFork(Parse(inputJson)).Asked;
+    /// <summary>The questions the swimmer is shown. Which ones apply is decided by <see cref="VisibleAnswers"/>, since it depends on their answers.</summary>
+    public static IReadOnlyList<InterviewQuestion> Asked(string inputJson) => Parse(inputJson);
 
-    /// <summary>The tool_result: one numbered line per question asked, plus notes about held-back questions and the turn cap.</summary>
-    public static string FormatAnswer(string inputJson, IReadOnlyList<string> answers, bool lastChance)
+    /// <summary>
+    /// Pairs each question that applies with the swimmer's answer (empty when blank), in order. A question whose <see cref="InterviewQuestion.ShowIf"/>
+    /// is not met - its fork was answered otherwise, or is itself hidden - is left out; the client hides the same ones.
+    /// </summary>
+    public static IReadOnlyList<(int Number, InterviewQuestion Question, string Answer)> VisibleAnswers(
+        IReadOnlyList<InterviewQuestion> questions, IReadOnlyList<string> rawAnswers)
     {
-        var all = Parse(inputJson);
-        if (all.Count == 0)
+        var answered = new Dictionary<string, string>();
+        var result = new List<(int, InterviewQuestion, string)>();
+        for (var i = 0; i < questions.Count; i++)
         {
-            return "No questions received. If the path is complete call draft_session; otherwise ask.";
+            var question = questions[i];
+            if (question.ShowIf is { } condition
+                && !(answered.TryGetValue(condition.QuestionId, out var forkAnswer)
+                     && string.Equals(forkAnswer, condition.Option, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var answer = ResolveAnswer(question.Options, i < rawAnswers.Count ? rawAnswers[i] : null);
+            answered[question.Id] = answer;
+            result.Add((i + 1, question, answer));
         }
 
-        var (asked, heldBack) = SplitAtFork(all);
+        return result;
+    }
+
+    /// <summary>The tool_result: one numbered line per question that applied. Numbers are the question's position in the full list, so hidden ones leave gaps.</summary>
+    public static string FormatAnswer(string inputJson, IReadOnlyList<string> answers)
+    {
         var sb = new StringBuilder();
-        for (var i = 0; i < asked.Count; i++)
+        foreach (var (number, _, answer) in VisibleAnswers(Parse(inputJson), answers))
         {
-            var text = ResolveAnswer(asked[i].Options, i < answers.Count ? answers[i] : null);
-            sb.Append(i + 1).Append(". ").AppendLine(text.Length == 0 ? "(skipped)" : text);
-        }
-
-        if (heldBack > 0)
-        {
-            sb.AppendLine($"{heldBack} later question(s) were not asked because they follow the fork; ask again next turn if still relevant.");
-        }
-
-        if (lastChance)
-        {
-            sb.AppendLine("Question limit reached: call draft_session now with your best reading.");
+            sb.Append(number).Append(". ").AppendLine(answer.Length == 0 ? "(skipped)" : answer);
         }
 
         return sb.ToString().TrimEnd();
@@ -97,5 +185,17 @@ public static class InterviewQuestions
 
         var exact = options.FirstOrDefault(o => string.Equals(o, trimmed, StringComparison.OrdinalIgnoreCase));
         return string.Join(' ', (exact ?? trimmed).Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    private static QuestionCondition? ReadCondition(JsonElement question)
+    {
+        if (!question.TryGetProperty("showIf", out var showIf) || showIf.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var id = showIf.TryGetProperty("qid", out var qid) ? qid.GetString() : null;
+        var option = showIf.TryGetProperty("opt", out var opt) ? opt.GetString() : null;
+        return string.IsNullOrEmpty(id) || option is null ? null : new QuestionCondition(id, option);
     }
 }

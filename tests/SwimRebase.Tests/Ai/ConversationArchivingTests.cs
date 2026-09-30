@@ -191,7 +191,7 @@ public class ConversationArchivingTests
         var loop = new ChatTurnLoop(
             conversations, toolExecutions, new InMemoryTokenUsageRepository(), unitOfWork, new ScriptedChatClient(), registry,
             new NoOpCompaction(), executor, closer, profiles, interactions, Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatTurnLoop>.Instance);
-        var runner = new ConversationRunner(loop, resolver);
+        var runner = new ConversationRunner(loop, resolver, new SubAgentFollowUp(toolExecutions, conversations, registry, [], unitOfWork), conversations, []);
         var orchestrator = new ChatOrchestrator(
             conversations, toolExecutions, uploadedImages, unitOfWork, new NoOpCompaction(), new NoOpAiUserProvisioningService(),
             resolver, runner, registry, new NoOpEventTracker());
