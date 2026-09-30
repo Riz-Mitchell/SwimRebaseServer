@@ -25,6 +25,7 @@ public sealed class AiChatController(
     ICurrentUserAccessor currentUser,
     IConversationRepository conversations,
     IToolExecutionRepository toolExecutions,
+    IAiToolRegistry toolRegistry,
     ITokenUsageRepository tokenUsage,
     ImageUploadService imageUpload,
     IBlobStorageService blobStorage,
@@ -142,16 +143,26 @@ public sealed class AiChatController(
         if (conversation is null) return NotFound();
 
         var pending = await toolExecutions.GetPendingForConversationAsync(currentUser.UserId, conversationId, cancellationToken);
-        return Ok(pending.Select(t => new
+        var result = new List<object>();
+        foreach (var t in pending)
         {
-            t.Id,
-            t.ConversationId,
-            t.Status,
-            t.AssistantMessageId,
-            t.ToolName,
-            t.InputJson,
-            t.CreatedAt,
-        }));
+            var preview = t.Status == ToolExecutionStatus.PendingApproval && toolRegistry.Find(t.ToolName) is IToolPreview previewer
+                ? await previewer.PreviewAsync(currentUser.UserId, t.InputJson, cancellationToken)
+                : null;
+            result.Add(new
+            {
+                t.Id,
+                t.ConversationId,
+                t.Status,
+                t.AssistantMessageId,
+                t.ToolName,
+                t.InputJson,
+                preview,
+                t.CreatedAt,
+            });
+        }
+
+        return Ok(result);
     }
 
     [HttpPost("images/upload-url")]

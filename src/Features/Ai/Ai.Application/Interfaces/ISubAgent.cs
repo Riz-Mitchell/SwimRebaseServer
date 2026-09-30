@@ -28,6 +28,13 @@ public interface ISubAgent
 
     /// <summary>Builds the parent tool call's result from the finished child conversation.</summary>
     Task<string> SummarizeAsync(SubAgentCompletion completion, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A gated call to put straight to the user once the sub-agent has finished, instead of resuming the main chat's model first (a save the
+    /// swimmer only has to accept). Null resumes the model as usual. Only asked of a sub-agent that succeeded.
+    /// </summary>
+    Task<ToolCallRequestedEvent?> FollowUpAsync(SubAgentCompletion completion, CancellationToken cancellationToken) =>
+        Task.FromResult<ToolCallRequestedEvent?>(null);
 }
 
 public sealed record SubAgentCompletion(Guid UserId, Guid ChildConversationId, ToolExecutionRequest ParentRequest);

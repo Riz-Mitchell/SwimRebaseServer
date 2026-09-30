@@ -82,6 +82,16 @@ internal static class AnthropicMessageMapper
         messages[^1] = messages[^1] with { Content = blocks };
     }
 
+    /// <summary>Parses a raw JSON Schema string into the structured-output format that constrains a reply to it.</summary>
+    public static JsonOutputFormat ToOutputFormat(string jsonSchema)
+    {
+        using var schema = JsonDocument.Parse(jsonSchema);
+        return new JsonOutputFormat
+        {
+            Schema = schema.RootElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone()),
+        };
+    }
+
     /// <summary>
     /// Parses our tool's raw JSON Schema string into the SDK's typed <see cref="InputSchema"/>.
     /// The tool list is identical on every turn of a conversation (see <c>ChatTurnLoop</c>), so the

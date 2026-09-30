@@ -59,7 +59,7 @@ public class MixedToolTurnTests
             var loop = new ChatTurnLoop(
                 Conversations, ToolExecutions, new InMemoryTokenUsageRepository(), unitOfWork, Client, registry,
                 new NoOpCompaction(), executor, closer, profiles, interactions, Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatTurnLoop>.Instance);
-            Runner = new ConversationRunner(loop, Resolver);
+            Runner = new ConversationRunner(loop, Resolver, new SubAgentFollowUp(ToolExecutions, Conversations, registry, [], unitOfWork), Conversations, []);
 
             Conversations.Add(new Conversation { Id = ChatId, UserId = UserId, CreatedAt = DateTimeOffset.UtcNow, LastMessageAt = DateTimeOffset.UtcNow });
             Conversations.AddMessage(ConversationMessageFactory.CreateUserMessage(ChatId, 1, "How many sessions do I have, and which day suits me?"));

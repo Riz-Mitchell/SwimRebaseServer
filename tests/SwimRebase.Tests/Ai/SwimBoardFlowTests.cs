@@ -13,15 +13,23 @@ using SwimRebase.Tests.SessionConversion;
 namespace SwimRebase.Tests.Ai;
 
 /// <summary>
-/// Drives the real turn loop, runner, resolver and interactions - with in-memory storage and a scripted model - through a swim-board
-/// interview nested inside a chat, the way the orchestrator's endpoints would.
+/// Drives the real turn loop, conversion driver, runner, resolver and interactions - with in-memory storage and a scripted model - through a
+/// swim-board conversion nested inside a chat, the way the orchestrator's endpoints would.
 /// </summary>
 public class SwimBoardFlowTests
 {
     private static readonly Guid UserId = Guid.NewGuid();
 
-    private const string LaneQuestion = """{"questions":[{"q":"Which lane?","kind":"fork","opts":["Lane 1","Lane 2"]}]}""";
-    private const string DetailQuestions = """{"questions":[{"q":"Kick or swim?","kind":"detail","opts":["Kick","Swim"]},{"q":"Did you skip anything?","kind":"detail","opts":[]}]}""";
+    private const string Questionnaire = """
+        {"questions":[
+          {"id":"q1","q":"Which lane?","kind":"fork","opts":["Lane 1","Lane 2"],"showIf":null},
+          {"id":"q2","q":"Kick or swim?","kind":"detail","opts":["Kick","Swim"],"showIf":{"qid":"q1","opt":"Lane 2"}}]}
+        """;
+
+    private const string InvalidSession = """{"ledger":[],"group":null,"sets":[{"kind":"item","reps":0,"timing":null,"parts":[{"dist":100,"stroke":"free","mode":"swim","equip":[],"effort":null}],"note":null}]}""";
+
+    /// <summary>Lane 2, kick, everything as written, 21 Sep 2026, short course yards - what the questionnaire's five questions are answered with.</summary>
+    private static readonly string[] FullAnswers = ["2", "Kick", "1", "2026-09-21", "1"];
 
     private sealed class Harness
     {
@@ -45,8 +53,8 @@ public class SwimBoardFlowTests
             Registry = new AiToolRegistry(
             [
                 new AskUserQuestionTool(), new ReadSwimBoardTool(), new EditDraftTool(draftService),
-                new AskSwimQuestionsTool(), new DraftSessionTool(draftService),
-                new SaveSessionTool(new SessionPromotionService(draftService, TestSessions.Service(Sessions))),
+                new AskSwimQuestionsTool(),
+                new SaveSessionTool(new SessionPromotionService(draftService, TestSessions.Service(Sessions)), draftService),
             ]);
 
             var agent = new SwimBoardInterviewAgent(draftService, ToolExecutions);
@@ -55,10 +63,15 @@ public class SwimBoardFlowTests
             var closer = new ToolTurnCloser(ToolExecutions, Conversations, Registry, unitOfWork, new NoOpCompaction(), executor);
             Resolver = new GatedToolApprovalResolver(closer, ToolExecutions, Conversations, Registry, profiles, [agent]);
             IToolInteraction[] interactions = [new ApprovalInteraction(), new QuestionInteraction(), new SubAgentInteraction(Conversations, [agent])];
+            var tokenUsage = new InMemoryTokenUsageRepository();
             var loop = new ChatTurnLoop(
-                Conversations, ToolExecutions, new InMemoryTokenUsageRepository(), unitOfWork, Client, Registry,
+                Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry,
                 new NoOpCompaction(), executor, closer, profiles, interactions, Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatTurnLoop>.Instance);
-            Runner = new ConversationRunner(loop, Resolver);
+            var driver = new SwimBoardConversionDriver(
+                Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry, draftService,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<SwimBoardConversionDriver>.Instance);
+            var followUp = new SubAgentFollowUp(ToolExecutions, Conversations, Registry, [agent], unitOfWork);
+            Runner = new ConversationRunner(loop, Resolver, followUp, Conversations, [driver]);
 
             Chat = new Conversation { Id = Guid.NewGuid(), UserId = UserId, Title = "chat", CreatedAt = DateTimeOffset.UtcNow, LastMessageAt = DateTimeOffset.UtcNow };
             Conversations.Add(Chat);
@@ -72,6 +85,8 @@ public class SwimBoardFlowTests
 
         public ToolExecutionRequest OpenQuestion => ToolExecutions.Requests.Last(r => r.ToolName == InterviewTools.Ask && r.Status == ToolExecutionStatus.PendingApproval);
 
+        public ToolExecutionRequest SaveRequest => ToolExecutions.Requests.Single(r => r.ToolName == InterviewTools.SaveSession);
+
         public Task<List<AiChatEvent>> RunAsync(Guid conversationId) => Collect(Runner.RunAsync(UserId, conversationId, CancellationToken.None));
 
         /// <summary>Answers the open question the way the answer endpoint does, then continues into whatever runs next.</summary>
@@ -80,6 +95,20 @@ public class SwimBoardFlowTests
             var events = new List<AiChatEvent>();
             var resolution = new ToolApprovalResolution();
             events.AddRange(await Collect(Resolver.AnswerAsync(UserId, OpenQuestion, answers, resolution, CancellationToken.None)));
+            if (resolution.ReadyConversationId is { } ready)
+            {
+                events.AddRange(await RunAsync(ready));
+            }
+
+            return events;
+        }
+
+        /// <summary>Approves or declines the save card the way the resolve endpoint does, then continues into the main chat's next turn.</summary>
+        public async Task<List<AiChatEvent>> ResolveSaveAsync(bool approve)
+        {
+            var events = new List<AiChatEvent>();
+            var resolution = new ToolApprovalResolution();
+            events.AddRange(await Collect(Resolver.ResolveAsync(UserId, SaveRequest, approve, approve ? null : "not quite", resolution, CancellationToken.None)));
             if (resolution.ReadyConversationId is { } ready)
             {
                 events.AddRange(await RunAsync(ready));
@@ -121,9 +150,9 @@ public class SwimBoardFlowTests
     private static ScriptedReply StartBoard() => ScriptedReply.Call(InterviewTools.ReadSwimBoard, """{"context":"Lane 2"}""");
 
     [Fact]
-    public async Task Reading_a_board_starts_an_interview_that_asks_its_first_question_in_the_same_stream()
+    public async Task Reading_a_board_asks_every_question_at_once_in_the_same_stream()
     {
-        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion));
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire));
 
         var events = await h.RunAsync(h.Chat.Id);
 
@@ -135,63 +164,66 @@ public class SwimBoardFlowTests
         var asked = Assert.Single(events.OfType<AiChatQuestionsAsked>());
         Assert.Equal(h.Child.Id, asked.ConversationId);
         Assert.Equal(h.OpenQuestion.Id, asked.ToolExecutionRequestId);
-        var question = Assert.Single(asked.Questions);
-        Assert.Equal(AskedQuestionKind.Fork, question.Kind);
-        Assert.Equal(["Lane 1", "Lane 2"], question.Options);
+        Assert.Equal(
+            [AskedQuestionKind.Fork, AskedQuestionKind.Detail, AskedQuestionKind.Detail, AskedQuestionKind.Field, AskedQuestionKind.Field],
+            asked.Questions.Select(q => q.Kind));
+        Assert.Equal(["q1", "q2", InterviewFields.ChangedId, InterviewFields.DateId, InterviewFields.CourseId], asked.Questions.Select(q => q.Id));
+        Assert.Equal(new AskedQuestionCondition("q1", "Lane 2"), asked.Questions[1].ShowIf);
+        Assert.Equal(InterviewFields.DateType, asked.Questions[3].FieldType);
+        Assert.Equal(["scy", "scm", "lcm"], asked.Questions[4].Options);
 
-        // The main chat is blocked on the running interview, and the client can find the question from the main chat.
+        // The main chat is blocked on the running conversion, and the client can find the questions from the main chat.
         Assert.Equal(ToolExecutionStatus.InProgress, h.ParentRequest.Status);
         Assert.True(await h.ToolExecutions.HasOutstandingRequestAsync(UserId, h.Chat.Id, CancellationToken.None));
         var pending = await h.ToolExecutions.GetPendingForConversationAsync(UserId, h.Chat.Id, CancellationToken.None);
         Assert.Equal(new[] { h.ParentRequest.Id, h.OpenQuestion.Id }.Order(), pending.Select(p => p.Id).Order());
-        Assert.Contains(pending, p => p.Id == h.ParentRequest.Id && p.Status == ToolExecutionStatus.InProgress);
-        Assert.Contains(pending, p => p.Id == h.OpenQuestion.Id && p.Status == ToolExecutionStatus.PendingApproval);
         Assert.Equal(h.Child.ParentToolExecutionRequestId, h.ParentRequest.Id);
     }
 
     [Fact]
-    public async Task The_interview_runs_on_its_own_profile_with_the_board_and_what_the_user_already_said()
+    public async Task Each_call_is_answered_as_json_of_its_own_schema_with_the_board_and_what_the_user_already_said()
     {
-        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion));
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(DraftTests.ModelSession));
 
         await h.RunAsync(h.Chat.Id);
+        await h.AnswerAsync(FullAnswers);
 
         var outer = h.Client.Requests[0];
         Assert.Contains(outer.Tools, t => t.Name == InterviewTools.ReadSwimBoard);
-        Assert.Contains(outer.Tools, t => t.Name == AiToolNames.AskUserQuestion);
-        Assert.DoesNotContain(outer.Tools, t => t.Name is InterviewTools.Ask or InterviewTools.DraftSession);
+        Assert.DoesNotContain(outer.Tools, t => t.Name == InterviewTools.Ask);
         Assert.Contains(InterviewTools.ReadSwimBoard, outer.SystemPrompt);
-        Assert.False(outer.RequireToolUse);
+        Assert.Null(outer.OutputSchema);
 
-        var interview = h.Client.Requests[1];
-        Assert.Equal([InterviewTools.Ask, InterviewTools.DraftSession], interview.Tools.Select(t => t.Name).Order().ToArray());
-        Assert.Equal(InterviewPrompt.System, interview.SystemPrompt);
-        Assert.True(interview.RequireToolUse);
-        Assert.True(interview.PromptCaching);
-
-        var opening = Assert.Single(interview.Messages);
+        var questionnaire = h.Client.Requests[1];
+        Assert.Empty(questionnaire.Tools);
+        Assert.Equal(InterviewPrompt.Questionnaire, questionnaire.SystemPrompt);
+        Assert.Equal(ConversionSchemas.Questionnaire, questionnaire.OutputSchema);
+        var opening = Assert.Single(questionnaire.Messages);
         Assert.Contains(opening.Content, b => b is ImageContentBlock { ObjectKey: "boards/today.png" });
         Assert.Contains(opening.Content, b => b is TextContentBlock t && t.Text.Contains("Board attached") && t.Text.Contains("Lane 2"));
+
+        var conversion = h.Client.Requests[2];
+        Assert.Empty(conversion.Tools);
+        Assert.Equal(InterviewPrompt.Conversion, conversion.SystemPrompt);
+        Assert.Equal(ConversionSchemas.Session, conversion.OutputSchema);
+        var board = Assert.Single(conversion.Messages);
+        Assert.Contains(board.Content, b => b is ImageContentBlock { ObjectKey: "boards/today.png" });
+        Assert.Contains(board.Content, b => b is TextContentBlock t && t.Text.Contains("Which lane? -> Lane 2") && t.Text.Contains("Kick or swim? -> Kick"));
     }
 
     [Fact]
-    public async Task An_ask_call_with_no_readable_questions_is_handed_back_to_the_model_instead_of_leaving_the_user_stuck()
+    public async Task A_questionnaire_that_cannot_be_read_fails_the_tool_call_instead_of_leaving_the_chat_stuck()
     {
-        var stringified = System.Text.Json.JsonSerializer.Serialize(new { questions = """[{"q":"Which lane?","kind":"fork","opts":["Lane 1","Lane 2"]}]""" });
-        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, stringified), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion));
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say("I can't read that board."), ScriptedReply.Say("Sorry, I couldn't read it."));
 
         var events = await h.RunAsync(h.Chat.Id);
 
-        // Only the valid second call reaches the user, and the model was asked again without anyone answering the first.
-        var asked = Assert.Single(events.OfType<AiChatQuestionsAsked>());
-        Assert.Equal("Which lane?", Assert.Single(asked.Questions).Text);
-        Assert.Equal(3, h.Client.Requests.Count);
-
-        var rejected = h.ToolExecutions.Requests.First(r => r.ToolName == InterviewTools.Ask);
-        Assert.Equal(ToolExecutionStatus.Failed, rejected.Status);
-        Assert.Contains("JSON array", rejected.ResultJson);
-        Assert.Contains(h.ToolResultsIn(h.Child.Id), r => r.Contains("JSON array"));
-        Assert.Equal(h.OpenQuestion.Id, h.ToolExecutions.Requests.Last(r => r.ToolName == InterviewTools.Ask).Id);
+        Assert.False(Assert.Single(events.OfType<AiChatSubAgentCompleted>()).Success);
+        Assert.Equal(ToolExecutionStatus.Failed, h.ParentRequest.Status);
+        Assert.Contains("without producing a result", Assert.Single(h.ToolResultsIn(h.Chat.Id)));
+        Assert.Contains(events.OfType<AiChatTextDelta>(), t => t.Text.Contains("Sorry"));
+        Assert.False(await h.ToolExecutions.HasOutstandingRequestAsync(UserId, h.Chat.Id, CancellationToken.None));
+        Assert.Empty(h.Drafts.Drafts);
     }
 
     [Fact]
@@ -221,84 +253,136 @@ public class SwimBoardFlowTests
     }
 
     [Fact]
-    public async Task A_finished_interview_hands_the_transcript_and_draft_back_and_the_chat_carries_on()
+    public async Task Answering_converts_the_board_in_one_call_and_puts_the_draft_to_the_user_to_save_without_a_chat_turn()
     {
-        var h = new Harness(
-            withImage: true,
-            StartBoard(),
-            ScriptedReply.Call(InterviewTools.Ask, LaneQuestion),
-            ScriptedReply.Call(InterviewTools.Ask, DetailQuestions),
-            ScriptedReply.Call(InterviewTools.DraftSession, DraftTests.ModelSession),
-            ScriptedReply.Say("Here is your draft - does it look right?"));
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(DraftTests.ModelSession), ScriptedReply.Say("Saved."));
 
         await h.RunAsync(h.Chat.Id);
-        var afterLane = await h.AnswerAsync("2");
-        Assert.Single(afterLane.OfType<AiChatQuestionsAsked>());
-        Assert.Equal(2, afterLane.OfType<AiChatQuestionsAsked>().Single().Questions.Count);
-
-        var finish = await h.AnswerAsync("1", "no, all of it");
+        var finish = await h.AnswerAsync(FullAnswers);
 
         var completed = Assert.Single(finish.OfType<AiChatSubAgentCompleted>());
         Assert.True(completed.Success);
         Assert.Equal(h.Chat.Id, completed.ParentConversationId);
-        Assert.Contains(finish.OfType<AiChatTextDelta>(), t => t.Text.Contains("does it look right"));
-        var last = Assert.IsType<AiChatCompleted>(finish[^1]);
-        Assert.Equal(h.Chat.Id, last.ConversationId);
 
-        // The draft exists, is tied to the interview, and the parent tool call now carries what the chat needs.
+        // The draft exists, is tied to the conversion, and the parent tool call now carries what the chat needs.
         var draft = Assert.Single(h.Drafts.Drafts);
         Assert.Equal(h.Child.Id, draft.SourceConversationId);
         Assert.Equal(ToolExecutionStatus.Executed, h.ParentRequest.Status);
         var result = Assert.Single(h.ToolResultsIn(h.Chat.Id));
         Assert.Contains($"Draft id: {draft.Id}", result);
         Assert.Contains("has not been saved", result);
+        Assert.Contains("Save button", result);
         Assert.Contains("Which lane? -> Lane 2", result);
         Assert.Contains("Kick or swim? -> Kick", result);
-        Assert.Contains("Did you skip anything? -> no, all of it", result);
+        Assert.Contains("Did you do everything as written, or skip, shorten, change or add anything? -> Everything as written", result);
         Assert.Contains("[1.0] 1 x 200 free kick", result);
         Assert.Contains("Distance: 1700", result);
 
+        // The save card is raised by the server straight after the conversion: the draft attached, date and pool filled in, no main-chat model turn.
+        var card = Assert.Single(finish.OfType<AiChatPermissionRequired>());
+        Assert.Equal(h.Chat.Id, card.ConversationId);
+        Assert.Equal(InterviewTools.SaveSession, card.ToolName);
+        Assert.Equal(h.SaveRequest.Id, card.ToolExecutionRequestId);
+        Assert.Contains($"\"draftId\":\"{draft.Id}\"", card.InputJson);
+        Assert.Contains("\"performedOn\":\"2026-09-21\"", card.InputJson);
+        Assert.Contains("\"course\":\"scy\"", card.InputJson);
+        Assert.Contains("Distance: 1700", card.Preview);
+        Assert.Equal(ToolExecutionStatus.PendingApproval, h.SaveRequest.Status);
+        Assert.IsType<AiChatCompleted>(finish[^1]);
+        Assert.Equal(h.Chat.Id, ((AiChatCompleted)finish[^1]).ConversationId);
+        Assert.True(await h.ToolExecutions.HasOutstandingRequestAsync(UserId, h.Chat.Id, CancellationToken.None));
+
+        // outer chat + questionnaire + conversion: nothing else ran before the user saw the card.
+        Assert.Equal(3, h.Client.Requests.Count);
+        Assert.Empty(h.Sessions.Sessions);
+    }
+
+    [Fact]
+    public async Task Accepting_the_card_saves_the_session_and_the_chat_confirms()
+    {
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(DraftTests.ModelSession), ScriptedReply.Say("Saved."));
+        await h.RunAsync(h.Chat.Id);
+        await h.AnswerAsync(FullAnswers);
+
+        var events = await h.ResolveSaveAsync(approve: true);
+
+        var session = Assert.Single(h.Sessions.Sessions);
+        Assert.Equal(new DateOnly(2026, 9, 21), session.PerformedOn);
+        Assert.Equal(PoolCourse.Scy, session.Course);
+        Assert.Equal(1700, session.TotalDistance);
+        Assert.Contains(events.OfType<AiChatTextDelta>(), t => t.Text.Contains("Saved."));
         Assert.False(await h.ToolExecutions.HasOutstandingRequestAsync(UserId, h.Chat.Id, CancellationToken.None));
         Assert.Equal(0, h.Client.Remaining);
     }
 
     [Fact]
-    public async Task The_interview_ends_the_moment_the_draft_is_accepted_without_another_model_turn()
+    public async Task Declining_the_card_hands_the_reason_back_to_the_chat_and_saves_nothing()
     {
-        var h = new Harness(
-            withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion),
-            ScriptedReply.Call(InterviewTools.DraftSession, DraftTests.ModelSession), ScriptedReply.Say("done"));
-
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(DraftTests.ModelSession), ScriptedReply.Say("What should I change?"));
         await h.RunAsync(h.Chat.Id);
-        await h.AnswerAsync("2");
+        await h.AnswerAsync(FullAnswers);
 
-        // 1 outer + 1 ask + 1 draft + 1 outer resume: no extra closing turn in the interview.
-        Assert.Equal(4, h.Client.Requests.Count);
-        Assert.Equal(h.Chat.Id, h.Conversations.Messages.Last(m => m.Role == MessageRole.Assistant).ConversationId);
+        var events = await h.ResolveSaveAsync(approve: false);
+
+        Assert.Empty(h.Sessions.Sessions);
+        Assert.Contains("not quite", h.ToolResultsIn(h.Chat.Id).Last());
+        Assert.Contains(events.OfType<AiChatTextDelta>(), t => t.Text.Contains("What should I change?"));
     }
 
     [Fact]
-    public async Task An_invalid_draft_is_sent_back_as_an_error_and_the_interviewer_fixes_it_in_the_same_run()
+    public async Task Without_a_valid_date_and_pool_the_chat_resumes_instead_of_offering_a_save()
     {
         var h = new Harness(
-            withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion),
-            ScriptedReply.Call(InterviewTools.DraftSession, """{"sets":[{"kind":"item","reps":0,"parts":[{"dist":100,"stroke":"free"}]}]}"""),
-            ScriptedReply.Call(InterviewTools.DraftSession, DraftTests.ModelSession),
-            ScriptedReply.Say("done"));
-
+            withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(DraftTests.ModelSession), ScriptedReply.Say("Which date and pool was that?"));
         await h.RunAsync(h.Chat.Id);
-        await h.AnswerAsync("2");
 
-        Assert.Contains(h.ToolResultsIn(h.Child.Id), r => r.Contains("reps must be >= 1"));
+        var finish = await h.AnswerAsync("2", "Kick", "1", "", "1");
+
+        Assert.Empty(finish.OfType<AiChatPermissionRequired>());
+        Assert.DoesNotContain(h.ToolExecutions.Requests, r => r.ToolName == InterviewTools.SaveSession);
+        Assert.DoesNotContain("Save button", Assert.Single(h.ToolResultsIn(h.Chat.Id)));
+        Assert.Contains(finish.OfType<AiChatTextDelta>(), t => t.Text.Contains("Which date and pool"));
+        Assert.Single(h.Drafts.Drafts);
+    }
+
+    [Fact]
+    public async Task An_invalid_draft_is_repaired_once_with_the_exact_problems()
+    {
+        var h = new Harness(
+            withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(InvalidSession), ScriptedReply.Say(DraftTests.ModelSession));
+        await h.RunAsync(h.Chat.Id);
+
+        var finish = await h.AnswerAsync(FullAnswers);
+
+        var repair = h.Client.Requests[3];
+        Assert.Contains(repair.Messages.Last().Content, b => b is TextContentBlock t && t.Text.Contains("reps must be >= 1"));
         Assert.Single(h.Drafts.Drafts);
         Assert.Equal(ToolExecutionStatus.Executed, h.ParentRequest.Status);
+        Assert.Single(finish.OfType<AiChatPermissionRequired>());
     }
 
     [Fact]
-    public async Task Cancelling_the_interview_unblocks_the_chat_and_tells_the_model_it_was_declined()
+    public async Task A_draft_that_stays_invalid_ends_the_conversion_without_a_draft_and_the_chat_is_told()
     {
         var h = new Harness(
-            withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion),
+            withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(InvalidSession), ScriptedReply.Say(InvalidSession),
+            ScriptedReply.Say("Sorry, I couldn't turn that board into a session."));
+        await h.RunAsync(h.Chat.Id);
+
+        var finish = await h.AnswerAsync(FullAnswers);
+
+        Assert.Empty(h.Drafts.Drafts);
+        Assert.Equal(ToolExecutionStatus.Failed, h.ParentRequest.Status);
+        Assert.Contains("without producing a result", Assert.Single(h.ToolResultsIn(h.Chat.Id)));
+        Assert.Empty(finish.OfType<AiChatPermissionRequired>());
+        Assert.Contains(finish.OfType<AiChatTextDelta>(), t => t.Text.Contains("Sorry"));
+    }
+
+    [Fact]
+    public async Task Cancelling_the_conversion_unblocks_the_chat_and_tells_the_model_it_was_declined()
+    {
+        var h = new Harness(
+            withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire),
             ScriptedReply.Say("No problem - just say when you want to try again."));
 
         await h.RunAsync(h.Chat.Id);
@@ -315,25 +399,11 @@ public class SwimBoardFlowTests
     }
 
     [Fact]
-    public async Task An_interview_that_answers_in_prose_fails_the_tool_call_instead_of_leaving_the_chat_stuck()
-    {
-        var h = new Harness(
-            withImage: true, StartBoard(), ScriptedReply.Say("I can't read that board."), ScriptedReply.Say("Sorry, I couldn't read it."));
-
-        var events = await h.RunAsync(h.Chat.Id);
-
-        Assert.False(Assert.Single(events.OfType<AiChatSubAgentCompleted>()).Success);
-        Assert.Equal(ToolExecutionStatus.Failed, h.ParentRequest.Status);
-        Assert.Contains("without producing a result", Assert.Single(h.ToolResultsIn(h.Chat.Id)));
-        Assert.False(await h.ToolExecutions.HasOutstandingRequestAsync(UserId, h.Chat.Id, CancellationToken.None));
-    }
-
-    [Fact]
     public async Task A_second_board_call_in_the_same_turn_is_refused_without_stalling_the_first()
     {
         var h = new Harness(withImage: true, new ScriptedReply(
             string.Empty, (InterviewTools.ReadSwimBoard, "{}"), (InterviewTools.ReadSwimBoard, "{}")),
-            ScriptedReply.Call(InterviewTools.Ask, LaneQuestion));
+            ScriptedReply.Say(Questionnaire));
 
         await h.RunAsync(h.Chat.Id);
 
@@ -346,11 +416,9 @@ public class SwimBoardFlowTests
     [Fact]
     public async Task The_main_chat_can_edit_the_draft_afterwards_by_path()
     {
-        var h = new Harness(
-            withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion),
-            ScriptedReply.Call(InterviewTools.DraftSession, DraftTests.ModelSession), ScriptedReply.Say("done"));
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(DraftTests.ModelSession));
         await h.RunAsync(h.Chat.Id);
-        await h.AnswerAsync("2");
+        await h.AnswerAsync(FullAnswers);
         var draft = Assert.Single(h.Drafts.Drafts);
 
         var edit = (IAiTool)h.Registry.Find(InterviewTools.EditDraft)!;
@@ -368,11 +436,9 @@ public class SwimBoardFlowTests
     [Fact]
     public async Task Saving_the_draft_is_gated_and_then_stores_a_session_the_chat_can_refer_to()
     {
-        var h = new Harness(
-            withImage: true, StartBoard(), ScriptedReply.Call(InterviewTools.Ask, LaneQuestion),
-            ScriptedReply.Call(InterviewTools.DraftSession, DraftTests.ModelSession), ScriptedReply.Say("done"));
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(DraftTests.ModelSession));
         await h.RunAsync(h.Chat.Id);
-        await h.AnswerAsync("2");
+        await h.AnswerAsync(FullAnswers);
         var draft = Assert.Single(h.Drafts.Drafts);
 
         var save = (IAiTool)h.Registry.Find(InterviewTools.SaveSession)!;
@@ -392,6 +458,22 @@ public class SwimBoardFlowTests
         Assert.Contains(session.Id.ToString(), result.ResultJson);
         Assert.Equal(result.ResultJson, again.ResultJson);
         Assert.Equal(1700, h.Sessions.Facts.Sum(f => f.Distance));
+    }
+
+    [Fact]
+    public async Task The_save_preview_shows_the_draft_and_nothing_for_an_unknown_one()
+    {
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(DraftTests.ModelSession));
+        await h.RunAsync(h.Chat.Id);
+        await h.AnswerAsync(FullAnswers);
+        var draft = Assert.Single(h.Drafts.Drafts);
+        var save = (IToolPreview)h.Registry.Find(InterviewTools.SaveSession)!;
+
+        var preview = await save.PreviewAsync(UserId, $$"""{"draftId":"{{draft.Id}}","performedOn":"2026-09-21","course":"scy"}""", CancellationToken.None);
+
+        Assert.Contains("Distance: 1700", preview);
+        Assert.Null(await save.PreviewAsync(UserId, $$"""{"draftId":"{{Guid.NewGuid()}}"}""", CancellationToken.None));
+        Assert.Null(await save.PreviewAsync(UserId, "not json", CancellationToken.None));
     }
 
     [Theory]

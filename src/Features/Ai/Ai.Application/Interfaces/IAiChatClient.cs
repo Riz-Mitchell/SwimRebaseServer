@@ -22,7 +22,8 @@ public sealed record AiToolSpec(string Name, string Description, string JsonSche
 /// <paramref name="PromptCaching"/> adds cache breakpoints on the system prompt and the newest message so a
 /// long, growing conversation re-reads its prefix from the provider's cache. <paramref name="RequireToolUse"/>
 /// asks the model to call at most one tool this turn instead of answering in prose (the system prompt has to
-/// say so; the provider no longer lets us force it).
+/// say so; the provider no longer lets us force it). <paramref name="OutputSchema"/> is a JSON Schema the reply text is constrained to, so the
+/// model's whole answer is JSON of that shape (no recursion, every object closed - the provider's structured-output rules).
 /// </summary>
 public sealed record ChatTurnRequest(
     IReadOnlyList<ChatMessage> Messages,
@@ -32,4 +33,5 @@ public sealed record ChatTurnRequest(
     int? MaxTokens = null,
     bool PromptCaching = false,
     bool RequireToolUse = false,
-    string? Effort = null);
+    string? Effort = null,
+    string? OutputSchema = null);
