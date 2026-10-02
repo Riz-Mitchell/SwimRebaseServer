@@ -30,10 +30,4 @@ public sealed class TimedSwimRepository(SessionsDbContext db) : ITimedSwimReposi
 
         return await query.OrderBy(t => t.Seconds).ToListAsync(cancellationToken);
     }
-
-    public async Task<IReadOnlyList<TimedSwim>> ListCountedForSessionsAsync(
-        Guid userId, IReadOnlyCollection<Guid> sessionIds, CancellationToken cancellationToken) =>
-        await db.TimedSwims.AsNoTracking()
-            .Where(t => t.OwnerId == userId && t.IncludeInMetrics && t.SessionId != null && sessionIds.Contains(t.SessionId.Value))
-            .ToListAsync(cancellationToken);
 }

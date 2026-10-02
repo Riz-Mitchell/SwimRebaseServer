@@ -84,7 +84,7 @@ public static class MetricsCalculator
     };
 
     /// <summary>Weeks start on Monday; a week is named by its Monday.</summary>
-    internal static DateOnly StartOfWeek(DateOnly date) => date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
+    private static DateOnly StartOfWeek(DateOnly date) => date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
 
     private sealed class KeyComparer : IEqualityComparer<string[]>
     {
