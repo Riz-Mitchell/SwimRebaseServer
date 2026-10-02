@@ -436,6 +436,98 @@ Examples: `?strokes=fly&groupBy=month` (how much fly per month), `?minIntensity=
 
 ---
 
+## Timed swims — `/api/timed-swims`
+
+How a swim went, as opposed to how much was swum: a time for a distance and stroke (the "event" is just `dist` + `stroke`, e.g. 50 free). Logged separately from sessions, usually during a practice (`sessionId` set) and sometimes standalone, such as a race result. Timed swims are never edited or deleted through the API.
+
+Enums are accepted in any case on input and returned PascalCase (`Free`, `Scm`, `Push`).
+
+### `POST /api/timed-swims`
+**Body:**
+```json
+{
+  "sessionId": "guid|null",
+  "performedOn": "yyyy-MM-dd",
+  "course": "Scy | Scm | Lcm",
+  "dist": 50,
+  "stroke": "free | back | breast | fly | im | choice",
+  "mode": "swim | kick | pull | drill | scull",
+  "seconds": 27.84,
+  "effort": "string|null",
+  "startType": "Push | Dive | null",
+  "finish": "Hand | Head | Feet | null",
+  "resistance": { "type": "string", "load": "string|null" },
+  "splits": [
+    { "distanceFromStart": 25, "seconds": 13.1, "strokeRateCyclesPerMinute": 52 }
+  ],
+  "includeInMetrics": false
+}
+```
+`sessionId`, `effort`, `startType`, `finish`, `resistance`, `splits` and `includeInMetrics` are optional.
+
+- `seconds` is the whole swim's time and is always required; splits are extra detail on top of it.
+- `effort` is free text ("easy", "80%", "race pace") and is mapped to the same 1-10 `intensity` as a session part. It is `null` when the text can't be mapped.
+- A split is a checkpoint before the finish, so `distanceFromStart` must be below `dist`. The finish time is `seconds`, not a split.
+- `strokeRateCyclesPerMinute` counts full stroke cycles, not individual arm strokes.
+- `includeInMetrics` defaults to `false`; see below.
+
+**Validation (400):** `dist >= 1`, `seconds > 0`, a `resistance` must have a `type`, and splits must be strictly increasing in both distance and seconds, finish before `dist` and `seconds`, with a rate above 0.
+
+**Response:** `TimedSwimResponse`. `400` with `{ error, problems }` listing everything to fix; nothing is saved.
+
+### `GET /api/timed-swims`
+Fastest first. All parameters optional; repeat a parameter for several values (`strokes=free&strokes=fly`).
+
+| Parameter | Meaning |
+|---|---|
+| `sessionId` | Only swims logged against this session |
+| `from`, `to` | Date range (yyyy-MM-dd), inclusive |
+| `distances` | Exact distances, e.g. `distances=50&distances=100` |
+| `strokes` | `free | back | breast | fly | im | choice` |
+| `minIntensity`, `maxIntensity` | Bounds on the 1-10 scale. Swims with no intensity are left out when either is set |
+| `startTypes` | `Push | Dive` |
+| `resistanceTypes` | Resistance type names to match |
+| `hasResistance` | `true` for swims with resistance, `false` for without |
+
+Examples: `?strokes=free&distances=50` (50 free times, best first), `?hasResistance=false&startTypes=Dive` (unresisted dive starts).
+
+The list is not paginated.
+
+**Response:** array of `TimedSwimResponse`.
+
+### `GET /api/timed-swims/{id}`
+**Response:** `TimedSwimResponse`. `404` if it is not the caller's.
+
+### `TimedSwimResponse` shape
+```json
+{
+  "id": "guid",
+  "sessionId": "guid|null",
+  "performedOn": "yyyy-MM-dd",
+  "course": "Scy | Scm | Lcm",
+  "unit": "Yards | Metres",
+  "dist": 50,
+  "stroke": "Free",
+  "mode": "Swim",
+  "seconds": 27.84,
+  "effort": "string|null",
+  "intensity": 9,
+  "startType": "Push | Dive | null",
+  "finish": "Hand | Head | Feet | null",
+  "resistance": { "type": "string", "load": "string|null" },
+  "splits": [{ "distanceFromStart": 25, "seconds": 13.1, "strokeRateCyclesPerMinute": 52 }],
+  "strokeRateCyclesPerMinute": 52.0,
+  "includeInMetrics": false,
+  "createdAt": "ISO-8601 timestamp"
+}
+```
+`unit` is derived from `course` (yards for `Scy`). `resistance` is `null` when none was set. The top-level `strokeRateCyclesPerMinute` is the average of the splits' rates, to one decimal place, and `null` when no split has one.
+
+### Interaction with session metrics
+A timed swim counts towards `GET /api/sessions/metrics` as training volume (its `dist`, `stroke`, `mode` and `intensity`, on the swim's own `performedOn` date, grouped under its session) only when **both** `includeInMetrics` is `true` and `sessionId` is set. A standalone swim never counts, whatever the flag, because there is no session for it to be volume of. Because the swim is added to the metrics at query time, editing the linked session does not remove it.
+
+---
+
 ## Timetable — `/api/timetable`
 
 ### `GET /api/timetable?asOf={date}`
