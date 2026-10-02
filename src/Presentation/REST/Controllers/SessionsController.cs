@@ -1,6 +1,7 @@
 using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sessions.Application.Load;
 using Sessions.Application.Metrics;
 using Sessions.Application.Services;
 using Sessions.Domain.Models;
@@ -14,7 +15,12 @@ namespace REST.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/sessions")]
-public sealed class SessionsController(SessionService sessions, MetricsService metrics, ICurrentUserAccessor currentUser) : ControllerBase
+public sealed class SessionsController(
+    SessionService sessions,
+    MetricsService metrics,
+    SessionLoadService load,
+    SessionPreferencesService preferences,
+    ICurrentUserAccessor currentUser) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List(
@@ -83,21 +89,62 @@ public sealed class SessionsController(SessionService sessions, MetricsService m
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    /// <summary>A load series: each session's load, or the mean load per day by day, week or month, each with a rolling baseline of the rows before it.</summary>
+    [HttpGet("load")]
+    public async Task<IActionResult> GetLoad(
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] LoadGrouping groupBy = LoadGrouping.Week,
+        [FromQuery] int baselinePeriods = LoadQuery.DefaultBaselinePeriods,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var query = new LoadQuery(from, to, groupBy, baselinePeriods);
+            return Ok(await load.QueryAsync(currentUser.UserId, query, DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken));
+        }
+        catch (InvalidLoadQueryException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("preferences")]
+    public async Task<IActionResult> GetPreferences(CancellationToken cancellationToken) =>
+        Ok(new SessionPreferencesResponse(await preferences.GetDefaultEffortAsync(currentUser.UserId, cancellationToken)));
+
+    /// <summary>Changing the default effort rebuilds the load of every saved session.</summary>
+    [HttpPut("preferences")]
+    public async Task<IActionResult> SetPreferences([FromBody] SessionPreferencesResponse request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await preferences.SetDefaultEffortAsync(currentUser.UserId, request.DefaultEffort, cancellationToken);
+            return Ok(request);
+        }
+        catch (InvalidSessionPreferencesException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 }
+
+public sealed record SessionPreferencesResponse(int DefaultEffort);
 
 public sealed record EditSessionRequest(List<SessionEditDto> Edits);
 
 public sealed record SessionSummaryResponse(
-    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, DateTimeOffset CreatedAt)
+    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, double Load, int UnratedDistance, DateTimeOffset CreatedAt)
 {
     public static SessionSummaryResponse FromEntity(Session s) =>
-        new(s.Id, s.PerformedOn, s.Title, s.Course, s.Unit, s.Source, s.TotalDistance, s.CreatedAt);
+        new(s.Id, s.PerformedOn, s.Title, s.Course, s.Unit, s.Source, s.TotalDistance, Math.Round(s.Load, 3), s.UnratedDistance, s.CreatedAt);
 }
 
 
 public sealed record SessionResponse(
-    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, SwimSession Content, string Outline)
+    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, double Load, int UnratedDistance, SwimSession Content, string Outline)
 {
     public static SessionResponse FromView(SessionView v) =>
-        new(v.Id, v.PerformedOn, v.Title, v.Course, v.Unit, v.Source, v.TotalDistance, v.Content, v.Outline);
+        new(v.Id, v.PerformedOn, v.Title, v.Course, v.Unit, v.Source, v.TotalDistance, Math.Round(v.Load, 3), v.UnratedDistance, v.Content, v.Outline);
 }

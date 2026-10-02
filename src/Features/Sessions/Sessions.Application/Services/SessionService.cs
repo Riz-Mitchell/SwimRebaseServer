@@ -15,13 +15,15 @@ public sealed record SessionView(
     DistanceUnit Unit,
     SessionSource Source,
     int TotalDistance,
-    SwimSession Content)
+    SwimSession Content,
+    double Load,
+    int UnratedDistance)
 {
     public string Outline => SessionText.Outline(Content);
 
     public static SessionView Of(Session session) => new(
         session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance,
-        SessionJson.Deserialize<SwimSession>(session.ContentJson));
+        SessionJson.Deserialize<SwimSession>(session.ContentJson), session.Load, session.UnratedDistance);
 }
 
 public sealed class SessionNotFoundException(Guid id) : Exception($"No session with id {id} exists for this user.");
@@ -30,6 +32,7 @@ public sealed class SessionNotFoundException(Guid id) : Exception($"No session w
 public sealed class SessionService(
     ISessionRepository sessions,
     SessionIngest ingest,
+    SessionLoadService load,
     [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
 {
     /// <summary>
@@ -68,9 +71,10 @@ public sealed class SessionService(
             UpdatedAt = now,
         };
 
+        await load.ApplyAsync(userId, session, SessionLeaves.Flatten(prepared), cancellationToken);
         sessions.Add(session, SessionFactBuilder.Build(session, prepared));
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, prepared);
+        return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, prepared, session.Load, session.UnratedDistance);
     }
 
     /// <exception cref="SessionNotFoundException">There is no such session for this user.</exception>
@@ -85,9 +89,10 @@ public sealed class SessionService(
         session.ContentJson = SessionJson.Serialize(edited);
         session.TotalDistance = SessionCalculator.Total(edited);
         session.UpdatedAt = DateTimeOffset.UtcNow;
+        await load.ApplyAsync(userId, session, SessionLeaves.Flatten(edited), cancellationToken);
         await sessions.ReplaceFactsAsync(session.Id, SessionFactBuilder.Build(session, edited), cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, edited);
+        return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, edited, session.Load, session.UnratedDistance);
     }
 
     public async Task<SessionView> GetAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
