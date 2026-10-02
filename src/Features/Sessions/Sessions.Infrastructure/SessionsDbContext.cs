@@ -11,6 +11,8 @@ public sealed class SessionsDbContext(DbContextOptions<SessionsDbContext> option
 
     public DbSet<TimedSwim> TimedSwims => Set<TimedSwim>();
 
+    public DbSet<SessionPreferences> SessionPreferences => Set<SessionPreferences>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SessionsDbContext).Assembly);

@@ -13,4 +13,7 @@ public interface ITimedSwimRepository
 
     /// <summary>Fastest first.</summary>
     Task<IReadOnlyList<TimedSwim>> ListAsync(Guid userId, TimedSwimFilter filter, CancellationToken cancellationToken);
+
+    /// <summary>The swims that count towards the given sessions' volume: opted in to metrics and logged against one of them.</summary>
+    Task<IReadOnlyList<TimedSwim>> ListCountedForSessionsAsync(Guid userId, IReadOnlyCollection<Guid> sessionIds, CancellationToken cancellationToken);
 }

@@ -31,6 +31,12 @@ public class Session
     /// <summary>Derived from <see cref="ContentJson"/> by <see cref="Calculations.SessionCalculator"/>.</summary>
     public int TotalDistance { get; set; }
 
+    /// <summary>Derived by <see cref="Calculations.LoadCalculator"/> from the session's facts (and any timed swims counted in its metrics).</summary>
+    public double Load { get; set; }
+
+    /// <summary>Distance that had no intensity and was counted in <see cref="Load"/> at the swimmer's default effort.</summary>
+    public int UnratedDistance { get; set; }
+
     /// <summary>A <see cref="SwimSession"/> serialized with <see cref="SessionJson.Options"/>.</summary>
     public string ContentJson { get; set; } = string.Empty;
 

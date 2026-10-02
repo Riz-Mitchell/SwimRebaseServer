@@ -38,4 +38,14 @@ public sealed class SessionRepository(SessionsDbContext db) : ISessionRepository
         db.SessionFacts.RemoveRange(await db.SessionFacts.Where(f => f.SessionId == sessionId).ToListAsync(cancellationToken));
         db.SessionFacts.AddRange(facts);
     }
+
+    public async Task<IReadOnlyList<Session>> ListTrackedAsync(Guid userId, IReadOnlyCollection<Guid>? ids, CancellationToken cancellationToken)
+    {
+        var query = db.Sessions.Where(s => s.OwnerId == userId);
+        if (ids is not null) query = query.Where(s => ids.Contains(s.Id));
+        return await query.ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<SessionFact>> ListFactsAsync(IReadOnlyCollection<Guid> sessionIds, CancellationToken cancellationToken) =>
+        await db.SessionFacts.AsNoTracking().Where(f => sessionIds.Contains(f.SessionId)).ToListAsync(cancellationToken);
 }

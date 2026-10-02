@@ -49,6 +49,7 @@ public sealed class TimedSwimNotFoundException(Guid id) : Exception($"No timed s
 /// </summary>
 public sealed class TimedSwimService(
     ITimedSwimRepository timedSwims,
+    SessionLoadService load,
     IEnumerable<IIntensityMapper> mappers,
     [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
 {
@@ -88,6 +89,14 @@ public sealed class TimedSwimService(
 
         timedSwims.Add(timedSwim);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // A swim that counts towards its session's volume counts towards its load too; saved first so the recompute can see it.
+        if (timedSwim.IncludeInMetrics && timedSwim.SessionId is { } sessionId)
+        {
+            await load.RecomputeAsync(userId, [sessionId], null, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
         return TimedSwimView.Of(timedSwim);
     }
 

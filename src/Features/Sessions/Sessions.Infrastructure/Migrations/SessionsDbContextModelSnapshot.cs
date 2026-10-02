@@ -44,6 +44,10 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<double>("Load")
+                        .HasColumnType("double precision")
+                        .HasColumnName("load");
+
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid")
                         .HasColumnName("owner_id");
@@ -71,6 +75,10 @@ namespace Sessions.Infrastructure.Migrations
                     b.Property<int>("TotalDistance")
                         .HasColumnType("integer")
                         .HasColumnName("total_distance");
+
+                    b.Property<int>("UnratedDistance")
+                        .HasColumnType("integer")
+                        .HasColumnName("unrated_distance");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -186,6 +194,22 @@ namespace Sessions.Infrastructure.Migrations
                         .HasDatabaseName("ix_session_facts_owner_id_stroke_performed_on");
 
                     b.ToTable("session_facts", (string)null);
+                });
+
+            modelBuilder.Entity("Sessions.Domain.Models.SessionPreferences", b =>
+                {
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<int>("DefaultEffort")
+                        .HasColumnType("integer")
+                        .HasColumnName("default_effort");
+
+                    b.HasKey("OwnerId")
+                        .HasName("pk_session_preferences");
+
+                    b.ToTable("session_preferences", (string)null);
                 });
 
             modelBuilder.Entity("Sessions.Domain.Models.TimedSwim", b =>
