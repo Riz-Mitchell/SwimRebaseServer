@@ -10,4 +10,6 @@ public static class EventTypes
     public const string FocusDeleted = "focus_deleted";
     public const string TimetableSlotUpserted = "timetable_slot_upserted";
     public const string TimetableSlotDeleted = "timetable_slot_deleted";
+    public const string OnboardingStepCompleted = "onboarding_step_completed";
+    public const string OnboardingCompleted = "onboarding_completed";
 }

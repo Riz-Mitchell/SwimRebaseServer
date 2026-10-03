@@ -23,6 +23,11 @@
     <Project Path="src/Features/Auth/Auth.Domain/Auth.Domain.csproj" />
     <Project Path="src/Features/Auth/Auth.Infrastructure/Auth.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/Features/Profile/">
+    <Project Path="src/Features/Profile/Profile.Application/Profile.Application.csproj" />
+    <Project Path="src/Features/Profile/Profile.Domain/Profile.Domain.csproj" />
+    <Project Path="src/Features/Profile/Profile.Infrastructure/Profile.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/Features/SessionConversion/">
     <Project Path="src/Features/SessionConversion/SessionConversion.Application/SessionConversion.Application.csproj" />
     <Project Path="src/Features/SessionConversion/SessionConversion.Domain/SessionConversion.Domain.csproj" />

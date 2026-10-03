@@ -1,6 +1,6 @@
 # SwimRebase REST API Reference
 
-_Last updated: 28/09/2026_
+_Last updated: 03/10/2026_
 
 Base URL: `https://swimrebase-pro.azurewebsites.net` (production) / `https://swimrebase-dev.azurewebsites.net` (staging)
 
@@ -604,6 +604,57 @@ Close out a slot as of a date.
 }
 ```
 `expectedSession` is `null` if none was set.
+
+---
+
+## Profile & onboarding — `/api/profile`
+
+Onboarding progress is tracked server-side so a user who closes the app can resume. On launch call `GET /api/profile/onboarding`: if `status` is `Completed`, go straight into the app, otherwise resume at `resumeStep`. A profile is created on first call (existing users before launch are already `Completed`).
+
+Steps, in order: `Questionnaire` → `FirstSession` → `ReviewWorkout` → `Schedule` → `ProTrial` → `Completed`. Only `Schedule` and `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
+
+### `GET /api/profile`
+**Response:** `{ "onboardingCompleted": bool, "answers": { "level": "Regional" }, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null }`
+
+### `GET /api/profile/onboarding`
+**Response:**
+```json
+{
+  "status": "InProgress | Completed",
+  "currentStep": "FirstSession",
+  "resumeStep": "FirstSession",
+  "completedSteps": ["Questionnaire"],
+  "firstSessionPath": "Upload | Sample | null",
+  "proTrial": { "endsAt": "datetime", "daysRemaining": 21 }
+}
+```
+`proTrial` is null until onboarding completes; the 21-day Pro trial starts then.
+
+### `GET /api/profile/onboarding/questionnaire`
+The questions and their options, plus the user's saved answers - render the questionnaire from this so new questions need no app change.
+
+**Response:** `{ "questions": [{ "key": "level", "prompt": "string", "options": [{ "value": "Regional", "label": "Regional" }], "answer": "string | null" }], "complete": bool }`
+
+Current questions: `level` (`Regional`, `StateQualified`, `NationalQualified`, `OlympicTrialQualified`) and `goal` (`CompetitiveImprovement`, `DataInsights`, `GeneralFitness`, `SocialCommunityAndGamification`, `Other`).
+
+### `PUT /api/profile/onboarding/questionnaire`
+**Body:** `{ "answers": { "level": "Regional", "goal": "DataInsights" } }`
+
+Partial saves are fine; once every question is answered the user advances to `FirstSession`. Unknown questions or values return `400`. **Response:** same shape as `GET /api/profile/onboarding`.
+
+### `PUT /api/profile/onboarding/first-session`
+Records which branch the user picked for the first session: `{ "path": "Upload" | "Sample" }`. Returns `409` before the questionnaire is done. **Response:** onboarding status.
+
+### `POST /api/profile/onboarding/steps/{step}/complete`
+Marks the current step done and advances. Completing a step the user is already past is a no-op; completing one ahead of the current step returns `409`. `Questionnaire` needs all answers and `FirstSession` needs a chosen path, otherwise `400`. Completing `ProTrial` finishes onboarding. **Response:** onboarding status.
+
+### `POST /api/profile/onboarding/steps/{step}/skip`
+Only valid for `Schedule` and `ProTrial` (`400` otherwise). **Response:** onboarding status.
+
+### `PUT /api/profile/notification-preferences`
+**Body:** `{ "remindersEnabled": true, "reminderLeadMinutes": 60 }` - lead time must be 5-1440. **Response:** profile (as `GET /api/profile`).
+
+The `Schedule` step itself uses the [Timetable](#timetable--apitimetable) endpoints, then the app calls `complete` or `skip`.
 
 ---
 
