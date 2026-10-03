@@ -20,10 +20,22 @@ public sealed class SessionsController(
     SessionPreferencesService preferences,
     ICurrentUserAccessor currentUser) : ControllerBase
 {
+    /// <summary>Newest first. <c>?include=content</c> adds each session's tree, so a page of full sessions is one call (at most <see cref="SessionService.MaxContentLimit"/>).</summary>
     [HttpGet]
     public async Task<IActionResult> List(
-        [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] int limit = 50, [FromQuery] int offset = 0, CancellationToken cancellationToken = default)
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        [FromQuery] int limit = 50,
+        [FromQuery] int offset = 0,
+        [FromQuery] SessionInclude[]? include = null,
+        CancellationToken cancellationToken = default)
     {
+        if (include?.Contains(SessionInclude.Content) == true)
+        {
+            var withContent = await sessions.ListWithContentAsync(currentUser.UserId, from, to, limit, offset, cancellationToken);
+            return Ok(withContent.Select(SessionWithContentResponse.From));
+        }
+
         var found = await sessions.ListAsync(currentUser.UserId, from, to, limit, offset, cancellationToken);
         return Ok(found.Select(SessionSummaryResponse.FromEntity));
     }
@@ -109,6 +121,8 @@ public sealed class SessionsController(
 
 public sealed record SessionPreferencesResponse(int DefaultEffort);
 
+public enum SessionInclude { Content }
+
 public sealed record EditSessionRequest(List<SessionEditDto> Edits);
 
 public sealed record SessionSummaryResponse(
@@ -118,6 +132,12 @@ public sealed record SessionSummaryResponse(
         new(s.Id, s.PerformedOn, s.Title, s.Course, s.Unit, s.Source, s.TotalDistance, s.CreatedAt);
 }
 
+public sealed record SessionWithContentResponse(
+    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, DateTimeOffset CreatedAt, SwimSession Content)
+{
+    public static SessionWithContentResponse From(SessionWithContent s) =>
+        new(s.Session.Id, s.Session.PerformedOn, s.Session.Title, s.Session.Course, s.Session.Unit, s.Session.Source, s.Session.TotalDistance, s.Session.CreatedAt, s.Content);
+}
 
 public sealed record SessionResponse(
     Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, SwimSession Content, string Outline)

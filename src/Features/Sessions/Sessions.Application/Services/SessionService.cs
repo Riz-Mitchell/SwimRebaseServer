@@ -24,6 +24,9 @@ public sealed record SessionView(
         SessionJson.Deserialize<SwimSession>(session.ContentJson));
 }
 
+/// <summary>A saved session with its tree parsed, for lists that carry the content along with the summary.</summary>
+public sealed record SessionWithContent(Session Session, SwimSession Content);
+
 public sealed class SessionNotFoundException(Guid id) : Exception($"No session with id {id} exists for this user.");
 
 /// <summary>Saves and edits sessions. The tree, the total and the fact rows are always written together, so they cannot drift apart.</summary>
@@ -32,6 +35,9 @@ public sealed class SessionService(
     SessionIngest ingest,
     [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
 {
+    /// <summary>The most sessions one list call returns when it carries their content.</summary>
+    public const int MaxContentLimit = 20;
+
     /// <summary>
     /// Idempotent on <paramref name="sourceDraftId"/>: saving the same draft again returns the session it already made.
     /// </summary>
@@ -95,6 +101,13 @@ public sealed class SessionService(
 
     public async Task<IReadOnlyList<Session>> ListAsync(Guid userId, DateOnly? from, DateOnly? to, int limit, int offset, CancellationToken cancellationToken) =>
         await sessions.ListAsync(userId, from, to, Math.Clamp(limit, 1, 100), Math.Max(offset, 0), cancellationToken);
+
+    public async Task<IReadOnlyList<SessionWithContent>> ListWithContentAsync(
+        Guid userId, DateOnly? from, DateOnly? to, int limit, int offset, CancellationToken cancellationToken)
+    {
+        var found = await sessions.ListAsync(userId, from, to, Math.Clamp(limit, 1, MaxContentLimit), Math.Max(offset, 0), cancellationToken);
+        return found.Select(s => new SessionWithContent(s, SessionJson.Deserialize<SwimSession>(s.ContentJson))).ToList();
+    }
 
     private static string DefaultTitle(DateOnly performedOn) => $"Swim {performedOn:yyyy-MM-dd}";
 }
