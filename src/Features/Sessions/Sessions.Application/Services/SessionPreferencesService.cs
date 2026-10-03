@@ -9,13 +9,11 @@ public sealed class InvalidSessionPreferencesException(string message) : Excepti
 
 public sealed class SessionPreferencesService(
     ISessionPreferencesRepository preferences,
-    SessionLoadService load,
     [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
 {
     public async Task<int> GetDefaultEffortAsync(Guid userId, CancellationToken cancellationToken) =>
-        await load.DefaultEffortAsync(userId, cancellationToken);
+        (await preferences.FindAsync(userId, cancellationToken))?.DefaultEffort ?? SessionPreferences.BuiltInDefaultEffort;
 
-    /// <summary>Changes the default effort and rebuilds every session's load with it, in one save.</summary>
     /// <exception cref="InvalidSessionPreferencesException">The level is outside 1-10.</exception>
     public async Task SetDefaultEffortAsync(Guid userId, int defaultEffort, CancellationToken cancellationToken)
     {
@@ -33,7 +31,6 @@ public sealed class SessionPreferencesService(
             preferences.Add(new SessionPreferences { OwnerId = userId, DefaultEffort = defaultEffort });
         }
 
-        await load.RecomputeAsync(userId, null, defaultEffort, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

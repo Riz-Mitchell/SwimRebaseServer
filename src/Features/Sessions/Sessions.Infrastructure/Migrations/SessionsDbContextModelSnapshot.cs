@@ -44,10 +44,6 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<double>("Load")
-                        .HasColumnType("double precision")
-                        .HasColumnName("load");
-
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid")
                         .HasColumnName("owner_id");
@@ -75,10 +71,6 @@ namespace Sessions.Infrastructure.Migrations
                     b.Property<int>("TotalDistance")
                         .HasColumnType("integer")
                         .HasColumnName("total_distance");
-
-                    b.Property<int>("UnratedDistance")
-                        .HasColumnType("integer")
-                        .HasColumnName("unrated_distance");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")

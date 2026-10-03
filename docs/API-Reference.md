@@ -394,7 +394,7 @@ A session's `content` is a tree. `sets` holds **items** (`{ kind: "item", reps, 
 ### `GET /api/sessions?from={date}&to={date}&limit={int}&offset={int}`
 Newest first. All parameters optional (`limit` 1-100, default 50).
 
-**Response:** array of `{ id, performedOn, title, course, unit, source, totalDistance, load, unratedDistance, createdAt }`. `course` is `Scy | Scm | Lcm`, `unit` is `Yards | Metres` (yards for `Scy`), `source` is `Ai | Logged`.
+**Response:** array of `{ id, performedOn, title, course, unit, source, totalDistance, createdAt }`. `course` is `Scy | Scm | Lcm`, `unit` is `Yards | Metres` (yards for `Scy`), `source` is `Ai | Logged`.
 
 ### `GET /api/sessions/{id}`
 **Response:** the summary fields above (without `createdAt`) plus `content` (the tree) and `outline` (numbered text). `404` if it is not the caller's.
@@ -434,33 +434,11 @@ Examples: `?strokes=fly&groupBy=month` (how much fly per month), `?minIntensity=
 ```
 `rows` reads in date/intensity order when grouped by time or intensity, otherwise biggest first. `units` lists every distance unit present; more than one means metres and yards are mixed - nothing is converted. `value` is `null` when the measure does not apply (an average with no intensity). `400` with `{ error }` for a question that cannot be answered (e.g. more than 2 `groupBy`).
 
-### `GET /api/sessions/load`
-Training load, to track over- and undertraining against a baseline.
-
-A session's load is `sum(distance x (effort / 100)^2) / 1000`, summed over every part of the session at its own effort. Effort is the 1-10 intensity level times 10, so level 8 counts as 80%. Distance with no intensity counts at the swimmer's **default effort** (see preferences below); `unratedDistance` says how much of a load that is. A session's load is stored with it and rebuilt whenever the session is edited, the default effort changes, or a timed swim that counts towards metrics is logged against it (see Timed swims).
-
-| Parameter | Meaning |
-|---|---|
-| `from`, `to` | Date range (yyyy-MM-dd), inclusive. Optional; `from` defaults to the first session and `to` to today |
-| `groupBy` | `session`, `day`, `week` (default) or `month`. Weeks start Monday and are named by that date |
-| `baselinePeriods` | How many earlier rows the baseline averages, 1-26 (default 4) |
-
-- `session`: one row per session, `load` is that session's own load.
-- `day`, `week`, `month`: `load` is the **mean load per day** for the period: the loads of its sessions added up over the days it covers, rest days counting as 0. Periods with no sessions are returned as 0, so the series has no gaps.
-- A period that has not finished is averaged over the days so far (up to today, UTC), and the first period over the days from `from` (or the first session). `days` says how many days a row is averaged over.
-- `baseline` is the mean `load` of the `baselinePeriods` rows before it, and `null` until that many exist. With `from` set, periods before it still feed the baseline but are not returned.
-
-```json
-{ "groupBy": "Week", "baselinePeriods": 4, "units": ["Metres"],
-  "rows": [ { "period": "2026-09-14", "sessionId": null, "load": 0.429, "totalLoad": 3.0, "sessionCount": 2, "days": 7, "unratedDistance": 200, "baseline": null } ] }
-```
-`period` is the date of a session, the day, the Monday of the week, or `yyyy-MM`; `sessionId` is set only for `session`. `units` lists every distance unit present; more than one means metres and yards are mixed - nothing is converted. `400` with `{ error }` for a query that cannot be answered (`from` after `to`, `baselinePeriods` out of range, or a `day` series over more than 366 days).
-
 ### `GET /api/sessions/preferences`
-**Response:** `{ "defaultEffort": 5 }`. The 1-10 level counted for distance with no intensity; 5 until the swimmer chooses one.
+**Response:** `{ "defaultEffort": 5 }`. The swimmer's default effort level on the 1-10 scale; 5 until they choose one. It is stored for load tracking, which is not available yet, so nothing uses it at the moment.
 
 ### `PUT /api/sessions/preferences`
-**Body:** `{ "defaultEffort": 6 }`. Rebuilds the load of every saved session with the new default. **Response:** the saved preferences. `400` with `{ error }` if the level is outside 1-10.
+**Body:** `{ "defaultEffort": 6 }`. **Response:** the saved preferences. `400` with `{ error }` if the level is outside 1-10.
 
 ---
 
@@ -551,8 +529,8 @@ The list is not paginated.
 ```
 `unit` is derived from `course` (yards for `Scy`). `resistance` is `null` when none was set. The top-level `strokeRateCyclesPerMinute` is the average of the splits' rates, to one decimal place, and `null` when no split has one.
 
-### Interaction with session metrics and load
-A timed swim counts towards `GET /api/sessions/metrics` and its session's `load` as training volume (its `dist`, `stroke`, `mode` and `intensity`, on the swim's own `performedOn` date, grouped under its session) only when **both** `includeInMetrics` is `true` and `sessionId` is set. A standalone swim never counts, whatever the flag, because there is no session for it to be volume of. Because the swim is added to the metrics at query time, editing the linked session does not remove it.
+### Interaction with session metrics
+A timed swim counts towards `GET /api/sessions/metrics` as training volume (its `dist`, `stroke`, `mode` and `intensity`, on the swim's own `performedOn` date, grouped under its session) only when **both** `includeInMetrics` is `true` and `sessionId` is set. A standalone swim never counts, whatever the flag, because there is no session for it to be volume of. Because the swim is added to the metrics at query time, editing the linked session does not remove it.
 
 ---
 

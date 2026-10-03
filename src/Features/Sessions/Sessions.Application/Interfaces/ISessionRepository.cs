@@ -17,9 +17,4 @@ public interface ISessionRepository
 
     /// <summary>Swaps a session's fact rows for <paramref name="facts"/> in the same unit of work as the session change.</summary>
     Task ReplaceFactsAsync(Guid sessionId, IEnumerable<SessionFact> facts, CancellationToken cancellationToken);
-
-    /// <summary>Tracked, so their load can be rewritten. All of the user's sessions when <paramref name="ids"/> is null.</summary>
-    Task<IReadOnlyList<Session>> ListTrackedAsync(Guid userId, IReadOnlyCollection<Guid>? ids, CancellationToken cancellationToken);
-
-    Task<IReadOnlyList<SessionFact>> ListFactsAsync(IReadOnlyCollection<Guid> sessionIds, CancellationToken cancellationToken);
 }
