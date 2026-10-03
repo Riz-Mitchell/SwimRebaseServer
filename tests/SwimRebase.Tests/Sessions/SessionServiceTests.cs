@@ -163,4 +163,73 @@ public class SessionServiceTests
         await Assert.ThrowsAsync<DraftNotFoundException>(() =>
             promotion.SaveAsync(Guid.NewGuid(), draft.Id, Day, PoolCourse.Lcm, null, CancellationToken.None));
     }
+
+    private static async Task<SessionService> ServiceWithSessions(InMemorySessionRepository repository, int count)
+    {
+        var service = TestSessions.Service(repository);
+        for (var i = 0; i < count; i++)
+        {
+            await service.CreateAsync(UserId, Sample(), Day.AddDays(i), PoolCourse.Scm, null, SessionSource.Logged, null, CancellationToken.None);
+        }
+
+        return service;
+    }
+
+    [Fact]
+    public async Task Listing_with_content_returns_each_sessions_parsed_tree_newest_first()
+    {
+        var repository = new InMemorySessionRepository();
+        var service = await ServiceWithSessions(repository, 3);
+
+        var listed = await service.ListWithContentAsync(UserId, null, null, 15, 0, CancellationToken.None);
+
+        Assert.Equal(new[] { Day.AddDays(2), Day.AddDays(1), Day }, listed.Select(s => s.Session.PerformedOn));
+        Assert.All(listed, s => Assert.Equal(3, s.Content.Sets.Count));
+        Assert.All(listed, s => Assert.Equal(1700, s.Session.TotalDistance));
+        Assert.All(listed, s => Assert.False(string.IsNullOrEmpty(Assert.IsType<SetItem>(s.Content.Sets[0]).Id)));
+    }
+
+    [Fact]
+    public async Task Listing_with_content_returns_at_most_the_content_limit()
+    {
+        var service = await ServiceWithSessions(new InMemorySessionRepository(), SessionService.MaxContentLimit + 2);
+
+        var listed = await service.ListWithContentAsync(UserId, null, null, 100, 0, CancellationToken.None);
+
+        Assert.Equal(SessionService.MaxContentLimit, listed.Count);
+    }
+
+    [Fact]
+    public async Task Listing_with_content_treats_a_negative_offset_as_the_start_and_pages_with_a_positive_one()
+    {
+        var service = await ServiceWithSessions(new InMemorySessionRepository(), 3);
+
+        var first = await service.ListWithContentAsync(UserId, null, null, 2, -5, CancellationToken.None);
+        var next = await service.ListWithContentAsync(UserId, null, null, 2, 2, CancellationToken.None);
+
+        Assert.Equal(2, first.Count);
+        Assert.Equal(Day.AddDays(2), first[0].Session.PerformedOn);
+        Assert.Equal(Day, Assert.Single(next).Session.PerformedOn);
+    }
+
+    [Fact]
+    public async Task Listing_with_content_respects_the_date_range()
+    {
+        var service = await ServiceWithSessions(new InMemorySessionRepository(), 5);
+
+        var listed = await service.ListWithContentAsync(UserId, Day.AddDays(1), Day.AddDays(3), 15, 0, CancellationToken.None);
+
+        Assert.Equal(new[] { Day.AddDays(3), Day.AddDays(2), Day.AddDays(1) }, listed.Select(s => s.Session.PerformedOn));
+    }
+
+    [Fact]
+    public async Task Listing_with_content_only_returns_the_callers_sessions()
+    {
+        var repository = new InMemorySessionRepository();
+        await ServiceWithSessions(repository, 2);
+
+        var listed = await TestSessions.Service(repository).ListWithContentAsync(Guid.NewGuid(), null, null, 15, 0, CancellationToken.None);
+
+        Assert.Empty(listed);
+    }
 }

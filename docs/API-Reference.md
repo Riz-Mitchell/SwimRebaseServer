@@ -389,12 +389,16 @@ Abandon a focus.
 
 Saved swims: a record of what was swum, logged after the fact. Today they are created by the AI's `save_session` tool (see Sub-agents above); these endpoints read them, correct them, and add them up. Distances are always computed from the session's structure, never entered.
 
-A session's `content` is a tree. `sets` holds **items** (`{ kind: "item", reps, timing?, parts, note? }` - `parts` is what one rep is made of, each `{ dist, stroke, mode, equip, effort, intensity? }`) and **groups** (`{ kind: "group", repeat, items }`, nesting at most 3 deep). `stroke` is `free | back | breast | fly | im | choice`; an `im` part counts as a quarter of each stroke. `intensity` is `{ level, scale }` on one global 1-10 scale, mapped from `effort` (words like "easy"/"hard" or a percentage); it is absent when the effort could not be mapped.
+A session's `content` is a tree. `sets` holds **items** (`{ kind: "item", reps, timing?, parts, note? }` - `parts` is what one rep is made of, each `{ dist, stroke, mode, equip, effort, intensity? }`) and **groups** (`{ kind: "group", repeat, items }`, nesting at most 3 deep). `stroke` is `free | back | breast | fly | im | choice`; an `im` part counts as a quarter of each stroke. `intensity` is `{ level, scale }` on one global 1-10 scale, mapped from `effort` (words like "easy"/"hard" or a percentage); it is `null` when the effort could not be mapped.
 
-### `GET /api/sessions?from={date}&to={date}&limit={int}&offset={int}`
+In API responses enum values are PascalCase (`Free`, `Kick`, `SendOff`; the lowercase forms above are what the AI tools read and write) and missing values are `null` rather than left out (`timing`, `note`, `effort`, `intensity`). Decode enums case-insensitively to be safe.
+
+### `GET /api/sessions?from={date}&to={date}&limit={int}&offset={int}&include=content`
 Newest first. All parameters optional (`limit` 1-100, default 50).
 
 **Response:** array of `{ id, performedOn, title, course, unit, source, totalDistance, createdAt }`. `course` is `Scy | Scm | Lcm`, `unit` is `Yards | Metres` (yards for `Scy`), `source` is `Ai | Logged`.
+
+`include=content` adds each session's `content` (the tree, exactly as `GET /api/sessions/{id}` returns it) to every item, so a page of full sessions is one call instead of one per session. Items then look like `{ id, performedOn, title, course, unit, source, totalDistance, createdAt, content }`; there is no `outline` in the list. With `include=content`, `limit` is capped at 20 (a larger value is treated as 20). Any other `include` value is a `400`.
 
 ### `GET /api/sessions/{id}`
 **Response:** the summary fields above (without `createdAt`) plus `content` (the tree) and `outline` (numbered text). `404` if it is not the caller's.
