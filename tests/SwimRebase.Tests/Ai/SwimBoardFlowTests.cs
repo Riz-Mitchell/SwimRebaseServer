@@ -272,6 +272,7 @@ public class SwimBoardFlowTests
         Assert.Contains($"Draft id: {draft.Id}", result);
         Assert.Contains("has not been saved", result);
         Assert.Contains("Save button", result);
+        Assert.Contains("swam on 2026-09-21 in a scy pool", result);
         Assert.Contains("Which lane? -> Lane 2", result);
         Assert.Contains("Kick or swim? -> Kick", result);
         Assert.Contains("Did you do everything as written, or skip, shorten, change or add anything? -> Everything as written", result);
@@ -287,6 +288,7 @@ public class SwimBoardFlowTests
         Assert.Contains("\"performedOn\":\"2026-09-21\"", card.InputJson);
         Assert.Contains("\"course\":\"scy\"", card.InputJson);
         Assert.Contains("Distance: 1700", card.Preview);
+        Assert.Contains(finish.OfType<AiChatTextDelta>(), t => t.Text.Contains("2026-09-21") && t.Text.Contains("scy"));
         Assert.Equal(ToolExecutionStatus.PendingApproval, h.SaveRequest.Status);
         Assert.IsType<AiChatCompleted>(finish[^1]);
         Assert.Equal(h.Chat.Id, ((AiChatCompleted)finish[^1]).ConversationId);
@@ -313,6 +315,10 @@ public class SwimBoardFlowTests
         Assert.Contains(events.OfType<AiChatTextDelta>(), t => t.Text.Contains("Saved."));
         Assert.False(await h.ToolExecutions.HasOutstandingRequestAsync(UserId, h.Chat.Id, CancellationToken.None));
         Assert.Equal(0, h.Client.Remaining);
+
+        var saveResult = h.ToolResultsIn(h.Chat.Id).Last();
+        Assert.StartsWith("The user reviewed this and approved it.", saveResult);
+        Assert.Contains(session.Id.ToString(), saveResult);
     }
 
     [Fact]
@@ -340,7 +346,9 @@ public class SwimBoardFlowTests
 
         Assert.Empty(finish.OfType<AiChatPermissionRequired>());
         Assert.DoesNotContain(h.ToolExecutions.Requests, r => r.ToolName == InterviewTools.SaveSession);
-        Assert.DoesNotContain("Save button", Assert.Single(h.ToolResultsIn(h.Chat.Id)));
+        var result = Assert.Single(h.ToolResultsIn(h.Chat.Id));
+        Assert.DoesNotContain("Save button", result);
+        Assert.DoesNotContain("swam on", result);
         Assert.Contains(finish.OfType<AiChatTextDelta>(), t => t.Text.Contains("Which date and pool"));
         Assert.Single(h.Drafts.Drafts);
     }
@@ -479,7 +487,9 @@ public class SwimBoardFlowTests
     [Theory]
     [InlineData("""{"draftId":"nope","performedOn":"2026-09-21","course":"scy"}""")]
     [InlineData("""{"draftId":"00000000-0000-0000-0000-000000000000","performedOn":"2026-09-21","course":"olympic"}""")]
-    public async Task Saving_with_a_bad_draft_id_or_course_is_an_error_the_model_can_correct(string input)
+    [InlineData("""{"draftId":"00000000-0000-0000-0000-000000000000","course":"scy"}""")]
+    [InlineData("""{"draftId":"00000000-0000-0000-0000-000000000000","performedOn":"0001-01-01","course":"scy"}""")]
+    public async Task Saving_with_a_bad_draft_id_date_or_course_is_an_error_the_model_can_correct(string input)
     {
         var h = new Harness(withImage: false);
         var save = (IAiTool)h.Registry.Find(InterviewTools.SaveSession)!;

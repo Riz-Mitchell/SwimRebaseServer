@@ -5,7 +5,7 @@ public abstract record ChatStreamEvent;
 
 public sealed record TextDeltaEvent(string Text) : ChatStreamEvent;
 
-public sealed record ToolCallRequestedEvent(string ToolUseId, string ToolName, string InputJson, bool RequiresApproval);
+public sealed record ToolCallRequestedEvent(string ToolUseId, string ToolName, string InputJson, bool RequiresApproval, string? LeadInText = null);
 
 public sealed record ChatTokenUsage(
     string Model, long InputTokens, long OutputTokens, long CacheCreationInputTokens, long CacheReadInputTokens);

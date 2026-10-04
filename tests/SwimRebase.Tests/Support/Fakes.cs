@@ -87,16 +87,27 @@ internal sealed class InMemoryConversationRepository : IConversationRepository
     public Task<IReadOnlyList<ConversationMessage>> GetMessagesPageAsync(Guid conversationId, int? beforeSequenceNumber, int limit, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 
-    public Task<ConversationSummary?> GetLatestSummaryAsync(Guid conversationId, CancellationToken cancellationToken) => Task.FromResult<ConversationSummary?>(null);
+    public List<ConversationSummary> Summaries { get; } = [];
+
+    public Task<ConversationSummary?> GetLatestSummaryAsync(Guid conversationId, CancellationToken cancellationToken) =>
+        Task.FromResult(Summaries.Where(s => s.ConversationId == conversationId).OrderBy(s => s.CoveredThroughSequenceNumber).LastOrDefault());
 
     public Task<int> GetNextSequenceNumberAsync(Guid conversationId, CancellationToken cancellationToken) =>
         Task.FromResult(Messages.Where(m => m.ConversationId == conversationId).Select(m => m.SequenceNumber).DefaultIfEmpty(0).Max() + 1);
 
     public void AddMessage(ConversationMessage message) => Messages.Add(message);
 
-    public void AddSummary(ConversationSummary summary) => throw new NotSupportedException();
+    public void AddSummary(ConversationSummary summary) => Summaries.Add(summary);
 
-    public Task MarkMessagesCompactedAsync(IReadOnlyList<Guid> messageIds, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task MarkMessagesCompactedAsync(IReadOnlyList<Guid> messageIds, CancellationToken cancellationToken)
+    {
+        foreach (var message in Messages.Where(m => messageIds.Contains(m.Id)))
+        {
+            message.IsCompacted = true;
+        }
+
+        return Task.CompletedTask;
+    }
 
     public Task TouchLastMessageAtAsync(Guid conversationId, DateTimeOffset at, CancellationToken cancellationToken) => Task.CompletedTask;
 

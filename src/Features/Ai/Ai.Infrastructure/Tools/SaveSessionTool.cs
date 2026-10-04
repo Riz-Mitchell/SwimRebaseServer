@@ -40,7 +40,12 @@ public sealed class SaveSessionTool(SessionPromotionService promotion, SessionDr
             throw new InvalidOperationException("course must be one of scy, scm, lcm.");
         }
 
-        var session = await promotion.SaveAsync(context.UserId, draftId, input.PerformedOn, course, input.Title, cancellationToken);
+        if (input.PerformedOn is not { } performedOn || performedOn == default)
+        {
+            throw new InvalidOperationException("performedOn is missing - ask the user which date they swam (yyyy-MM-dd).");
+        }
+
+        var session = await promotion.SaveAsync(context.UserId, draftId, performedOn, course, input.Title, cancellationToken);
 
         var resultJson = JsonSerializer.Serialize(
             new
@@ -75,5 +80,5 @@ public sealed class SaveSessionTool(SessionPromotionService promotion, SessionDr
         }
     }
 
-    private sealed record Input(string? DraftId, DateOnly PerformedOn, string? Course, string? Title);
+    private sealed record Input(string? DraftId, DateOnly? PerformedOn, string? Course, string? Title);
 }

@@ -37,7 +37,8 @@ public sealed class SwimBoardInterviewAgent(SessionDraftService drafts, IToolExe
         $"Otherwise show them the result briefly and ask if it looks right. To change a draft, call {InterviewTools.EditDraft} with the draft id and " +
         $"small edits - never re-type the whole session. To save one, use {InterviewTools.SaveSession} (it needs the date they swam and the pool " +
         "course - ask if they have not said; the user confirms before it is saved). Once they have declined a save, ask what to change. " +
-        "Until it has been saved with that tool, never claim a session was saved. For questions about how much they have swum (a stroke, an intensity, a " +
+        "The save button shows the user the date, pool and outline, so a save they approve is confirmed: after one, state the saved date and pool " +
+        "plainly and do not say they were unconfirmed. Until it has been saved with that tool, never claim a session was saved. For questions about how much they have swum (a stroke, an intensity, a " +
         $"period), call {MetricsTool.Name} instead of estimating.";
 
     public string BuildOpeningMessage(string toolInputJson)
@@ -55,8 +56,9 @@ public sealed class SwimBoardInterviewAgent(SessionDraftService drafts, IToolExe
 
         var asked = await ApprovedQuestionnairesAsync(completion.ChildConversationId, cancellationToken);
         var transcript = InterviewTranscript.Build(asked.Select(a => (a.InputJson, a.ResultJson)));
-        var offered = SaveAnswers(asked) is not null
-            ? $"It is being shown to the user right now with a Save button: wait for their decision and do not call {InterviewTools.SaveSession}.\n\n"
+        var offered = SaveAnswers(asked) is { } swum
+            ? $"The swimmer said they swam on {swum.PerformedOn:yyyy-MM-dd} in a {swum.Course} pool.\n" +
+              $"It is being shown to the user right now with a Save button: wait for their decision and do not call {InterviewTools.SaveSession}.\n\n"
             : string.Empty;
 
         return $"Draft id: {draft.Id} (version {draft.Version}). This is a DRAFT: it has not been saved to the user's log yet ({InterviewTools.SaveSession} does that).\n" +
@@ -77,7 +79,9 @@ public sealed class SwimBoardInterviewAgent(SessionDraftService drafts, IToolExe
         var input = JsonSerializer.Serialize(
             new { draftId = draft.Id, performedOn = performedOn.ToString("yyyy-MM-dd"), course },
             ToolJsonOptions.Web);
-        return new ToolCallRequestedEvent($"toolu_{Guid.NewGuid():N}", InterviewTools.SaveSession, input, RequiresApproval: true);
+        return new ToolCallRequestedEvent(
+            $"toolu_{Guid.NewGuid():N}", InterviewTools.SaveSession, input, RequiresApproval: true,
+            LeadInText: $"Here's your session for {performedOn:yyyy-MM-dd} ({course}). Check it over and save it, or tell me what to change.");
     }
 
     private async Task<IReadOnlyList<ToolExecutionRequest>> ApprovedQuestionnairesAsync(Guid childConversationId, CancellationToken cancellationToken) =>

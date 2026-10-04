@@ -35,6 +35,24 @@ public class MixedToolTurnTests
         }
     }
 
+    private sealed class WriteTool : IAiTool
+    {
+        public string Name => "write_thing";
+
+        public string DisplayName => "Writing something";
+
+        public ToolEffect Effect => ToolEffect.Creative;
+
+        public string Description => "gated";
+
+        public string JsonSchema => """{"type":"object","properties":{}}""";
+
+        public bool RequiresApproval => true;
+
+        public Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, string inputJson, CancellationToken cancellationToken) =>
+            Task.FromResult(new ToolExecutionResult("""{"written":1}""", AffectedCount: 1));
+    }
+
     private sealed class Rig
     {
         public readonly InMemoryConversationRepository Conversations = new();
@@ -50,7 +68,7 @@ public class MixedToolTurnTests
             ToolExecutions = new InMemoryToolExecutionRepository(Conversations);
             Client = new ScriptedChatClient(script);
             var unitOfWork = new NoOpUnitOfWork();
-            var registry = new AiToolRegistry([new AskUserQuestionTool(), Lookup]);
+            var registry = new AiToolRegistry([new AskUserQuestionTool(), Lookup, new WriteTool()]);
             var profiles = new AgentProfileProvider([]);
             var executor = new ToolExecutor(registry);
             var closer = new ToolTurnCloser(ToolExecutions, Conversations, registry, unitOfWork, new NoOpCompaction(), executor);
@@ -136,5 +154,34 @@ public class MixedToolTurnTests
         Assert.Equal(2, results.Count);
         Assert.Contains(results, r => r.IsError && r.ResultJson.Contains("missing_tool"));
         Assert.Contains(results, r => !r.IsError && r.ResultJson.Contains("Mon"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task An_approved_gated_call_tells_the_model_the_user_approved_it_and_a_declined_one_says_so(bool approve)
+    {
+        var rig = new Rig(new ScriptedReply(string.Empty, ("write_thing", "{}")), ScriptedReply.Say("ok"));
+
+        await rig.RunAsync();
+        var request = rig.ToolExecutions.Requests.Single(r => r.ToolName == "write_thing");
+        var resolution = new ToolApprovalResolution();
+        await foreach (var _ in rig.Resolver.ResolveAsync(UserId, request, approve, approve ? null : "no thanks", resolution, CancellationToken.None))
+        {
+        }
+
+        var result = Assert.Single(
+            ChatContentJson.Deserialize(rig.Conversations.Messages.Single(m => m.Role == MessageRole.Tool).RawContentJson).OfType<ToolResultContentBlock>());
+        if (approve)
+        {
+            Assert.StartsWith("The user reviewed this and approved it.", result.ResultJson);
+            Assert.EndsWith("""{"written":1}""", result.ResultJson);
+            Assert.False(result.IsError);
+        }
+        else
+        {
+            Assert.StartsWith("The user declined this action.", result.ResultJson);
+            Assert.True(result.IsError);
+        }
     }
 }

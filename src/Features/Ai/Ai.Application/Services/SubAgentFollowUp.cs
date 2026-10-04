@@ -37,7 +37,7 @@ public sealed class SubAgentFollowUp(
         }
 
         var conversationId = parent.ConversationId;
-        const string text = "Here's your session. Check it over and save it, or tell me what to change.";
+        var text = call.LeadInText ?? "Here's your session. Check it over and save it, or tell me what to change.";
         var sequence = await conversations.GetNextSequenceNumberAsync(conversationId, cancellationToken);
         var assistant = ConversationMessageFactory.CreateAssistantMessage(
             conversationId, sequence, text,
