@@ -46,7 +46,7 @@ public sealed class ChatCompactionService(
         }
 
         var ordered = liveMessages.OrderBy(m => m.SequenceNumber).ToList();
-        var toCompactCount = ordered.Count - settings.MessagesToRetainAfterCompaction;
+        var toCompactCount = CleanCutIndex(ordered, ordered.Count - settings.MessagesToRetainAfterCompaction);
         if (toCompactCount <= 0)
         {
             return;
@@ -119,8 +119,30 @@ public sealed class ChatCompactionService(
         foreach (var message in messages)
         {
             sb.AppendLine($"{message.Role}: {message.Content}");
+            foreach (var toolUse in ChatContentJson.Deserialize(message.RawContentJson).OfType<ToolUseContentBlock>())
+            {
+                sb.AppendLine($"  called {toolUse.ToolName} with {toolUse.InputJson}");
+            }
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The retained tail must start at a user's own text message: starting at a tool result would orphan it from its tool_use, and
+    /// starting at an assistant message breaks the alternation the API requires. Moves the cut earlier (compacting less) until it does;
+    /// returns 0 when no such message exists.
+    /// </summary>
+    private static int CleanCutIndex(IReadOnlyList<ConversationMessage> ordered, int cut)
+    {
+        for (var i = Math.Min(cut, ordered.Count - 1); i > 0; i--)
+        {
+            if (ordered[i].Role == MessageRole.User)
+            {
+                return i;
+            }
+        }
+
+        return 0;
     }
 }

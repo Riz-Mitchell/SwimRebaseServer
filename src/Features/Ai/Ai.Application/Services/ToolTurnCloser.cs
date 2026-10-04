@@ -26,6 +26,8 @@ public sealed class ToolTurnCloser(
     IChatCompactionService compaction,
     ToolExecutor toolExecutor)
 {
+    private const string ApprovedPrefix = "The user reviewed this and approved it. Result: ";
+
     /// <summary>
     /// <paramref name="settle"/> applies the outcome (status, result, reason) to <paramref name="request"/>. Streams an
     /// <see cref="AiChatToolStarted"/>/<see cref="AiChatToolCompleted"/> pair for each approved sibling actually executed.
@@ -105,7 +107,9 @@ public sealed class ToolTurnCloser(
                 userId, sibling.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, sibling.InputJson, cancellationToken);
             sibling.Status = summary.Success ? ToolExecutionStatus.Executed : ToolExecutionStatus.Failed;
             sibling.ResultJson = summary.ResultJson;
-            summaries.Add(summary);
+            summaries.Add(summary.Success && siblingTool is { RequiresApproval: true }
+                ? summary with { ResultJson = $"{ApprovedPrefix}{summary.ResultJson}" }
+                : summary);
 
             yield return new AiChatToolCompleted(
                 request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect, summary.Success, summary.AffectedCount);
