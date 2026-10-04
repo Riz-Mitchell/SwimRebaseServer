@@ -14,7 +14,7 @@ public static class SessionText
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Group: {session.Group ?? "(not specified / everyone)"}");
-        sb.AppendLine($"Distance: {SessionCalculator.Total(session)}");
+        sb.AppendLine($"Distance: {SessionCalculator.Total(session):0.##}");
         for (var i = 0; i < session.Sets.Count; i++)
         {
             AppendNode(sb, session.Sets[i], i.ToString(), indent: 0);
@@ -49,7 +49,7 @@ public static class SessionText
     {
         var sb = new StringBuilder();
         sb.Append(item.Reps).Append(" x ");
-        sb.Append(item.Parts.Count == 1 ? DescribePart(item.Parts[0]) : $"{item.RepDistance} ({string.Join(" + ", item.Parts.Select(DescribePart))})");
+        sb.Append(item.Parts.Count == 1 ? DescribePart(item.Parts[0]) : $"{item.RepDistance:0.##} ({string.Join(" + ", item.Parts.Select(DescribePart))})");
 
         if (item.Timing is { } timing)
         {
@@ -67,7 +67,7 @@ public static class SessionText
     private static string DescribePart(Part part)
     {
         var sb = new StringBuilder();
-        sb.Append(part.Dist);
+        sb.Append(part.Dist.ToString("0.##"));
         sb.Append(' ').Append((part.Stroke ?? Stroke.Choice).ToString().ToLowerInvariant());
 
         if (part.Mode != SwimMode.Swim)

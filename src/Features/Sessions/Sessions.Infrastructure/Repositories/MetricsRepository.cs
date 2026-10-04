@@ -21,7 +21,7 @@ public sealed class MetricsRepository(SessionsDbContext db) : IMetricsRepository
         // group by anything (including sessions and time buckets) and count sessions.
         var factTotals = await facts
             .GroupBy(f => new { f.PerformedOn, f.SessionId, f.Stroke, f.Mode, f.Intensity, f.Unit })
-            .Select(g => new FactTotal(g.Key.PerformedOn, g.Key.SessionId, g.Key.Stroke, g.Key.Mode, g.Key.Intensity, g.Key.Unit, g.Sum(f => (long)f.Distance)))
+            .Select(g => new FactTotal(g.Key.PerformedOn, g.Key.SessionId, g.Key.Stroke, g.Key.Mode, g.Key.Intensity, g.Key.Unit, g.Sum(f => f.Distance)))
             .ToListAsync(cancellationToken);
 
         // Opted-in, session-linked timed swims count too (see TimedSwimFacts) - unioned here rather than written as SessionFact

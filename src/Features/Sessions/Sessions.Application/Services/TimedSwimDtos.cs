@@ -3,7 +3,7 @@ using Sessions.Domain.Models;
 namespace Sessions.Application.Services;
 
 /// <summary>A split as it arrives over the wire.</summary>
-public sealed record SplitDto(int DistanceFromStart, double Seconds, int? StrokeRateCyclesPerMinute)
+public sealed record SplitDto(decimal DistanceFromStart, double Seconds, int? StrokeRateCyclesPerMinute)
 {
     public Split ToSplit() => new() { DistanceFromStart = DistanceFromStart, Seconds = Seconds, StrokeRateCyclesPerMinute = StrokeRateCyclesPerMinute };
 }
@@ -23,7 +23,7 @@ public sealed record LogTimedSwimRequest(
     Guid? SessionId,
     DateOnly PerformedOn,
     PoolCourse Course,
-    int Dist,
+    decimal Dist,
     Stroke Stroke,
     SwimMode Mode,
     double Seconds,
@@ -39,7 +39,7 @@ public sealed record TimedSwimFilter(
     Guid? SessionId,
     DateOnly? From,
     DateOnly? To,
-    IReadOnlyList<int>? Distances,
+    IReadOnlyList<decimal>? Distances,
     IReadOnlyList<Stroke>? Strokes,
     int? MinIntensity,
     int? MaxIntensity,

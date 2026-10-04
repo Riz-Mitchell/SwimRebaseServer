@@ -7,7 +7,7 @@ public enum FinishReference { Hand, Head, Feet }
 /// <summary>A checkpoint before the finish: how far in, how long it took to get there, and the stroke rate at that point.</summary>
 public sealed record Split
 {
-    public int DistanceFromStart { get; init; }
+    public decimal DistanceFromStart { get; init; }
 
     public double Seconds { get; init; }
 
@@ -41,7 +41,7 @@ public class TimedSwim
 
     public PoolCourse Course { get; set; }
 
-    public int Dist { get; set; }
+    public decimal Dist { get; set; }
 
     public Stroke Stroke { get; set; }
 

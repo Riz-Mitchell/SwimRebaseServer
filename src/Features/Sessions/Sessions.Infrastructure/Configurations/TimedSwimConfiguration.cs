@@ -14,7 +14,7 @@ public sealed class TimedSwimConfiguration : IEntityTypeConfiguration<TimedSwim>
         builder.Property(t => t.OwnerId).IsRequired();
         builder.Property(t => t.PerformedOn).IsRequired();
         builder.Property(t => t.Course).HasConversion<string>().HasMaxLength(8).IsRequired();
-        builder.Property(t => t.Dist).IsRequired();
+        builder.Property(t => t.Dist).HasPrecision(10, 2).IsRequired();
         builder.Property(t => t.Stroke).HasConversion<string>().HasMaxLength(16).IsRequired();
         builder.Property(t => t.Mode).HasConversion<string>().HasMaxLength(16).IsRequired();
         builder.Property(t => t.Seconds).IsRequired();

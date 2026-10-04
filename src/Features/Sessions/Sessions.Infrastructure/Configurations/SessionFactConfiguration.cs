@@ -16,7 +16,7 @@ public sealed class SessionFactConfiguration : IEntityTypeConfiguration<SessionF
         builder.Property(f => f.Stroke).HasConversion<string>().HasMaxLength(16).IsRequired();
         builder.Property(f => f.Mode).HasConversion<string>().HasMaxLength(16).IsRequired();
         builder.Property(f => f.Equip).IsRequired();
-        builder.Property(f => f.Distance).IsRequired();
+        builder.Property(f => f.Distance).HasPrecision(10, 2).IsRequired();
         builder.Property(f => f.OwnerId).IsRequired();
         builder.Property(f => f.PerformedOn).IsRequired();
         builder.Property(f => f.Unit).HasConversion<string>().HasMaxLength(8).IsRequired();

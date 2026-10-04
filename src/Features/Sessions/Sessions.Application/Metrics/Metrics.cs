@@ -37,7 +37,7 @@ public sealed record MetricsQuery(
 }
 
 /// <summary>The facts of one session narrowed to what a metric can group by, with distance summed. What the repository returns and the calculator reads.</summary>
-public sealed record FactTotal(DateOnly PerformedOn, Guid SessionId, Stroke Stroke, SwimMode Mode, int? Intensity, DistanceUnit Unit, long Distance);
+public sealed record FactTotal(DateOnly PerformedOn, Guid SessionId, Stroke Stroke, SwimMode Mode, int? Intensity, DistanceUnit Unit, decimal Distance);
 
 /// <param name="Keys">One value per group-by dimension, in order. Empty for an ungrouped query.</param>
 /// <param name="Value">Null when the measure does not apply (an average over distance with no intensity).</param>
@@ -48,7 +48,7 @@ public sealed record MetricsResult(
     MetricMeasure Measure,
     IReadOnlyList<MetricDimension> GroupBy,
     IReadOnlyList<MetricRow> Rows,
-    long TotalDistance,
+    decimal TotalDistance,
     IReadOnlyList<DistanceUnit> Units);
 
 /// <summary>The query cannot be answered as asked. The message is written for whoever (or whatever) made it.</summary>

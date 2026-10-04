@@ -16,7 +16,7 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
         builder.Property(s => s.Title).HasMaxLength(200).IsRequired();
         builder.Property(s => s.Course).HasConversion<string>().HasMaxLength(8).IsRequired();
         builder.Property(s => s.Source).HasConversion<string>().HasMaxLength(16).IsRequired();
-        builder.Property(s => s.TotalDistance).IsRequired();
+        builder.Property(s => s.TotalDistance).HasPrecision(10, 2).IsRequired();
         // Plain text rather than jsonb: the tree is never queried at the SQL level (facts are), and jsonb reorders object keys,
         // which breaks polymorphic deserialization on the "kind" discriminator.
         builder.Property(s => s.ContentJson).HasColumnType("text").IsRequired();

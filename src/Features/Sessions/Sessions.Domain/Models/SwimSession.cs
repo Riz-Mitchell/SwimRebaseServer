@@ -53,7 +53,7 @@ public sealed record SetItem : SessionNode
 
     /// <summary>Distance of one rep.</summary>
     [JsonIgnore]
-    public int RepDistance => Parts.Sum(p => p.Dist);
+    public decimal RepDistance => Parts.Sum(p => p.Dist);
 }
 
 /// <summary>Rest between reps, or the send-off interval they leave on.</summary>
@@ -70,7 +70,7 @@ public sealed record Part
     public string? Id { get; init; }
 
     /// <summary>Distance of this part in one rep.</summary>
-    public int Dist { get; init; }
+    public decimal Dist { get; init; }
 
     /// <summary>Required. "choice" when the swimmer picked freely; "im" is a quarter each of fly, back, breast, free.</summary>
     public Stroke? Stroke { get; init; }

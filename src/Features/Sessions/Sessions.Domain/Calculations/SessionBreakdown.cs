@@ -8,26 +8,26 @@ public sealed record SessionBreakdown
 {
     public const string Unspecified = "unspecified";
 
-    public int Total { get; init; }
+    public decimal Total { get; init; }
 
-    public Dictionary<string, int> ByStroke { get; init; } = [];
+    public Dictionary<string, decimal> ByStroke { get; init; } = [];
 
-    public Dictionary<string, int> ByMode { get; init; } = [];
+    public Dictionary<string, decimal> ByMode { get; init; } = [];
 
     /// <summary>A rep with two pieces of equipment counts towards both, so these can add up to more than <see cref="Total"/>. "none" = no equipment.</summary>
-    public Dictionary<string, int> ByEquipment { get; init; } = [];
+    public Dictionary<string, decimal> ByEquipment { get; init; } = [];
 
     /// <summary>Keyed by level on the global scale ("1".."10"), or "unspecified".</summary>
-    public Dictionary<string, int> ByIntensity { get; init; } = [];
+    public Dictionary<string, decimal> ByIntensity { get; init; } = [];
 
     public string ToText()
     {
         var sb = new StringBuilder();
 
-        void Line(string title, Dictionary<string, int> values) =>
-            sb.AppendLine($"  {title,-10} " + string.Join(", ", values.OrderByDescending(x => x.Value).Select(x => $"{x.Key} {x.Value}")));
+        void Line(string title, Dictionary<string, decimal> values) =>
+            sb.AppendLine($"  {title,-10} " + string.Join(", ", values.OrderByDescending(x => x.Value).Select(x => $"{x.Key} {x.Value:0.##}")));
 
-        sb.AppendLine($"  total      {Total}");
+        sb.AppendLine($"  total      {Total:0.##}");
         Line("stroke", ByStroke);
         Line("mode", ByMode);
         Line("equipment", ByEquipment);
@@ -41,11 +41,11 @@ public static class BreakdownCalculator
 {
     public static SessionBreakdown Of(SwimSession session)
     {
-        var stroke = new Dictionary<string, int>();
-        var mode = new Dictionary<string, int>();
-        var equipment = new Dictionary<string, int>();
-        var intensity = new Dictionary<string, int>();
-        var total = 0;
+        var stroke = new Dictionary<string, decimal>();
+        var mode = new Dictionary<string, decimal>();
+        var equipment = new Dictionary<string, decimal>();
+        var intensity = new Dictionary<string, decimal>();
+        var total = 0m;
 
         foreach (var leaf in SessionLeaves.Flatten(session))
         {
@@ -69,7 +69,7 @@ public static class BreakdownCalculator
         return new SessionBreakdown { Total = total, ByStroke = stroke, ByMode = mode, ByEquipment = equipment, ByIntensity = intensity };
     }
 
-    private static void Add(Dictionary<string, int> values, string key, int dist) => values[key] = values.GetValueOrDefault(key) + dist;
+    private static void Add(Dictionary<string, decimal> values, string key, decimal dist) => values[key] = values.GetValueOrDefault(key) + dist;
 
     private static string Normalize(string? text) => string.Join(' ', (text ?? string.Empty).ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
 }

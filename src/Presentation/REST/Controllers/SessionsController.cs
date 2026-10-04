@@ -126,21 +126,21 @@ public enum SessionInclude { Content }
 public sealed record EditSessionRequest(List<SessionEditDto> Edits);
 
 public sealed record SessionSummaryResponse(
-    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, DateTimeOffset CreatedAt)
+    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, decimal TotalDistance, DateTimeOffset CreatedAt)
 {
     public static SessionSummaryResponse FromEntity(Session s) =>
         new(s.Id, s.PerformedOn, s.Title, s.Course, s.Unit, s.Source, s.TotalDistance, s.CreatedAt);
 }
 
 public sealed record SessionWithContentResponse(
-    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, DateTimeOffset CreatedAt, SwimSession Content)
+    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, decimal TotalDistance, DateTimeOffset CreatedAt, SwimSession Content)
 {
     public static SessionWithContentResponse From(SessionWithContent s) =>
         new(s.Session.Id, s.Session.PerformedOn, s.Session.Title, s.Session.Course, s.Session.Unit, s.Session.Source, s.Session.TotalDistance, s.Session.CreatedAt, s.Content);
 }
 
 public sealed record SessionResponse(
-    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, int TotalDistance, SwimSession Content, string Outline)
+    Guid Id, DateOnly PerformedOn, string Title, PoolCourse Course, DistanceUnit Unit, SessionSource Source, decimal TotalDistance, SwimSession Content, string Outline)
 {
     public static SessionResponse FromView(SessionView v) =>
         new(v.Id, v.PerformedOn, v.Title, v.Course, v.Unit, v.Source, v.TotalDistance, v.Content, v.Outline);

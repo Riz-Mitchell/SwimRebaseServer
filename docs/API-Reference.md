@@ -387,7 +387,7 @@ Abandon a focus.
 
 ## Sessions — `/api/sessions`
 
-Saved swims: a record of what was swum, logged after the fact. Today they are created by the AI's `save_session` tool (see Sub-agents above); these endpoints read them, correct them, and add them up. Distances are always computed from the session's structure, never entered.
+Saved swims: a record of what was swum, logged after the fact. Today they are created by the AI's `save_session` tool (see Sub-agents above); these endpoints read them, correct them, and add them up. Distances are always computed from the session's structure, never entered. Every distance (`dist`, `totalDistance`, `distanceFromStart`, metric totals) is a decimal number with at most 2 decimal places, so odd pool lengths like `12.5` work.
 
 A session's `content` is a tree. `sets` holds **items** (`{ kind: "item", reps, timing?, parts, note? }` - `parts` is what one rep is made of, each `{ dist, stroke, mode, equip, effort, intensity? }`) and **groups** (`{ kind: "group", repeat, items }`, nesting at most 3 deep). `stroke` is `free | back | breast | fly | im | choice`; an `im` part counts as a quarter of each stroke. `intensity` is `{ level, scale }` on one global 1-10 scale, mapped from `effort` (words like "easy"/"hard" or a percentage); it is `null` when the effort could not be mapped.
 
@@ -481,7 +481,7 @@ Enums are accepted in any case on input and returned PascalCase (`Free`, `Scm`, 
 - `strokeRateCyclesPerMinute` counts full stroke cycles, not individual arm strokes.
 - `includeInMetrics` defaults to `false`; see below.
 
-**Validation (400):** `dist >= 1`, `seconds > 0`, a `resistance` must have a `type`, and splits must be strictly increasing in both distance and seconds, finish before `dist` and `seconds`, with a rate above 0.
+**Validation (400):** `dist >= 1` with at most 2 decimal places, `seconds > 0`, a `resistance` must have a `type`, and splits must be strictly increasing in both distance and seconds, finish before `dist` and `seconds`, with a rate above 0.
 
 **Response:** `TimedSwimResponse`. `400` with `{ error, problems }` listing everything to fix; nothing is saved.
 
@@ -492,7 +492,7 @@ Fastest first. All parameters optional; repeat a parameter for several values (`
 |---|---|
 | `sessionId` | Only swims logged against this session |
 | `from`, `to` | Date range (yyyy-MM-dd), inclusive |
-| `distances` | Exact distances, e.g. `distances=50&distances=100` |
+| `distances` | Exact distances, e.g. `distances=50&distances=12.5` |
 | `strokes` | `free | back | breast | fly | im | choice` |
 | `minIntensity`, `maxIntensity` | Bounds on the 1-10 scale. Swims with no intensity are left out when either is set |
 | `startTypes` | `Push | Dive` |
