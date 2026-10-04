@@ -29,7 +29,7 @@ public class Session
     public Guid? SourceDraftId { get; set; }
 
     /// <summary>Derived from <see cref="ContentJson"/> by <see cref="Calculations.SessionCalculator"/>.</summary>
-    public int TotalDistance { get; set; }
+    public decimal TotalDistance { get; set; }
 
     /// <summary>A <see cref="SwimSession"/> serialized with <see cref="SessionJson.Options"/>.</summary>
     public string ContentJson { get; set; } = string.Empty;
@@ -64,7 +64,7 @@ public class SessionFact
     public int? Intensity { get; set; }
 
     /// <summary>Never null: in <see cref="Session.Unit"/>, repeats applied.</summary>
-    public int Distance { get; set; }
+    public decimal Distance { get; set; }
 
     // Copied down from the session so metric queries never join back to it.
     public Guid OwnerId { get; set; }

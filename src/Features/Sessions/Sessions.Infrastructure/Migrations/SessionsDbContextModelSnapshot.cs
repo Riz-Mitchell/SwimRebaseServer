@@ -68,8 +68,9 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("title");
 
-                    b.Property<int>("TotalDistance")
-                        .HasColumnType("integer")
+                    b.Property<decimal>("TotalDistance")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
                         .HasColumnName("total_distance");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -110,8 +111,9 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnType("character varying(8)")
                         .HasColumnName("course");
 
-                    b.Property<int>("Distance")
-                        .HasColumnType("integer")
+                    b.Property<decimal>("Distance")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
                         .HasColumnName("distance");
 
                     b.PrimitiveCollection<string[]>("Equip")
@@ -221,8 +223,9 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<int>("Dist")
-                        .HasColumnType("integer")
+                    b.Property<decimal>("Dist")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
                         .HasColumnName("dist");
 
                     b.Property<string>("Effort")

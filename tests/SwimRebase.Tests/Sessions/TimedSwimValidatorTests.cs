@@ -5,12 +5,27 @@ namespace SwimRebase.Tests.Sessions;
 
 public class TimedSwimValidatorTests
 {
-    private static Split Split(int dist, double seconds, int? rate = null) => new() { DistanceFromStart = dist, Seconds = seconds, StrokeRateCyclesPerMinute = rate };
+    private static Split Split(decimal dist, double seconds, int? rate = null) => new() { DistanceFromStart = dist, Seconds = seconds, StrokeRateCyclesPerMinute = rate };
 
     [Fact]
     public void A_bare_time_with_no_splits_is_valid()
     {
         Assert.Empty(TimedSwimValidator.Validate(dist: 50, seconds: 32.1, resistance: null, splits: []));
+    }
+
+    [Fact]
+    public void A_decimal_dist_and_split_are_valid()
+    {
+        Assert.Empty(TimedSwimValidator.Validate(dist: 12.5m, seconds: 8.4, resistance: null, splits: [Split(6.25m, 4.1)]));
+    }
+
+    [Fact]
+    public void More_than_two_decimal_places_are_rejected()
+    {
+        var errors = TimedSwimValidator.Validate(dist: 12.555m, seconds: 8.4, resistance: null, splits: [Split(6.255m, 4.1)]);
+
+        Assert.Contains(errors, e => e.StartsWith("dist"));
+        Assert.Contains(errors, e => e.Contains("distanceFromStart can have"));
     }
 
     [Fact]

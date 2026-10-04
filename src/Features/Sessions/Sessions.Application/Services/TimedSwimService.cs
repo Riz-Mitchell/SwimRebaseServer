@@ -13,7 +13,7 @@ public sealed record TimedSwimView(
     DateOnly PerformedOn,
     PoolCourse Course,
     DistanceUnit Unit,
-    int Dist,
+    decimal Dist,
     Stroke Stroke,
     SwimMode Mode,
     double Seconds,

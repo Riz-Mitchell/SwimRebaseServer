@@ -9,7 +9,7 @@ public class CalculatorTests
 
     internal static SetItem Item(int reps, params Part[] parts) => new() { Reps = reps, Parts = [.. parts] };
 
-    internal static Part Swim(int dist, Stroke stroke, SwimMode mode = SwimMode.Swim, string? effort = null, int? level = null, params string[] equip) => new()
+    internal static Part Swim(decimal dist, Stroke stroke, SwimMode mode = SwimMode.Swim, string? effort = null, int? level = null, params string[] equip) => new()
     {
         Dist = dist,
         Stroke = stroke,
@@ -27,6 +27,21 @@ public class CalculatorTests
             new SetGroup { Repeat = 3, Items = [Item(1, Swim(200, Stroke.Free)), Item(2, Swim(50, Stroke.Free))] });
 
         Assert.Equal(400 + 3 * (200 + 100), SessionCalculator.Total(session));
+    }
+
+    [Fact]
+    public void Decimal_distances_are_summed_exactly()
+    {
+        Assert.Equal(8 * 12.5m + 4 * 33.33m, SessionCalculator.Total(Tree(Item(8, Swim(12.5m, Stroke.Free)), Item(4, Swim(33.33m, Stroke.Back)))));
+    }
+
+    [Fact]
+    public void An_im_part_splits_a_decimal_distance_into_exact_quarters()
+    {
+        var leaves = SessionLeaves.Flatten(Tree(Item(1, Swim(50.5m, Stroke.Im))));
+
+        Assert.Equal(4, leaves.Count);
+        Assert.All(leaves, l => Assert.Equal(12.625m, l.Distance));
     }
 
     [Fact]

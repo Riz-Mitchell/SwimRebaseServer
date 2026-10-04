@@ -14,7 +14,7 @@ public sealed record SessionView(
     PoolCourse Course,
     DistanceUnit Unit,
     SessionSource Source,
-    int TotalDistance,
+    decimal TotalDistance,
     SwimSession Content)
 {
     public string Outline => SessionText.Outline(Content);

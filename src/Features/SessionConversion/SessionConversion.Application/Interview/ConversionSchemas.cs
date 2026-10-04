@@ -38,7 +38,7 @@ public static class ConversionSchemas
         var timing = Closed(("kind", EnumOf(Names<TimingKind>())), ("seconds", Integer()));
 
         var part = Closed(
-            ("dist", Integer()),
+            ("dist", Number()),
             ("stroke", EnumOf(Names<Stroke>())),
             ("mode", EnumOf(Names<SwimMode>())),
             ("equip", ArrayOf(Text())),
@@ -83,6 +83,8 @@ public static class ConversionSchemas
     private static JsonObject Text() => new() { ["type"] = "string" };
 
     private static JsonObject Integer() => new() { ["type"] = "integer" };
+
+    private static JsonObject Number() => new() { ["type"] = "number" };
 
     private static JsonObject EnumOf(params string[] values) => new()
     {

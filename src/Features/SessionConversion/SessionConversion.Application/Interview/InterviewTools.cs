@@ -63,7 +63,7 @@ public static class InterviewTools
 
     private const string NodeDefs = """
         "node":{"type":"object","properties":{"kind":{"type":"string","enum":["item","group"]},"reps":{"type":"integer"},"timing":{"type":"object","properties":{"kind":{"type":"string","enum":["rest","sendOff"]},"seconds":{"type":"integer"}},"required":["kind","seconds"]},"parts":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/part"},"description":"one rep"},"note":{"type":"string"},"repeat":{"type":"integer"},"items":{"type":"array","items":{"$ref":"#/$defs/node"}}},"required":["kind"]},
-        "part":{"type":"object","properties":{"dist":{"type":"integer"},"stroke":{"type":"string","enum":["free","back","breast","fly","im","choice"]},"mode":{"type":"string","enum":["swim","kick","pull","drill","scull"]},"equip":{"type":"array","items":{"type":"string"}},"effort":{"type":"string"}},"required":["dist","stroke"]}
+        "part":{"type":"object","properties":{"dist":{"type":"number"},"stroke":{"type":"string","enum":["free","back","breast","fly","im","choice"]},"mode":{"type":"string","enum":["swim","kick","pull","drill","scull"]},"equip":{"type":"array","items":{"type":"string"}},"effort":{"type":"string"}},"required":["dist","stroke"]}
         """;
 
     private static string WithDefs(string schema) => schema.Replace("__DEFS__", NodeDefs.Trim());

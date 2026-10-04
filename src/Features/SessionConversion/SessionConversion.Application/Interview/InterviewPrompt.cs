@@ -24,7 +24,7 @@ public static class InterviewPrompt
         WRITING THE SESSION
         - Only what was swum, in board order. Skipped sets are omitted; extra sets the swimmer added are included where they happened.
         - Sets for other groups/lanes are omitted. `group` = the swimmer's group name as written, or null if the board is for everyone.
-        - kind=item: `reps` and `parts`. `parts` is what ONE rep is made of and always has at least one part, each with `dist` (per rep) and `stroke`.
+        - kind=item: `reps` and `parts`. `parts` is what ONE rep is made of and always has at least one part, each with `dist` (per rep, decimals allowed for odd pool lengths like 12.5, at most 2 places) and `stroke`.
           "4x100 free" -> reps 4, one part {dist 100, stroke free}. "1 x 400 IM" -> reps 1, one part {dist 400, stroke im}. "8 x 50 kick" -> reps 8, one part {dist 50, stroke free, mode kick}.
           A rep that mixes strokes/modes/equipment/effort ("25 fly + 75 free", "50 kick + 50 swim") is several parts in order. Ladders/pyramids (100-200-300): one item per rung.
         - kind=group: `repeat` + `items`, for "3 rounds of..." / a bracket followed by "x3", or a rep pattern that repeats ("12x50 as 3 easy, 1 as 25 fast + 25 easy" -> repeat 3 of [3 x 50 easy, 1 x (25 fast + 25 easy)]). Groups may nest, but no more than 3 deep.

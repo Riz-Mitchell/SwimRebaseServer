@@ -4,7 +4,7 @@ namespace Sessions.Domain.Calculations;
 
 /// <summary>One stroke of one part with every enclosing repeat applied.</summary>
 /// <param name="NodeId">The part's id, or its position (<c>1.0.2</c>: set 1, item 0, part 2) for a session that has not been saved yet.</param>
-public sealed record SessionLeaf(string NodeId, Stroke Stroke, SwimMode Mode, IReadOnlyList<string> Equip, int? Intensity, int Distance);
+public sealed record SessionLeaf(string NodeId, Stroke Stroke, SwimMode Mode, IReadOnlyList<string> Equip, int? Intensity, decimal Distance);
 
 /// <summary>
 /// Flattens the tree into leaves. The single place repeats are multiplied out: facts and breakdowns are both built from this, so they cannot

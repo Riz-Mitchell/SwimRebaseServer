@@ -59,7 +59,7 @@ public static class MetricsCalculator
 
     private static double? Measure(MetricMeasure measure, IEnumerable<FactTotal> group) => measure switch
     {
-        MetricMeasure.Distance => group.Sum(f => f.Distance),
+        MetricMeasure.Distance => (double)group.Sum(f => f.Distance),
         MetricMeasure.Sessions => group.Select(f => f.SessionId).Distinct().Count(),
         _ => WeightedIntensity(group),
     };
@@ -68,7 +68,7 @@ public static class MetricsCalculator
     {
         var withIntensity = group.Where(f => f.Intensity is not null).ToList();
         var distance = withIntensity.Sum(f => f.Distance);
-        return distance == 0 ? null : Math.Round(withIntensity.Sum(f => f.Distance * (double)f.Intensity!.Value) / distance, 2);
+        return distance == 0 ? null : (double)Math.Round(withIntensity.Sum(f => f.Distance * f.Intensity!.Value) / distance, 2);
     }
 
     private static string Key(MetricDimension dimension, FactTotal f) => dimension switch
