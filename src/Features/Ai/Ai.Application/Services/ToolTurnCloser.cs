@@ -1,8 +1,11 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shared.Application;
 
 namespace Ai.Application.Services;
@@ -24,8 +27,11 @@ public sealed class ToolTurnCloser(
     IAiToolRegistry toolRegistry,
     [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     IChatCompactionService compaction,
-    ToolExecutor toolExecutor)
+    ToolExecutor toolExecutor,
+    ILogger<ToolTurnCloser>? logger = null)
 {
+    private readonly ILogger<ToolTurnCloser> _logger = logger ?? NullLogger<ToolTurnCloser>.Instance;
+
     private const string ApprovedPrefix = "The user reviewed this and approved it. Result: ";
 
     /// <summary>
@@ -45,28 +51,64 @@ public sealed class ToolTurnCloser(
         // request whose history has a tool_use with no following tool_result). Wrapping it means a
         // crash mid-resolve rolls the status change back too, leaving the request outstanding and
         // safely re-resolvable instead of stuck half-done.
-        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var phase = "begin transaction";
+        var finished = false;
+        var startedAt = Stopwatch.GetTimestamp();
 
-        settle(request);
-        request.ResolvedAt = DateTimeOffset.UtcNow;
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var siblings = await toolExecutions.GetByAssistantMessageIdAsync(request.AssistantMessageId, cancellationToken);
-        if (siblings.Any(s => s.Status is ToolExecutionStatus.PendingApproval or ToolExecutionStatus.InProgress))
+        try
         {
+            await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+            phase = "settle request";
+            settle(request);
+            request.ResolvedAt = DateTimeOffset.UtcNow;
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            phase = "load sibling requests";
+            var siblings = await toolExecutions.GetByAssistantMessageIdAsync(request.AssistantMessageId, cancellationToken);
+            if (siblings.Any(s => s.Status is ToolExecutionStatus.PendingApproval or ToolExecutionStatus.InProgress))
+            {
+                phase = "commit (siblings still pending)";
+                await transaction.CommitAsync(cancellationToken);
+                resolution.ReadyConversationId = null;
+                finished = true;
+                _logger.LogInformation(
+                    "AI tool turn conv={ConversationId} request={RequestId} tool={Tool} settled as {Status}; {Pending} sibling(s) still outstanding ms={ElapsedMs}",
+                    request.ConversationId, request.Id, request.ToolName, request.Status,
+                    siblings.Count(s => s.Status is ToolExecutionStatus.PendingApproval or ToolExecutionStatus.InProgress),
+                    (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+                yield break;
+            }
+
+            phase = "execute siblings and write tool_result";
+            await foreach (var chatEvent in ExecuteResolvedSiblingsAsync(userId, request, siblings, cancellationToken))
+            {
+                yield return chatEvent;
+            }
+
+            phase = "commit";
             await transaction.CommitAsync(cancellationToken);
-            resolution.ReadyConversationId = null;
-            yield break;
-        }
 
-        await foreach (var chatEvent in ExecuteResolvedSiblingsAsync(userId, request, siblings, cancellationToken))
+            phase = "compaction";
+            await compaction.CompactIfNeededAsync(request.ConversationId, userId, cancellationToken);
+            resolution.ReadyConversationId = request.ConversationId;
+            finished = true;
+            _logger.LogInformation(
+                "AI tool turn conv={ConversationId} request={RequestId} tool={Tool} settled as {Status}; turn closed with {Siblings} tool result(s) ms={ElapsedMs}",
+                request.ConversationId, request.Id, request.ToolName, request.Status, siblings.Count,
+                (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+        }
+        finally
         {
-            yield return chatEvent;
+            if (!finished)
+            {
+                _logger.LogWarning(
+                    "AI tool turn conv={ConversationId} request={RequestId} tool={Tool} did not finish: stopped in phase '{Phase}' " +
+                    "(status={Status}, cancelled={Cancelled}) ms={ElapsedMs}",
+                    request.ConversationId, request.Id, request.ToolName, request.Status, phase,
+                    cancellationToken.IsCancellationRequested, (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            }
         }
-
-        await transaction.CommitAsync(cancellationToken);
-        await compaction.CompactIfNeededAsync(request.ConversationId, userId, cancellationToken);
-        resolution.ReadyConversationId = request.ConversationId;
     }
 
     private async IAsyncEnumerable<AiChatEvent> ExecuteResolvedSiblingsAsync(
@@ -103,8 +145,13 @@ public sealed class ToolTurnCloser(
 
             yield return new AiChatToolStarted(request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect);
 
+            var executeStartedAt = Stopwatch.GetTimestamp();
             var summary = await toolExecutor.ExecuteAsync(
                 userId, sibling.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, sibling.InputJson, cancellationToken);
+            _logger.LogInformation(
+                "AI tool {Tool} {Outcome} after approval conv={ConversationId} request={RequestId} resultChars={ResultChars} ms={ElapsedMs}",
+                sibling.ToolName, summary.Success ? "ok" : "FAILED", sibling.ConversationId, sibling.Id, summary.ResultJson.Length,
+                (long)Stopwatch.GetElapsedTime(executeStartedAt).TotalMilliseconds);
             sibling.Status = summary.Success ? ToolExecutionStatus.Executed : ToolExecutionStatus.Failed;
             sibling.ResultJson = summary.ResultJson;
             summaries.Add(summary.Success && siblingTool is { RequiresApproval: true }

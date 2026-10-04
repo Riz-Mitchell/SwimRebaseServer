@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Ai.Application.Services;
 
@@ -15,8 +17,11 @@ public sealed class ConversationRunner(
     GatedToolApprovalResolver approvalResolver,
     SubAgentFollowUp followUp,
     IConversationRepository conversations,
-    IEnumerable<IConversationDriver> drivers)
+    IEnumerable<IConversationDriver> drivers,
+    ILogger<ConversationRunner>? logger = null)
 {
+    private readonly ILogger<ConversationRunner> _logger = logger ?? NullLogger<ConversationRunner>.Instance;
+
     public async IAsyncEnumerable<AiChatEvent> RunAsync(
         Guid userId, Guid conversationId, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -45,6 +50,9 @@ public sealed class ConversationRunner(
         if (outcome.ParentToolExecutionRequestId is { } parentRequestId
             && (outcome.TerminalToolCompleted || outcome.EndedWithoutToolCall))
         {
+            _logger.LogInformation(
+                "AI sub-agent conv={ConversationId} ended (terminalTool={Terminal}, endedWithoutToolCall={NoToolCall}); settling parent request {ParentRequestId}",
+                conversationId, outcome.TerminalToolCompleted, outcome.EndedWithoutToolCall, parentRequestId);
             var resolution = new ToolApprovalResolution();
             await foreach (var chatEvent in approvalResolver.CompleteSubAgentAsync(
                 userId, conversationId, parentRequestId, outcome.TerminalToolCompleted, resolution, cancellationToken))
@@ -57,6 +65,9 @@ public sealed class ConversationRunner(
                 if (outcome.TerminalToolCompleted
                     && await followUp.RaiseAsync(userId, conversationId, parentRequestId, cancellationToken) is { } followUpEvents)
                 {
+                    _logger.LogInformation(
+                        "AI parent conv={ParentConversationId} is waiting on the user: a follow-up request was raised instead of resuming the model",
+                        parentConversationId);
                     foreach (var chatEvent in followUpEvents)
                     {
                         yield return chatEvent;
@@ -65,6 +76,7 @@ public sealed class ConversationRunner(
                     yield break;
                 }
 
+                _logger.LogInformation("AI parent conv={ParentConversationId} resumes the model after its sub-agent", parentConversationId);
                 await foreach (var chatEvent in RunAsync(userId, parentConversationId, cancellationToken))
                 {
                     yield return chatEvent;
