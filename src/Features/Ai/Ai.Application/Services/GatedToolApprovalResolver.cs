@@ -1,7 +1,10 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Ai.Application.Services;
 
@@ -16,8 +19,11 @@ public sealed class GatedToolApprovalResolver(
     IConversationRepository conversations,
     IAiToolRegistry toolRegistry,
     IAgentProfileProvider profiles,
-    IEnumerable<ISubAgent> subAgents)
+    IEnumerable<ISubAgent> subAgents,
+    ILogger<GatedToolApprovalResolver>? logger = null)
 {
+    private readonly ILogger<GatedToolApprovalResolver> _logger = logger ?? NullLogger<GatedToolApprovalResolver>.Instance;
+
     public IAsyncEnumerable<AiChatEvent> ResolveAsync(
         Guid userId, ToolExecutionRequest request, bool approve, string? denialReason,
         ToolApprovalResolution resolution, CancellationToken cancellationToken) =>
@@ -61,14 +67,22 @@ public sealed class GatedToolApprovalResolver(
         var parent = await toolExecutions.FindAsync(userId, parentRequestId, cancellationToken);
         if (parent is null || parent.Status != ToolExecutionStatus.InProgress)
         {
+            _logger.LogWarning(
+                "AI sub-agent conv={ChildConversationId} finished but its parent request {ParentRequestId} is {Status}, not InProgress; the parent chat is not resumed",
+                childConversationId, parentRequestId, parent?.Status.ToString() ?? "missing");
             resolution.ReadyConversationId = null;
             yield break;
         }
 
         var agent = subAgents.First(a => a.ToolName == parent.ToolName);
+        var summarizeStartedAt = Stopwatch.GetTimestamp();
         var resultJson = succeeded
             ? await agent.SummarizeAsync(new SubAgentCompletion(userId, childConversationId, parent), cancellationToken)
             : "The session ended without producing a result.";
+        _logger.LogInformation(
+            "AI sub-agent {Tool} conv={ChildConversationId} parent={ParentRequestId} succeeded={Succeeded} summaryChars={SummaryChars} ms={ElapsedMs}",
+            parent.ToolName, childConversationId, parentRequestId, succeeded, resultJson.Length,
+            (long)Stopwatch.GetElapsedTime(summarizeStartedAt).TotalMilliseconds);
 
         yield return new AiChatSubAgentCompleted(
             parent.ConversationId, parent.Id, childConversationId, toolRegistry.Find(parent.ToolName)?.DisplayName ?? parent.ToolName, succeeded);

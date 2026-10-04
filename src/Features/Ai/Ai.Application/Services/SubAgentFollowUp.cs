@@ -2,6 +2,8 @@ using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shared.Application;
 
 namespace Ai.Application.Services;
@@ -16,8 +18,11 @@ public sealed class SubAgentFollowUp(
     IConversationRepository conversations,
     IAiToolRegistry toolRegistry,
     IEnumerable<ISubAgent> subAgents,
-    [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork)
+    [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    ILogger<SubAgentFollowUp>? logger = null)
 {
+    private readonly ILogger<SubAgentFollowUp> _logger = logger ?? NullLogger<SubAgentFollowUp>.Instance;
+
     /// <summary>The events that ask the user, or null when the sub-agent has no follow-up and the main chat should carry on.</summary>
     public async Task<IReadOnlyList<AiChatEvent>?> RaiseAsync(
         Guid userId, Guid childConversationId, Guid parentRequestId, CancellationToken cancellationToken)
@@ -33,6 +38,9 @@ public sealed class SubAgentFollowUp(
         var tool = call is null ? null : toolRegistry.Find(call.ToolName);
         if (call is null || tool is null || !call.RequiresApproval)
         {
+            _logger.LogInformation(
+                "AI sub-agent follow-up for parent request {ParentRequestId}: none offered (call={Call}, toolRegistered={Registered})",
+                parentRequestId, call?.ToolName ?? "none", tool is not null);
             return null;
         }
 
@@ -50,6 +58,9 @@ public sealed class SubAgentFollowUp(
         await conversations.TouchLastMessageAtAsync(conversationId, DateTimeOffset.UtcNow, cancellationToken);
 
         var preview = tool is IToolPreview previewer ? await previewer.PreviewAsync(userId, call.InputJson, cancellationToken) : null;
+        _logger.LogInformation(
+            "AI sub-agent follow-up raised conv={ConversationId} request={RequestId} tool={Tool} previewChars={PreviewChars}",
+            conversationId, request.Id, call.ToolName, preview?.Length ?? 0);
         return
         [
             new AiChatTextDelta(text),

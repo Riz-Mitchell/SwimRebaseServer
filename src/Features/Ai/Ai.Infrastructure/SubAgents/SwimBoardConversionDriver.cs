@@ -174,7 +174,12 @@ public sealed class SwimBoardConversionDriver(
             sessionJson = reply.Text;
             try
             {
+                var draftStartedAt = Stopwatch.GetTimestamp();
                 draft = await drafts.CreateAsync(userId, conversationId, sessionJson, cancellationToken);
+                logger.LogInformation(
+                    "AI swim board conversation {ConversationId} draft {DraftId} v{Version} stored with {Sets} sets from {Chars} chars ms={ElapsedMs}",
+                    conversationId, draft.Id, draft.Version, draft.Session.Sets.Count, sessionJson.Length,
+                    (long)Stopwatch.GetElapsedTime(draftStartedAt).TotalMilliseconds);
             }
             catch (InvalidSessionException ex)
             {
@@ -204,6 +209,7 @@ public sealed class SwimBoardConversionDriver(
         conversations.AddMessage(ConversationMessageFactory.CreateAssistantMessage(
             conversationId, sequence, sessionJson, ChatContentJson.Serialize([new TextContentBlock(sessionJson)])));
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("AI swim board conversation {ConversationId} conversion reply persisted as message {Sequence}", conversationId, sequence);
 
         outcome.TerminalToolCompleted = true;
     }
