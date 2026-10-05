@@ -32,6 +32,7 @@ public static class ServiceCollectionExtensions
 
         services.Configure<AiModelOptions>(configuration.GetSection(AiModelOptions.SectionName));
         services.Configure<ChatCompactionOptions>(configuration.GetSection(ChatCompactionOptions.SectionName));
+        services.Configure<AiTitleOptions>(configuration.GetSection(AiTitleOptions.SectionName));
 
         services.AddSingleton(_ =>
         {
@@ -64,6 +65,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConversationDriver, SwimBoardConversionDriver>();
         services.AddScoped<IAiChatClient, AnthropicChatClient>();
         services.AddScoped<IChatCompactionService, ChatCompactionService>();
+        services.AddScoped<IConversationTitler, AiConversationTitler>();
         services.AddScoped<IAiUserProvisioningService, AiUserProvisioningService>();
         services.AddScoped<ImageUploadService>();
         services.AddScoped<ConversationManagementService>();

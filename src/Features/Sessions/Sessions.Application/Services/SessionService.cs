@@ -57,7 +57,7 @@ public sealed class SessionService(
             return SessionView.Of(existing);
         }
 
-        var prepared = NodeIds.Assign(ingest.Prepare(content));
+        var prepared = NodeIds.Assign(ingest.Prepare(content)) with { Title = null };
         var now = DateTimeOffset.UtcNow;
         var session = new Session
         {
@@ -67,12 +67,15 @@ public sealed class SessionService(
             Course = course,
             Source = source,
             SourceDraftId = sourceDraftId,
-            Title = string.IsNullOrWhiteSpace(title) ? DefaultTitle(performedOn) : title.Trim(),
+            Title = string.Empty,
             TotalDistance = SessionCalculator.Total(prepared),
             ContentJson = SessionJson.Serialize(prepared),
             CreatedAt = now,
             UpdatedAt = now,
         };
+
+        // An explicit title wins, then the one the converter wrote, then one built from what was swum.
+        session.Title = SessionTitles.Clean(title) ?? SessionTitles.Clean(content.Title) ?? SessionTitles.Build(prepared, session.Unit, performedOn);
 
         sessions.Add(session, SessionFactBuilder.Build(session, prepared));
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -109,5 +112,7 @@ public sealed class SessionService(
         return found.Select(s => new SessionWithContent(s, SessionJson.Deserialize<SwimSession>(s.ContentJson))).ToList();
     }
 
-    private static string DefaultTitle(DateOnly performedOn) => $"Swim {performedOn:yyyy-MM-dd}";
+    /// <summary>The titles of the swimmer's most recent sessions, newest first and without repeats.</summary>
+    public async Task<IReadOnlyList<string>> RecentTitlesAsync(Guid userId, int count, CancellationToken cancellationToken) =>
+        (await sessions.RecentTitlesAsync(userId, Math.Clamp(count, 1, 50), cancellationToken)).Distinct().ToList();
 }

@@ -26,6 +26,7 @@ public static class InterviewPrompt
         WRITING THE SESSION
         - Only what was swum, in board order. Skipped sets are omitted; extra sets the swimmer added are included where they happened.
         - Sets for other groups/lanes are omitted. `group` = the swimmer's group name as written, or null if the board is for everyone.
+        - `title`: 2-6 words naming what makes this workout distinctive: its focus or signature set ("Fly kick ladder", "Threshold 200s", "Sprint starts and turns"). Sentence case. Never the date, the total distance, or just "swim". If the swimmer's recent titles are listed, give a clearly different one. null only when the board gives nothing to go on.
         - kind=item: `reps` and `parts`. `parts` is what ONE rep is made of and always has at least one part, each with `dist` (per rep, decimals allowed for odd pool lengths like 12.5, at most 2 places) and `stroke`.
           "4x100 free" -> reps 4, one part {dist 100, stroke free}. "1 x 400 IM" -> reps 1, one part {dist 400, stroke im}. "8 x 50 kick" -> reps 8, one part {dist 50, stroke free, mode kick}.
           A rep that mixes strokes/modes/equipment/effort ("25 fly + 75 free", "50 kick + 50 swim") is several parts in order. Ladders/pyramids (100-200-300): one item per rung.

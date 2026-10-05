@@ -53,12 +53,12 @@ public class SessionServiceTests
     }
 
     [Fact]
-    public async Task A_session_without_a_title_is_named_for_the_day_it_was_swum()
+    public async Task A_session_without_a_title_is_named_from_what_was_swum()
     {
         var saved = await TestSessions.Service(new InMemorySessionRepository())
             .CreateAsync(UserId, Sample(), Day, PoolCourse.Scy, "  ", SessionSource.Logged, null, CancellationToken.None);
 
-        Assert.Equal("Swim 2026-09-21", saved.Title);
+        Assert.Equal("Lane 2 - Freestyle and kick - 1,700 yd", saved.Title);
     }
 
     [Fact]
@@ -231,5 +231,47 @@ public class SessionServiceTests
         var listed = await TestSessions.Service(repository).ListWithContentAsync(Guid.NewGuid(), null, null, 15, 0, CancellationToken.None);
 
         Assert.Empty(listed);
+    }
+
+    [Fact]
+    public async Task An_explicit_title_wins_then_the_converters_then_one_built_from_the_session()
+    {
+        var titled = Sample() with { Title = "Fly kick ladder" };
+        var service = TestSessions.Service(new InMemorySessionRepository());
+
+        var explicitTitle = await service.CreateAsync(UserId, titled, Day, PoolCourse.Scy, "Tuesday squad", SessionSource.Ai, null, CancellationToken.None);
+        var converters = await service.CreateAsync(UserId, titled, Day, PoolCourse.Scy, null, SessionSource.Ai, null, CancellationToken.None);
+        var built = await service.CreateAsync(UserId, Sample(), Day, PoolCourse.Scy, null, SessionSource.Ai, null, CancellationToken.None);
+
+        Assert.Equal("Tuesday squad", explicitTitle.Title);
+        Assert.Equal("Fly kick ladder", converters.Title);
+        Assert.Equal("Lane 2 - Freestyle and kick - 1,700 yd", built.Title);
+    }
+
+    [Fact]
+    public async Task The_title_lives_in_its_column_and_not_in_the_stored_tree_and_is_clamped()
+    {
+        var repository = new InMemorySessionRepository();
+        var service = TestSessions.Service(repository);
+
+        await service.CreateAsync(UserId, Sample() with { Title = new string('x', 300) }, Day, PoolCourse.Scy, null, SessionSource.Ai, null, CancellationToken.None);
+
+        var stored = Assert.Single(repository.Sessions);
+        Assert.Equal(SessionTitles.MaxLength, stored.Title.Length);
+        Assert.Null(SessionJson.Deserialize<SwimSession>(stored.ContentJson).Title);
+    }
+
+    [Fact]
+    public async Task Recent_titles_are_newest_first_without_repeats_and_only_the_swimmers_own()
+    {
+        var service = TestSessions.Service(new InMemorySessionRepository());
+        foreach (var (title, day) in new[] { ("Sprint starts", 1), ("Threshold 200s", 2), ("Sprint starts", 3) })
+        {
+            await service.CreateAsync(UserId, Sample(), new DateOnly(2026, 9, day), PoolCourse.Scy, title, SessionSource.Ai, null, CancellationToken.None);
+        }
+
+        await service.CreateAsync(Guid.NewGuid(), Sample(), Day, PoolCourse.Scy, "Someone else's", SessionSource.Ai, null, CancellationToken.None);
+
+        Assert.Equal(["Sprint starts", "Threshold 200s"], await service.RecentTitlesAsync(UserId, 10, CancellationToken.None));
     }
 }

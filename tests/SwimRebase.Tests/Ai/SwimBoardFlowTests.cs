@@ -49,12 +49,13 @@ public class SwimBoardFlowTests
             Client = new ScriptedChatClient(script);
             var unitOfWork = new NoOpUnitOfWork();
             var draftService = new SessionDraftService(Drafts, TestSessions.Ingest(), unitOfWork);
+            var sessionService = TestSessions.Service(Sessions);
 
             Registry = new AiToolRegistry(
             [
                 new AskUserQuestionTool(), new ReadSwimBoardTool(), new EditDraftTool(draftService),
                 new AskSwimQuestionsTool(),
-                new SaveSessionTool(new SessionPromotionService(draftService, TestSessions.Service(Sessions)), draftService),
+                new SaveSessionTool(new SessionPromotionService(draftService, sessionService), draftService),
             ]);
 
             var agent = new SwimBoardInterviewAgent(draftService, ToolExecutions);
@@ -68,7 +69,7 @@ public class SwimBoardFlowTests
                 Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry,
                 new NoOpCompaction(), executor, closer, profiles, interactions, Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatTurnLoop>.Instance);
             var driver = new SwimBoardConversionDriver(
-                Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry, draftService,
+                Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry, draftService, sessionService,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<SwimBoardConversionDriver>.Instance);
             var followUp = new SubAgentFollowUp(ToolExecutions, Conversations, Registry, [agent], unitOfWork);
             Runner = new ConversationRunner(loop, Resolver, followUp, Conversations, [driver]);
@@ -497,5 +498,83 @@ public class SwimBoardFlowTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             save.ExecuteAsync(new ToolExecutionContext(UserId, h.Chat.Id, "toolu_x"), input, CancellationToken.None));
         Assert.Empty(h.Sessions.Sessions);
+    }
+
+    private static readonly string TitledSession = DraftTests.ModelSession.Replace("{\"group\":\"Lane 2\",", "{\"group\":\"Lane 2\",\"title\":\"Fly kick ladder\",");
+
+    [Fact]
+    public async Task The_conversion_is_asked_for_a_title_and_the_schema_has_a_place_for_it()
+    {
+        Assert.Contains("\"title\"", ConversionSchemas.Session);
+        Assert.Contains("`title`", InterviewPrompt.Conversion);
+        Assert.Contains("Never the date", InterviewPrompt.Conversion);
+
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(TitledSession));
+        await h.RunAsync(h.Chat.Id);
+        await h.AnswerAsync(FullAnswers);
+
+        Assert.Equal("Fly kick ladder", Assert.IsType<SwimSession>(SessionJson.Deserialize<SwimSession>(Assert.Single(h.Drafts.Drafts).ContentJson)).Title);
+    }
+
+    [Fact]
+    public async Task The_save_card_carries_the_drafts_title_and_saving_uses_it()
+    {
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(TitledSession), ScriptedReply.Say("Saved."));
+        await h.RunAsync(h.Chat.Id);
+        var finish = await h.AnswerAsync(FullAnswers);
+
+        var card = Assert.Single(finish.OfType<AiChatPermissionRequired>());
+        Assert.Contains("\"title\":\"Fly kick ladder\"", card.InputJson);
+
+        await h.ResolveSaveAsync(approve: true);
+
+        var session = Assert.Single(h.Sessions.Sessions);
+        Assert.Equal("Fly kick ladder", session.Title);
+        Assert.Null(SessionJson.Deserialize<SwimSession>(session.ContentJson).Title);
+    }
+
+    [Fact]
+    public async Task A_board_the_model_gave_no_title_for_is_named_from_what_was_swum()
+    {
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(DraftTests.ModelSession), ScriptedReply.Say("Saved."));
+        await h.RunAsync(h.Chat.Id);
+        var finish = await h.AnswerAsync(FullAnswers);
+
+        Assert.Contains("\"title\":null", Assert.Single(finish.OfType<AiChatPermissionRequired>()).InputJson);
+
+        await h.ResolveSaveAsync(approve: true);
+
+        Assert.Equal("Lane 2 - Freestyle and kick - 1,700 yd", Assert.Single(h.Sessions.Sessions).Title);
+    }
+
+    [Fact]
+    public async Task The_conversion_is_shown_the_swimmers_recent_titles_so_it_can_choose_a_different_one()
+    {
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(TitledSession));
+        var now = DateTimeOffset.UtcNow;
+        h.Sessions.Add(new Session { Id = Guid.NewGuid(), OwnerId = UserId, Title = "Sprint starts", PerformedOn = new DateOnly(2026, 9, 14), CreatedAt = now }, []);
+        h.Sessions.Add(new Session { Id = Guid.NewGuid(), OwnerId = UserId, Title = "Threshold 200s", PerformedOn = new DateOnly(2026, 9, 18), CreatedAt = now }, []);
+        h.Sessions.Add(new Session { Id = Guid.NewGuid(), OwnerId = Guid.NewGuid(), Title = "Someone else's", PerformedOn = new DateOnly(2026, 9, 19), CreatedAt = now }, []);
+
+        await h.RunAsync(h.Chat.Id);
+        await h.AnswerAsync(FullAnswers);
+
+        var conversion = h.Client.Requests[2];
+        var text = string.Join('\n', conversion.Messages.SelectMany(m => m.Content).OfType<TextContentBlock>().Select(t => t.Text));
+        Assert.Contains("recent session titles", text);
+        Assert.Contains("\"Threshold 200s\"; \"Sprint starts\"", text);
+        Assert.DoesNotContain("Someone else's", text);
+        Assert.DoesNotContain("recent session titles", conversion.SystemPrompt);
+    }
+
+    [Fact]
+    public async Task A_first_conversion_with_no_saved_sessions_mentions_no_titles()
+    {
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire), ScriptedReply.Say(TitledSession));
+        await h.RunAsync(h.Chat.Id);
+        await h.AnswerAsync(FullAnswers);
+
+        var text = string.Join('\n', h.Client.Requests[2].Messages.SelectMany(m => m.Content).OfType<TextContentBlock>().Select(t => t.Text));
+        Assert.DoesNotContain("recent session titles", text);
     }
 }

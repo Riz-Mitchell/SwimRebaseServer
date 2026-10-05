@@ -32,6 +32,16 @@ public sealed class SessionRepository(SessionsDbContext db) : ISessionRepository
             .Take(limit)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<string>> RecentTitlesAsync(Guid userId, int take, CancellationToken cancellationToken) =>
+        await db.Sessions
+            .AsNoTracking()
+            .Where(s => s.OwnerId == userId)
+            .OrderByDescending(s => s.PerformedOn)
+            .ThenByDescending(s => s.CreatedAt)
+            .Take(take)
+            .Select(s => s.Title)
+            .ToListAsync(cancellationToken);
+
     public async Task ReplaceFactsAsync(Guid sessionId, IEnumerable<SessionFact> facts, CancellationToken cancellationToken)
     {
         // Tracked delete + insert, so both go out in the same SaveChanges (one transaction) as the session change.

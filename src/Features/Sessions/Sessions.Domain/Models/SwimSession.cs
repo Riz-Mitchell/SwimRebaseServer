@@ -30,6 +30,12 @@ public sealed record SwimSession
     /// <summary>The group/lane the swimmer answered as; null when the board is for everyone.</summary>
     public string? Group { get; init; }
 
+    /// <summary>
+    /// A short name for the workout, written by the converter. It rides along in a draft until the session is saved; a saved session keeps
+    /// its title in <see cref="Session.Title"/> and stores this as null.
+    /// </summary>
+    public string? Title { get; init; }
+
     public List<SessionNode> Sets { get; init; } = [];
 }
 
