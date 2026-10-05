@@ -54,6 +54,7 @@ public static class MetricsCalculator
         (q.From is null || f.PerformedOn >= q.From)
         && (q.To is null || f.PerformedOn <= q.To)
         && (q.Strokes is not { Count: > 0 } || q.Strokes.Contains(f.Stroke))
+        && (q.SessionId is null || f.SessionId == q.SessionId)
         && (q.Modes is not { Count: > 0 } || q.Modes.Contains(f.Mode))
         && (q.MinPercent is null || f.Intensity >= q.MinPercent)
         && (q.MaxPercent is null || f.Intensity <= q.MaxPercent);

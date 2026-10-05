@@ -78,11 +78,12 @@ public sealed class SessionsController(
     }
 
     /// <summary>
-    /// Filter, group and measure what was swum, e.g. <c>?strokes=fly&amp;groupBy=month</c> or <c>?minPercent=80&amp;groupBy=week</c>.
+    /// Filter, group and measure what was swum, e.g. <c>?strokes=fly&amp;groupBy=month</c> or <c>?sessionId=...&amp;groupBy=stroke</c> for one session or <c>?minPercent=80&amp;groupBy=week</c>.
     /// <c>scale</c> picks how <c>groupBy=intensity</c> is bucketed; <c>minIntensity</c>/<c>maxIntensity</c> are the earlier 1-10 bounds.
     /// </summary>
     [HttpGet("metrics")]
     public async Task<IActionResult> GetMetrics(
+        [FromQuery] Guid? sessionId,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         [FromQuery] Stroke[]? strokes,
@@ -101,7 +102,7 @@ public sealed class SessionsController(
             var query = new MetricsQuery(
                 from, to, strokes, modes,
                 EffortScale.MinPercent(minPercent, minIntensity), EffortScale.MaxPercent(maxPercent, maxIntensity),
-                groupBy ?? [], measure, scale);
+                groupBy ?? [], measure, scale, SessionId: sessionId);
             return Ok(await metrics.QueryAsync(currentUser.UserId, query, cancellationToken));
         }
         catch (InvalidMetricsQueryException ex)

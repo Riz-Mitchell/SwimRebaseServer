@@ -31,7 +31,8 @@ public sealed record MetricsQuery(
     IReadOnlyList<MetricDimension> GroupBy,
     MetricMeasure Measure,
     string? ScaleId = null,
-    EffortScale? Scale = null)
+    EffortScale? Scale = null,
+    Guid? SessionId = null)
 {
     public const int MaxDimensions = 2;
 
