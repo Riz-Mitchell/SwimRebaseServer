@@ -172,6 +172,9 @@ public sealed class FocusService(
     public Task<IReadOnlyList<Focus>> GetActiveAsync(Guid userId, CancellationToken cancellationToken) =>
         focuses.GetActiveAsync(userId, cancellationToken);
 
+    public Task<Focus?> GetAsync(Guid userId, Guid focusId, CancellationToken cancellationToken) =>
+        focuses.FindAsync(userId, focusId, cancellationToken);
+
     /// <summary>Closes the priority gap an active focus leaves behind by shifting everything above it down by one.</summary>
     private Task CloseActivePriorityGapAsync(Guid userId, int priority, CancellationToken cancellationToken) =>
         focuses.ShiftPrioritiesAsync(userId, priority + 1, null, -1, cancellationToken);

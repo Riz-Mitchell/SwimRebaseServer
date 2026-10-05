@@ -252,7 +252,7 @@ The two message-sending endpoints and the tool-resolve/answer endpoints all stre
 | `text_delta` | `text` | A chunk of the assistant's reply text |
 | `turn_started` | `conversationId` | A new model call just started — show a "thinking" indicator until text or a tool event arrives |
 | `tool_started` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect` | A tool is about to run (auto-executed read tool, or a freshly-approved gated one) — `displayName` is the UI-friendly label, e.g. "Checking your timetable"; `effect` is `Neutral`/`Creative`/`Destructive` |
-| `tool_completed` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect`, `success`, `affectedCount` | The tool finished — `affectedCount` is tool-defined (e.g. sessions fetched, rows created/deleted) |
+| `tool_completed` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect`, `success`, `affectedCount`, `resources` | The tool finished — `affectedCount` is tool-defined (e.g. sessions fetched, rows created/deleted). `resources` (nullable) lists what it created, changed or removed — see [Tool resources](#tool-resources) |
 | `permission_required` | `conversationId`, `toolExecutionRequestId`, `toolName`, `displayName`, `effect`, `inputJson`, `preview` | The AI wants to run a gated tool — needs a `resolve` call. `preview` (nullable) is a readable rendering of what approving would do, e.g. the drafted session for `save_session` |
 | `permission_resolved` | `conversationId`, `toolExecutionRequestId`, `approved` | Confirms a resolve was recorded (sibling gated calls from the same turn still pending) |
 | `question_asked` | `conversationId`, `toolExecutionRequestId`, `question`, `options` | The AI is asking a clarifying question — needs an `answer` call. `options` are advisory quick-reply suggestions only; always also offer free-text entry |
@@ -265,6 +265,22 @@ The two message-sending endpoints and the tool-resolve/answer endpoints all stre
 
 Consume with `curl -N` (disables buffering) or an `EventSource`/SSE client.
 
+### Tool resources
+
+`resources` on `tool_completed` (and on each tool-message entry in message history, next to `resultJson`) tells the client what a tool touched, so chat can render a tappable card and link to it without parsing the tool's own output. It is `null` when the tool touched nothing the user can open (reads, failed or declined calls).
+
+```json
+"resources": [ { "kind": "session", "id": "guid", "action": "created", "label": "Tuesday sprint set" } ]
+```
+
+| `kind` | `id` is | Open with |
+|---|---|---|
+| `session` | session id | `GET /api/sessions/{id}` |
+| `focus` | focus id | `GET /api/focuses/{id}` |
+| `timetable_slot` | slot id (stable across versions) | `GET /api/timetable` and find the entry whose `slotId` matches |
+
+`action` is `created`, `updated` or `deleted`. A `deleted` resource no longer exists, so render it as a non-tappable card. `label` is a short title for the card (absent for `deleted`).
+
 ---
 
 ## Focuses — `/api/focuses`
@@ -273,6 +289,13 @@ Consume with `curl -N` (disables buffering) or an `EventSource`/SSE client.
 List the current user's active focuses.
 
 **Response:** array of `FocusResponse` (see shape below).
+
+---
+
+### `GET /api/focuses/{focusId}`
+One of the current user's focuses, of any status. `404` if it doesn't exist or isn't theirs.
+
+**Response:** `FocusResponse`.
 
 ---
 

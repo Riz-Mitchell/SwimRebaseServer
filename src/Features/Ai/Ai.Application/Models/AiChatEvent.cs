@@ -31,8 +31,10 @@ public sealed record AiChatTurnStarted(Guid ConversationId) : AiChatEvent;
 /// <summary>A tool is about to run. Fired for both auto-executed read tools and freshly-approved gated ones.</summary>
 public sealed record AiChatToolStarted(Guid ConversationId, string ToolUseId, string ToolName, string DisplayName, ToolEffect Effect) : AiChatEvent;
 
+/// <param name="Resources">What the tool created, changed or removed, for tappable cards; empty when it touched nothing the user can open.</param>
 public sealed record AiChatToolCompleted(
-    Guid ConversationId, string ToolUseId, string ToolName, string DisplayName, ToolEffect Effect, bool Success, int AffectedCount) : AiChatEvent;
+    Guid ConversationId, string ToolUseId, string ToolName, string DisplayName, ToolEffect Effect, bool Success, int AffectedCount,
+    IReadOnlyList<ToolResource>? Resources = null) : AiChatEvent;
 
 /// <param name="Preview">A readable rendering of what approving would do (a drafted session's outline, say) for tools that can offer one; null otherwise.</param>
 public sealed record AiChatPermissionRequired(

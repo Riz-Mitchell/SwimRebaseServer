@@ -87,7 +87,11 @@ public sealed class UpsertTimetableSlotTool(TimetableService timetable) : IAiToo
             },
             ToolJsonOptions.Web);
 
-        return new ToolExecutionResult(resultJson, AffectedCount: 1);
+        var action = input.SlotId is null ? ToolResourceActions.Created : ToolResourceActions.Updated;
+        return new ToolExecutionResult(
+            resultJson,
+            AffectedCount: 1,
+            [new ToolResource(ToolResourceKinds.TimetableSlot, version.SlotId, action, version.Label)]);
     }
 
     private static TimeOnly ParseTime(string value) =>

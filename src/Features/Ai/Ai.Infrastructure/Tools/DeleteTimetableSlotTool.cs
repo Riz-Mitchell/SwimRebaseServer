@@ -41,7 +41,10 @@ public sealed class DeleteTimetableSlotTool(TimetableService timetable) : IAiToo
             ?? throw new InvalidOperationException("Missing tool input.");
 
         var deleted = await timetable.DeleteSlotAsync(context.UserId, input.SlotId, input.EffectiveTo, cancellationToken);
-        return new ToolExecutionResult(JsonSerializer.Serialize(new { deleted }, ToolJsonOptions.Web), AffectedCount: deleted ? 1 : 0);
+        return new ToolExecutionResult(
+            JsonSerializer.Serialize(new { deleted }, ToolJsonOptions.Web),
+            AffectedCount: deleted ? 1 : 0,
+            deleted ? [new ToolResource(ToolResourceKinds.TimetableSlot, input.SlotId, ToolResourceActions.Deleted)] : null);
     }
 
     private sealed record Input(Guid SlotId, DateOnly EffectiveTo);

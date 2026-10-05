@@ -87,7 +87,10 @@ public sealed class EditFocusTool(FocusService focuses) : IAiTool
             },
             ToolJsonOptions.Web);
 
-        return new ToolExecutionResult(resultJson, AffectedCount: 1);
+        return new ToolExecutionResult(
+            resultJson,
+            AffectedCount: 1,
+            [new ToolResource(ToolResourceKinds.Focus, focus.Id, ToolResourceActions.Updated, focus.TagLine)]);
     }
 
     private static IReadOnlyList<ComparisonPointInput> ToPoints(IReadOnlyList<PointPayload>? points) =>

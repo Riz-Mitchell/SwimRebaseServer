@@ -37,6 +37,8 @@ public class MixedToolTurnTests
 
     private sealed class WriteTool : IAiTool
     {
+        public static readonly Guid ThingId = Guid.NewGuid();
+
         public string Name => "write_thing";
 
         public string DisplayName => "Writing something";
@@ -50,7 +52,8 @@ public class MixedToolTurnTests
         public bool RequiresApproval => true;
 
         public Task<ToolExecutionResult> ExecuteAsync(ToolExecutionContext context, string inputJson, CancellationToken cancellationToken) =>
-            Task.FromResult(new ToolExecutionResult("""{"written":1}""", AffectedCount: 1));
+            Task.FromResult(new ToolExecutionResult(
+                """{"written":1}""", AffectedCount: 1, [new ToolResource(ToolResourceKinds.Session, ThingId, ToolResourceActions.Created, "A thing")]));
     }
 
     private sealed class Rig
@@ -154,6 +157,42 @@ public class MixedToolTurnTests
         Assert.Equal(2, results.Count);
         Assert.Contains(results, r => r.IsError && r.ResultJson.Contains("missing_tool"));
         Assert.Contains(results, r => !r.IsError && r.ResultJson.Contains("Mon"));
+    }
+
+    [Fact]
+    public async Task An_approved_call_streams_and_stores_the_resources_it_declared()
+    {
+        var rig = new Rig(new ScriptedReply(string.Empty, ("write_thing", "{}")), ScriptedReply.Say("ok"));
+
+        await rig.RunAsync();
+        var request = rig.ToolExecutions.Requests.Single(r => r.ToolName == "write_thing");
+        var events = new List<AiChatEvent>();
+        await foreach (var e in rig.Resolver.ResolveAsync(UserId, request, true, null, new ToolApprovalResolution(), CancellationToken.None))
+        {
+            events.Add(e);
+        }
+
+        var expected = new ToolResource(ToolResourceKinds.Session, WriteTool.ThingId, ToolResourceActions.Created, "A thing");
+        var completed = Assert.Single(events.OfType<AiChatToolCompleted>());
+        Assert.Equal(expected, Assert.Single(completed.Resources!));
+
+        var stored = Assert.Single(rig.Conversations.Messages, m => m.Role == MessageRole.Tool);
+        Assert.Contains($"\"kind\":\"session\",\"id\":\"{WriteTool.ThingId}\",\"action\":\"created\"", stored.Content);
+    }
+
+    [Fact]
+    public async Task A_declined_call_reports_no_resources()
+    {
+        var rig = new Rig(new ScriptedReply(string.Empty, ("write_thing", "{}")), ScriptedReply.Say("ok"));
+
+        await rig.RunAsync();
+        var request = rig.ToolExecutions.Requests.Single(r => r.ToolName == "write_thing");
+        await foreach (var _ in rig.Resolver.ResolveAsync(UserId, request, false, "no thanks", new ToolApprovalResolution(), CancellationToken.None))
+        {
+        }
+
+        var stored = Assert.Single(rig.Conversations.Messages, m => m.Role == MessageRole.Tool);
+        Assert.DoesNotContain(WriteTool.ThingId.ToString(), stored.Content);
     }
 
     [Theory]

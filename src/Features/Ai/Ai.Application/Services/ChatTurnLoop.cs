@@ -161,7 +161,7 @@ public sealed class ChatTurnLoop(
                     toolExecutions.Add(settledRequest);
 
                     yield return new AiChatToolCompleted(
-                        conversationId, call.ToolUseId, call.ToolName, plainName, plainEffect, plainSummary.Success, plainSummary.AffectedCount);
+                        conversationId, call.ToolUseId, call.ToolName, plainName, plainEffect, plainSummary.Success, plainSummary.AffectedCount, plainSummary.Resources);
                 }
 
                 var raised = new List<ToolExecutionRequest>();
@@ -216,7 +216,7 @@ public sealed class ChatTurnLoop(
                 summaries.Add(toolSummary);
 
                 yield return new AiChatToolCompleted(
-                    conversationId, call.ToolUseId, call.ToolName, callDisplayName, callEffect, toolSummary.Success, toolSummary.AffectedCount);
+                    conversationId, call.ToolUseId, call.ToolName, callDisplayName, callEffect, toolSummary.Success, toolSummary.AffectedCount, toolSummary.Resources);
             }
 
             var toolResultSequence = await conversations.GetNextSequenceNumberAsync(conversationId, cancellationToken);

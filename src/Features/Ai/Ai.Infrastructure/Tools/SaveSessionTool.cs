@@ -59,7 +59,10 @@ public sealed class SaveSessionTool(SessionPromotionService promotion, SessionDr
             },
             ToolJsonOptions.Web);
 
-        return new ToolExecutionResult(resultJson, AffectedCount: 1);
+        return new ToolExecutionResult(
+            resultJson,
+            AffectedCount: 1,
+            [new ToolResource(ToolResourceKinds.Session, session.Id, ToolResourceActions.Created, session.Title)]);
     }
 
     public async Task<string?> PreviewAsync(Guid userId, string inputJson, CancellationToken cancellationToken)

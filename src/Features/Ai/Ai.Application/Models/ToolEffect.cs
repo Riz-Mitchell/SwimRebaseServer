@@ -18,4 +18,21 @@ public enum ToolEffect
 /// is tool-defined - "6" for six timetable entries fetched, "1" for one focus created, "0" for a
 /// delete/edit that found nothing to act on.
 /// </summary>
-public sealed record ToolExecutionResult(string ResultJson, int AffectedCount);
+public sealed record ToolExecutionResult(string ResultJson, int AffectedCount, IReadOnlyList<ToolResource>? Resources = null);
+
+/// <summary>A user-facing thing a tool created, changed or removed, so the client can render a card and link to it without parsing the tool's own result JSON.</summary>
+public sealed record ToolResource(string Kind, Guid Id, string Action, string? Label = null);
+
+public static class ToolResourceKinds
+{
+    public const string Session = "session";
+    public const string Focus = "focus";
+    public const string TimetableSlot = "timetable_slot";
+}
+
+public static class ToolResourceActions
+{
+    public const string Created = "created";
+    public const string Updated = "updated";
+    public const string Deleted = "deleted";
+}
