@@ -75,3 +75,8 @@ Intensity is now a percent of maximum effort (1-100) instead of a 1-10 level. Fu
 - Metrics: `groupBy=intensity` buckets by an effort scale. Pass `scale=tens|zones|custom`, or omit it to use the swimmer's saved scale. Row `keys` are band keys of that scale (`"8"`, `"TH"`), in band order. `GET /api/sessions/effort-scales` lists the choices and `PUT /api/sessions/preferences` saves one, including a custom scale.
 - `avgIntensity` is now an average percent. Filter with `minPercent`/`maxPercent`; `minIntensity`/`maxIntensity` still work as 1-10 bounds.
 - `PUT /api/sessions/preferences`: `defaultEffort` is now a percent (1-100; default 50).
+
+## Titles (changed)
+
+- **Chat titles:** a new chat is first listed with the start of its first message, then gets a generated 2-6 word title. Handle the new SSE event `{ "type": "title_updated", "conversationId": "...", "title": "..." }`: replace that conversation's title in the sidebar/list. It arrives once, just before `completed`, only for the first message of a new chat, and only if a title was generated. Renaming still works, and a rename is never overwritten. If your client never sees the event (older client, dropped stream), the next `GET /api/ai/conversations` returns the new title.
+- **Session titles:** the `save_session` card's `inputJson` now includes `title` (the name the converter gave the workout, or `null`). Show it on the card, e.g. as the heading. If the user wants a different name they decline and say so; the assistant saves again with a new title. Saved sessions are no longer all named `Swim yyyy-MM-dd`: they get a short descriptive title, or one built from the strokes and distance as a fallback. Existing sessions keep their old titles.

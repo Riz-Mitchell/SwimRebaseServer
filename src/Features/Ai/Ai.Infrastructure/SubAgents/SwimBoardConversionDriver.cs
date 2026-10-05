@@ -29,10 +29,12 @@ public sealed class SwimBoardConversionDriver(
     IAiChatClient chatClient,
     IAiToolRegistry toolRegistry,
     SessionDraftService drafts,
+    SessionService sessions,
     ILogger<SwimBoardConversionDriver> logger) : IConversationDriver
 {
     private const int QuestionnaireMaxTokens = 4000;
     private const int LoggedTextLength = 1500;
+    private const int RecentTitleCount = 10;
 
     public string Kind => InterviewTools.AgentKind;
 
@@ -143,11 +145,18 @@ public sealed class SwimBoardConversionDriver(
         yield return new AiChatTurnStarted(conversationId);
 
         var transcript = InterviewTranscript.Build([(answered.InputJson, answered.ResultJson)]);
+
+        // In the user message rather than the system prompt, so the cached prompt is the same for everyone.
+        var recentTitles = await sessions.RecentTitlesAsync(userId, RecentTitleCount, cancellationToken);
+        var avoid = recentTitles.Count == 0
+            ? string.Empty
+            : $"\n\nTheir recent session titles (give this one a clearly different title): {string.Join("; ", recentTitles.Select(t => $"\"{t}\""))}.";
+
         var messages = new List<ChatMessage>
         {
             opening with
             {
-                Content = [.. opening.Content, new TextContentBlock($"What the swimmer told you about their path:\n{transcript}\n\nWrite the JSON now.")],
+                Content = [.. opening.Content, new TextContentBlock($"What the swimmer told you about their path:\n{transcript}{avoid}\n\nWrite the JSON now.")],
             },
         };
 

@@ -36,6 +36,11 @@ internal sealed class InMemorySessionRepository : ISessionRepository
             .Where(s => s.OwnerId == userId && (from is null || s.PerformedOn >= from) && (to is null || s.PerformedOn <= to))
             .OrderByDescending(s => s.PerformedOn).ThenByDescending(s => s.CreatedAt).Skip(offset).Take(limit).ToList());
 
+    public Task<IReadOnlyList<string>> RecentTitlesAsync(Guid userId, int take, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<string>>(Sessions
+            .Where(s => s.OwnerId == userId)
+            .OrderByDescending(s => s.PerformedOn).ThenByDescending(s => s.CreatedAt).Take(take).Select(s => s.Title).ToList());
+
     public Task ReplaceFactsAsync(Guid sessionId, IEnumerable<SessionFact> facts, CancellationToken cancellationToken)
     {
         Facts.RemoveAll(f => f.SessionId == sessionId);

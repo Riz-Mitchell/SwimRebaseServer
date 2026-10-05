@@ -194,7 +194,7 @@ public class ConversationArchivingTests
         var runner = new ConversationRunner(loop, resolver, new SubAgentFollowUp(toolExecutions, conversations, registry, [], unitOfWork), conversations, []);
         var orchestrator = new ChatOrchestrator(
             conversations, toolExecutions, uploadedImages, unitOfWork, new NoOpCompaction(), new NoOpAiUserProvisioningService(),
-            resolver, runner, registry, new NoOpEventTracker());
+            resolver, runner, registry, new NoOpEventTracker(), new FakeTitler(TitleResult.None), new InMemoryTokenUsageRepository());
 
         var chatId = Guid.NewGuid();
         conversations.Add(new Conversation

@@ -99,11 +99,11 @@ public class ConversionSchemasTests
     }
 
     [Fact]
-    public void The_ledger_is_written_before_the_session()
+    public void The_ledger_is_written_before_the_session_and_the_title_after_it()
     {
         using var document = JsonDocument.Parse(ConversionSchemas.Session);
 
-        Assert.Equal(["ledger", "group", "sets"], document.RootElement.GetProperty("properties").EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["ledger", "group", "sets", "title"], document.RootElement.GetProperty("properties").EnumerateObject().Select(p => p.Name));
     }
 
     [Fact]

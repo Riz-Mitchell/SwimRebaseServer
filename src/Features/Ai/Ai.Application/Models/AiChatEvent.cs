@@ -18,6 +18,7 @@ namespace Ai.Application.Models;
 [JsonDerivedType(typeof(AiChatQuestionsAsked), "questions_asked")]
 [JsonDerivedType(typeof(AiChatSubAgentStarted), "sub_agent_started")]
 [JsonDerivedType(typeof(AiChatSubAgentCompleted), "sub_agent_completed")]
+[JsonDerivedType(typeof(AiChatTitleUpdated), "title_updated")]
 [JsonDerivedType(typeof(AiChatUsage), "usage")]
 [JsonDerivedType(typeof(AiChatCompleted), "completed")]
 [JsonDerivedType(typeof(AiChatError), "error")]
@@ -50,6 +51,9 @@ public sealed record AiChatQuestionAsked(
 /// <summary>Token usage for the turn that just completed, so the client can show live usage without a separate poll.</summary>
 public sealed record AiChatUsage(
     Guid ConversationId, string Model, long InputTokens, long OutputTokens, long CacheCreationInputTokens, long CacheReadInputTokens) : AiChatEvent;
+
+/// <summary>A new chat has been given a generated title. Replace the one the list showed (the start of the first message); sent once, before the turn ends.</summary>
+public sealed record AiChatTitleUpdated(Guid ConversationId, string Title) : AiChatEvent;
 
 public sealed record AiChatCompleted(Guid ConversationId, Guid AssistantMessageId) : AiChatEvent;
 

@@ -71,7 +71,8 @@ public static class ConversionSchemas
         var root = Closed(
             ("ledger", ArrayOf(ledgerEntry)),
             ("group", OrNull(Text())),
-            ("sets", ArrayOf(new JsonObject { ["anyOf"] = new JsonArray { Ref("item"), Ref("group1") } })));
+            ("sets", ArrayOf(new JsonObject { ["anyOf"] = new JsonArray { Ref("item"), Ref("group1") } })),
+            ("title", OrNull(Text())));
         root["$defs"] = defs;
 
         return Serialize(root);

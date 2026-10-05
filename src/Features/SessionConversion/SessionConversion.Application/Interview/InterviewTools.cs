@@ -55,10 +55,11 @@ public static class InterviewTools
 
     public const string SaveSessionDescription =
         "Saves a draft made by read_swim_board as the user's session, once they are happy with it. Needs the date they swam and the pool course; " +
-        "ask if they have not said. Saving the same draft twice is safe. The user is asked to confirm before it is saved.";
+        "ask if they have not said. The title is optional: leave it out to use the draft's own, or give a short one if the user asks for a different name. " +
+        "Saving the same draft twice is safe. The user is asked to confirm before it is saved.";
 
     public const string SaveSessionSchema = """
-        {"type":"object","properties":{"draftId":{"type":"string"},"performedOn":{"type":"string","description":"date swum, yyyy-MM-dd"},"course":{"type":"string","enum":["scy","scm","lcm"]},"title":{"type":"string"}},"required":["draftId","performedOn","course"]}
+        {"type":"object","properties":{"draftId":{"type":"string"},"performedOn":{"type":"string","description":"date swum, yyyy-MM-dd"},"course":{"type":"string","enum":["scy","scm","lcm"]},"title":{"type":"string","description":"2-6 words; omit to use the draft's"}},"required":["draftId","performedOn","course"]}
         """;
 
     private const string NodeDefs = """

@@ -15,6 +15,9 @@ public interface ISessionRepository
     /// <summary>Newest first (by date swum, then by when it was saved).</summary>
     Task<IReadOnlyList<Session>> ListAsync(Guid userId, DateOnly? from, DateOnly? to, int limit, int offset, CancellationToken cancellationToken);
 
+    /// <summary>Titles only, newest first (by date swum, then by when it was saved).</summary>
+    Task<IReadOnlyList<string>> RecentTitlesAsync(Guid userId, int take, CancellationToken cancellationToken);
+
     /// <summary>Swaps a session's fact rows for <paramref name="facts"/> in the same unit of work as the session change.</summary>
     Task ReplaceFactsAsync(Guid sessionId, IEnumerable<SessionFact> facts, CancellationToken cancellationToken);
 }

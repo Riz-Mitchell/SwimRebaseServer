@@ -4,6 +4,8 @@ using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shared.Application;
 
 namespace Ai.Application.Services;
@@ -25,8 +27,13 @@ public sealed class ChatOrchestrator(
     GatedToolApprovalResolver approvalResolver,
     ConversationRunner runner,
     IAiToolRegistry toolRegistry,
-    IEventTracker eventTracker)
+    IEventTracker eventTracker,
+    IConversationTitler titler,
+    ITokenUsageRepository tokenUsage,
+    ILogger<ChatOrchestrator>? logger = null)
 {
+    private readonly ILogger<ChatOrchestrator> _logger = logger ?? NullLogger<ChatOrchestrator>.Instance;
+
     public async IAsyncEnumerable<AiChatEvent> SendUserMessageAsync(
         Guid userId,
         Guid? conversationId,
@@ -38,7 +45,8 @@ public sealed class ChatOrchestrator(
         // GetOrCreateConversationAsync (or anything downstream) can insert a row that references it.
         await aiUserProvisioning.EnsureExistsAsync(userId, cancellationToken);
 
-        var conversation = await GetOrCreateConversationAsync(userId, conversationId, userMessage, cancellationToken);
+        var (conversation, created) = await GetOrCreateConversationAsync(userId, conversationId, userMessage, cancellationToken);
+        var firstTitle = conversation.Title;
         if (conversation.IsArchived)
         {
             yield return new AiChatError("This conversation is archived - unarchive it before sending new messages.");
@@ -89,9 +97,75 @@ public sealed class ChatOrchestrator(
 
         await compaction.CompactIfNeededAsync(conversation.Id, userId, cancellationToken);
 
+        // A new chat is named by a cheap model while the first reply streams; the title cut from the message stays until then. The call
+        // does no database work, so it is safe beside the turn, and the result is saved here, between events, on this one flow.
+        var titleTask = created ? StartTitle(userMessage, imageBlocks is { Count: > 0 }, cancellationToken) : null;
+
         await foreach (var chatEvent in runner.RunAsync(userId, conversation.Id, cancellationToken))
         {
+            if (titleTask is not null && chatEvent is AiChatCompleted or AiChatError)
+            {
+                var titled = await ApplyTitleAsync(userId, conversation, firstTitle, titleTask, cancellationToken);
+                titleTask = null;
+                if (titled is not null)
+                {
+                    yield return titled;
+                }
+            }
+
             yield return chatEvent;
+        }
+
+        // The stream ended some other way (a turn that stopped for a question or an approval): the title still goes out, as the last event.
+        if (titleTask is not null && await ApplyTitleAsync(userId, conversation, firstTitle, titleTask, cancellationToken) is { } late)
+        {
+            yield return late;
+        }
+    }
+
+    private Task<TitleResult> StartTitle(string userMessage, bool hasImages, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return titler.GenerateAsync(userMessage, hasImages, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AI chat title could not be started");
+            return Task.FromResult(TitleResult.None);
+        }
+    }
+
+    /// <summary>Saves the generated title unless the chat has been renamed meanwhile; null when there is nothing to announce.</summary>
+    private async Task<AiChatTitleUpdated?> ApplyTitleAsync(
+        Guid userId, Conversation conversation, string? firstTitle, Task<TitleResult> titleTask, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await titleTask;
+            if (result.Usage is { } usage)
+            {
+                tokenUsage.Add(ConversationMessageFactory.CreateUsageRecord(userId, conversation.Id, usage));
+            }
+
+            var announce = result.Title is { } title && conversation.Title == firstTitle && title != firstTitle;
+            if (announce)
+            {
+                conversation.Title = result.Title;
+            }
+
+            if (announce || result.Usage is not null)
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            return announce ? new AiChatTitleUpdated(conversation.Id, result.Title!) : null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Never let naming a chat break the chat.
+            _logger.LogWarning(ex, "AI chat {ConversationId} could not be given a generated title", conversation.Id);
+            return null;
         }
     }
 
@@ -209,13 +283,13 @@ public sealed class ChatOrchestrator(
         }
     }
 
-    private async Task<Conversation> GetOrCreateConversationAsync(
+    private async Task<(Conversation Conversation, bool Created)> GetOrCreateConversationAsync(
         Guid userId, Guid? conversationId, string initialMessage, CancellationToken cancellationToken)
     {
         if (conversationId is { } id)
         {
-            return await conversations.FindAsync(userId, id, cancellationToken)
-                ?? throw new ConversationAccessDeniedException(id);
+            return (await conversations.FindAsync(userId, id, cancellationToken)
+                ?? throw new ConversationAccessDeniedException(id), false);
         }
 
         var conversation = new Conversation
@@ -229,6 +303,6 @@ public sealed class ChatOrchestrator(
 
         conversations.Add(conversation);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return conversation;
+        return (conversation, true);
     }
 }

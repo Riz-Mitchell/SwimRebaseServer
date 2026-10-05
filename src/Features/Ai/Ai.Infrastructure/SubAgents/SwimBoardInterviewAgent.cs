@@ -4,6 +4,7 @@ using Ai.Application.Models;
 using Ai.Domain.Models;
 using Ai.Infrastructure.Tools;
 using Sessions.Application.Metrics;
+using Sessions.Domain.Calculations;
 using SessionConversion.Application.Interview;
 using SessionConversion.Application.Services;
 
@@ -77,7 +78,7 @@ public sealed class SwimBoardInterviewAgent(SessionDraftService drafts, IToolExe
 
         var (performedOn, course) = answers;
         var input = JsonSerializer.Serialize(
-            new { draftId = draft.Id, performedOn = performedOn.ToString("yyyy-MM-dd"), course },
+            new { draftId = draft.Id, performedOn = performedOn.ToString("yyyy-MM-dd"), course, title = SessionTitles.Clean(draft.Session.Title) },
             ToolJsonOptions.Web);
         return new ToolCallRequestedEvent(
             $"toolu_{Guid.NewGuid():N}", InterviewTools.SaveSession, input, RequiresApproval: true,
