@@ -14,17 +14,18 @@ public static class MetricsTool
 
     public const string Description =
         "Answers how much the user has swum, from their saved sessions: total distance, number of sessions, or average intensity, optionally filtered " +
-        "(dates, strokes, modes, intensity range) and grouped by up to 2 of stroke, mode, intensity, day, week (starts Monday), month or session. " +
+        "(dates, one session, strokes, modes, intensity range) and grouped by up to 2 of stroke, mode, intensity, day, week (starts Monday), month or session. " +
         "Intensity is a percent of maximum effort (1-100); minPercent/maxPercent filter on it, and the intensity grouping uses the effort scale " +
         "named by scale (tens = bands 1-10, zones = A0, A1, A2, A3, TH, VO2, Sub Max, Max, custom = the user's own), else the user's saved one. " +
         "Distance with no stated intensity is \"unspecified\" and is left out when an intensity range is set. " +
         "Use it instead of guessing for questions like \"how much fly this month\" or \"metres at hard effort per week\".";
 
     public const string Schema = """
-        {"type":"object","properties":{"from":{"type":"string","description":"yyyy-MM-dd"},"to":{"type":"string","description":"yyyy-MM-dd"},"strokes":{"type":"array","items":{"type":"string","enum":["free","back","breast","fly","im","choice"]}},"modes":{"type":"array","items":{"type":"string","enum":["swim","kick","pull","drill","scull"]}},"minPercent":{"type":"integer","description":"1-100"},"maxPercent":{"type":"integer","description":"1-100"},"scale":{"type":"string","enum":["tens","zones","custom"]},"groupBy":{"type":"array","maxItems":2,"items":{"type":"string","enum":["stroke","mode","intensity","day","week","month","session"]}},"measure":{"type":"string","enum":["distance","sessions","avgIntensity"]}}}
+        {"type":"object","properties":{"sessionId":{"type":"string","description":"limit to one saved session (guid)"},"from":{"type":"string","description":"yyyy-MM-dd"},"to":{"type":"string","description":"yyyy-MM-dd"},"strokes":{"type":"array","items":{"type":"string","enum":["free","back","breast","fly","im","choice"]}},"modes":{"type":"array","items":{"type":"string","enum":["swim","kick","pull","drill","scull"]}},"minPercent":{"type":"integer","description":"1-100"},"maxPercent":{"type":"integer","description":"1-100"},"scale":{"type":"string","enum":["tens","zones","custom"]},"groupBy":{"type":"array","maxItems":2,"items":{"type":"string","enum":["stroke","mode","intensity","day","week","month","session"]}},"measure":{"type":"string","enum":["distance","sessions","avgIntensity"]}}}
         """;
 
     private sealed record Payload(
+        Guid? SessionId,
         DateOnly? From,
         DateOnly? To,
         List<Stroke>? Strokes,
@@ -47,7 +48,7 @@ public static class MetricsTool
             return new MetricsQuery(
                 p.From, p.To, p.Strokes, p.Modes,
                 EffortScale.MinPercent(p.MinPercent, p.MinIntensity), EffortScale.MaxPercent(p.MaxPercent, p.MaxIntensity),
-                p.GroupBy ?? [], p.Measure ?? MetricMeasure.Distance, p.Scale);
+                p.GroupBy ?? [], p.Measure ?? MetricMeasure.Distance, p.Scale, SessionId: p.SessionId);
         }
         catch (JsonException ex)
         {

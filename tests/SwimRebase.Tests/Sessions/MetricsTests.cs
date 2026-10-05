@@ -34,8 +34,9 @@ public class MetricsTests
         int? max = null,
         string? from = null,
         string? to = null,
-        EffortScale? scale = null) =>
-        new(from is null ? null : DateOnly.Parse(from), to is null ? null : DateOnly.Parse(to), strokes, null, min, max, groupBy ?? [], measure, Scale: scale);
+        EffortScale? scale = null,
+        Guid? sessionId = null) =>
+        new(from is null ? null : DateOnly.Parse(from), to is null ? null : DateOnly.Parse(to), strokes, null, min, max, groupBy ?? [], measure, Scale: scale, SessionId: sessionId);
 
     private static Dictionary<string, double?> Table(MetricsResult result) => result.Rows.ToDictionary(r => string.Join('|', r.Keys), r => r.Value);
 
@@ -48,6 +49,34 @@ public class MetricsTests
         Assert.Empty(row.Keys);
         Assert.Equal(1600, row.Value);
         Assert.Equal(1600, result.TotalDistance);
+    }
+
+    [Fact]
+    public void A_session_filter_keeps_only_that_sessions_distance_even_when_another_session_shares_the_day()
+    {
+        var sameDay = Facts().Append(Fact(SessionC, "2026-09-14", Stroke.Back, SwimMode.Swim, 60, 700)).ToList();
+
+        var result = MetricsCalculator.Compute(Query(groupBy: [MetricDimension.Stroke], sessionId: SessionA), sameDay);
+
+        Assert.Equal(new Dictionary<string, double?> { ["free"] = 400, ["fly"] = 200 }, Table(result));
+        Assert.Equal(600, result.TotalDistance);
+    }
+
+    [Fact]
+    public void An_unknown_session_gives_no_rows()
+    {
+        var result = MetricsCalculator.Compute(Query(groupBy: [MetricDimension.Stroke], sessionId: Guid.NewGuid()), Facts());
+
+        Assert.Empty(result.Rows);
+        Assert.Equal(0, result.TotalDistance);
+    }
+
+    [Fact]
+    public void The_model_can_ask_about_one_session()
+    {
+        var id = Guid.NewGuid();
+
+        Assert.Equal(id, MetricsTool.Parse($$"""{"sessionId":"{{id}}"}""").SessionId);
     }
 
     [Fact]

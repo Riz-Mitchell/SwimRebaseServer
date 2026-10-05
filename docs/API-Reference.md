@@ -446,6 +446,7 @@ Filter, group and measure what was swum. All parameters optional; repeat a param
 
 | Parameter | Meaning |
 |---|---|
+| `sessionId` | Only that saved session (including its linked timed swims). Combine with `groupBy=stroke`, `mode` or `intensity` for one session's breakdown; an unknown id returns empty rows |
 | `from`, `to` | Date range (yyyy-MM-dd), inclusive |
 | `strokes` | `free | back | breast | fly | im | choice` (an IM part counts towards fly, back, breast and free) |
 | `modes` | `swim | kick | pull | drill | scull` |
@@ -455,7 +456,7 @@ Filter, group and measure what was swum. All parameters optional; repeat a param
 | `groupBy` | Up to 2 of `stroke | mode | intensity | day | week | month | session` (weeks start Monday and are named by that date) |
 | `measure` | `distance` (default), `sessions`, or `avgIntensity` (average percent, weighted by distance) |
 
-Examples: `?strokes=fly&groupBy=month` (how much fly per month), `?minPercent=80&groupBy=week` (distance at 80%+ effort per week), `?groupBy=intensity&scale=zones` (distance per zone), `?measure=avgIntensity&groupBy=month`.
+Examples: `?strokes=fly&groupBy=month` (how much fly per month), `?minPercent=80&groupBy=week` (distance at 80%+ effort per week), `?groupBy=intensity&scale=zones` (distance per zone), `?measure=avgIntensity&groupBy=month`, `?sessionId={id}&groupBy=intensity&scale=zones` (one session's effort split).
 
 **Response:**
 ```json
