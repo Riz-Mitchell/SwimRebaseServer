@@ -196,9 +196,21 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("owner_id");
 
+                    b.Property<string>("CustomEffortScaleJson")
+                        .HasColumnType("text")
+                        .HasColumnName("custom_effort_scale_json");
+
                     b.Property<int>("DefaultEffort")
                         .HasColumnType("integer")
                         .HasColumnName("default_effort");
+
+                    b.Property<string>("EffortScale")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("tens")
+                        .HasColumnName("effort_scale");
 
                     b.HasKey("OwnerId")
                         .HasName("pk_session_preferences");

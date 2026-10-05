@@ -17,7 +17,7 @@ public sealed record SessionBreakdown
     /// <summary>A rep with two pieces of equipment counts towards both, so these can add up to more than <see cref="Total"/>. "none" = no equipment.</summary>
     public Dictionary<string, decimal> ByEquipment { get; init; } = [];
 
-    /// <summary>Keyed by level on the global scale ("1".."10"), or "unspecified".</summary>
+    /// <summary>Keyed by tens level ("1".."10") of the intensity, or "unspecified".</summary>
     public Dictionary<string, decimal> ByIntensity { get; init; } = [];
 
     public string ToText()
@@ -52,7 +52,7 @@ public static class BreakdownCalculator
             total += leaf.Distance;
             Add(stroke, leaf.Stroke.ToString().ToLowerInvariant(), leaf.Distance);
             Add(mode, leaf.Mode.ToString().ToLowerInvariant(), leaf.Distance);
-            Add(intensity, leaf.Intensity?.ToString() ?? SessionBreakdown.Unspecified, leaf.Distance);
+            Add(intensity, EffortScale.Tens.Bucket(leaf.Intensity), leaf.Distance);
 
             var gear = leaf.Equip.Select(Normalize).Where(g => g.Length > 0).Distinct().ToList();
             if (gear.Count == 0)

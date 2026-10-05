@@ -59,7 +59,7 @@ public static class SessionValidator
         if (decimal.Round(part.Dist, 2) != part.Dist) errors.Add($"{path}: dist can have at most 2 decimal places");
         if (part.Stroke is null) errors.Add($"{path}: stroke is required (use \"choice\" if the swimmer picked freely)");
         if (part.Stroke == Stroke.Im && part.Dist % 4 != 0) errors.Add($"{path}: an IM part is a quarter of each stroke, so dist must divide by 4");
-        if (part.Intensity is { } i && (i.Level < Intensity.Min || i.Level > Intensity.Max))
+        if (part.Intensity is { } i && (i.Percent < Intensity.Min || i.Percent > Intensity.Max))
         {
             errors.Add($"{path}: intensity must be {Intensity.Min}-{Intensity.Max}");
         }

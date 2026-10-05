@@ -83,7 +83,7 @@ public static class SessionText
         if (!string.IsNullOrWhiteSpace(part.Effort) || part.Intensity is not null)
         {
             sb.Append(" - ").Append(part.Effort ?? "effort");
-            sb.Append(part.Intensity is { } i ? $" ({i.Level}/{Intensity.Max})" : " (intensity unspecified)");
+            sb.Append(part.Intensity is { } i ? $" ({i.Percent}%)" : " (intensity unspecified)");
         }
 
         return sb.ToString();

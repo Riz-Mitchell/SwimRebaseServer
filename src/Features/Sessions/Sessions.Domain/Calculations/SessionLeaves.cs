@@ -53,7 +53,7 @@ public static class SessionLeaves
         var nodeId = part.Id ?? position;
         var stroke = part.Stroke ?? Stroke.Choice;
         var equip = part.Equip;
-        var intensity = part.Intensity?.Level;
+        var intensity = part.Intensity?.Percent;
 
         if (stroke != Stroke.Im)
         {

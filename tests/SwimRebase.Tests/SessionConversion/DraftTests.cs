@@ -54,10 +54,10 @@ public class DraftTests
 
         Assert.Contains("Group: Lane 2", outline);
         Assert.Contains("Distance: 1700", outline);
-        Assert.Contains("[0] 4 x 100 free - easy (2/10), on 1:30", outline);
+        Assert.Contains("[0] 4 x 100 free - easy (20%), on 1:30", outline);
         Assert.Contains("[1] 3 rounds", outline);
         Assert.Contains("[1.0] 1 x 200 free kick", outline);
-        Assert.Contains("[1.1] 2 x 50 fly with fins - hard (8/10)", outline);
+        Assert.Contains("[1.1] 2 x 50 fly with fins - hard (80%)", outline);
         Assert.Contains("[2] 1 x 400 im", outline);
         Assert.Contains("intensity", outline);
     }

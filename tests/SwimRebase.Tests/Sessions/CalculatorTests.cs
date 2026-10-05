@@ -9,14 +9,14 @@ public class CalculatorTests
 
     internal static SetItem Item(int reps, params Part[] parts) => new() { Reps = reps, Parts = [.. parts] };
 
-    internal static Part Swim(decimal dist, Stroke stroke, SwimMode mode = SwimMode.Swim, string? effort = null, int? level = null, params string[] equip) => new()
+    internal static Part Swim(decimal dist, Stroke stroke, SwimMode mode = SwimMode.Swim, string? effort = null, int? percent = null, params string[] equip) => new()
     {
         Dist = dist,
         Stroke = stroke,
         Mode = mode,
         Effort = effort,
         Equip = [.. equip],
-        Intensity = level is { } l ? new Intensity { Level = l, Scale = "words" } : null,
+        Intensity = percent is { } p ? new Intensity { Percent = p, Scale = "words" } : null,
     };
 
     [Fact]
@@ -107,8 +107,8 @@ public class CalculatorTests
     public void Breakdown_groups_by_stroke_mode_equipment_and_intensity()
     {
         var session = Tree(
-            Item(4, Swim(100, Stroke.Free, effort: "easy", level: 2)),
-            new SetGroup { Repeat = 2, Items = [Item(3, Swim(50, Stroke.Fly, SwimMode.Kick, "hard", 8, "fins"))] },
+            Item(4, Swim(100, Stroke.Free, effort: "easy", percent: 20)),
+            new SetGroup { Repeat = 2, Items = [Item(3, Swim(50, Stroke.Fly, SwimMode.Kick, "hard", 80, "fins"))] },
             Item(1, Swim(200, Stroke.Choice)));
 
         var breakdown = BreakdownCalculator.Of(session);

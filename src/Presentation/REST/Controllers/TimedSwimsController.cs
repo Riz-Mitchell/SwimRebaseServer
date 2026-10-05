@@ -2,6 +2,7 @@ using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sessions.Application.Services;
+using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
 
 namespace REST.Controllers;
@@ -36,6 +37,8 @@ public sealed class TimedSwimsController(TimedSwimService timedSwims, ICurrentUs
         [FromQuery] DateOnly? to,
         [FromQuery] decimal[]? distances,
         [FromQuery] Stroke[]? strokes,
+        [FromQuery] int? minPercent,
+        [FromQuery] int? maxPercent,
         [FromQuery] int? minIntensity,
         [FromQuery] int? maxIntensity,
         [FromQuery] StartType[]? startTypes,
@@ -43,7 +46,7 @@ public sealed class TimedSwimsController(TimedSwimService timedSwims, ICurrentUs
         [FromQuery] bool? hasResistance,
         CancellationToken cancellationToken = default)
     {
-        var filter = new TimedSwimFilter(sessionId, from, to, distances, strokes, minIntensity, maxIntensity, startTypes, resistanceTypes, hasResistance);
+        var filter = new TimedSwimFilter(sessionId, from, to, distances, strokes, EffortScale.MinPercent(minPercent, minIntensity), EffortScale.MaxPercent(maxPercent, maxIntensity), startTypes, resistanceTypes, hasResistance);
         var found = await timedSwims.ListAsync(currentUser.UserId, filter, cancellationToken);
         return Ok(found.Select(TimedSwimResponse.FromView));
     }

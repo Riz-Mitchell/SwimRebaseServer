@@ -22,8 +22,8 @@ public sealed class TimedSwimRepository(SessionsDbContext db) : ITimedSwimReposi
         if (filter.To is { } to) query = query.Where(t => t.PerformedOn <= to);
         if (filter.Distances is { Count: > 0 } distances) query = query.Where(t => distances.Contains(t.Dist));
         if (filter.Strokes is { Count: > 0 } strokes) query = query.Where(t => strokes.Contains(t.Stroke));
-        if (filter.MinIntensity is { } min) query = query.Where(t => t.Intensity >= min);
-        if (filter.MaxIntensity is { } max) query = query.Where(t => t.Intensity <= max);
+        if (filter.MinPercent is { } min) query = query.Where(t => t.Intensity >= min);
+        if (filter.MaxPercent is { } max) query = query.Where(t => t.Intensity <= max);
         if (filter.StartTypes is { Count: > 0 } startTypes) query = query.Where(t => t.StartType != null && startTypes.Contains(t.StartType.Value));
         if (filter.ResistanceTypes is { Count: > 0 } resistanceTypes) query = query.Where(t => t.ResistanceType != null && resistanceTypes.Contains(t.ResistanceType));
         if (filter.HasResistance is { } hasResistance) query = query.Where(t => (t.ResistanceType != null) == hasResistance);

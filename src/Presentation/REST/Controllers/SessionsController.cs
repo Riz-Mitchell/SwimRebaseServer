@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sessions.Application.Metrics;
 using Sessions.Application.Services;
+using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
 
 namespace REST.Controllers;
@@ -76,22 +77,31 @@ public sealed class SessionsController(
         }
     }
 
-    /// <summary>Filter, group and measure what was swum, e.g. <c>?strokes=fly&amp;groupBy=month</c> or <c>?minIntensity=8&amp;groupBy=week</c>.</summary>
+    /// <summary>
+    /// Filter, group and measure what was swum, e.g. <c>?strokes=fly&amp;groupBy=month</c> or <c>?minPercent=80&amp;groupBy=week</c>.
+    /// <c>scale</c> picks how <c>groupBy=intensity</c> is bucketed; <c>minIntensity</c>/<c>maxIntensity</c> are the earlier 1-10 bounds.
+    /// </summary>
     [HttpGet("metrics")]
     public async Task<IActionResult> GetMetrics(
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
         [FromQuery] Stroke[]? strokes,
         [FromQuery] SwimMode[]? modes,
+        [FromQuery] int? minPercent,
+        [FromQuery] int? maxPercent,
         [FromQuery] int? minIntensity,
         [FromQuery] int? maxIntensity,
+        [FromQuery] string? scale,
         [FromQuery] MetricDimension[]? groupBy,
         [FromQuery] MetricMeasure measure = MetricMeasure.Distance,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var query = new MetricsQuery(from, to, strokes, modes, minIntensity, maxIntensity, groupBy ?? [], measure);
+            var query = new MetricsQuery(
+                from, to, strokes, modes,
+                EffortScale.MinPercent(minPercent, minIntensity), EffortScale.MaxPercent(maxPercent, maxIntensity),
+                groupBy ?? [], measure, scale);
             return Ok(await metrics.QueryAsync(currentUser.UserId, query, cancellationToken));
         }
         catch (InvalidMetricsQueryException ex)
@@ -100,17 +110,32 @@ public sealed class SessionsController(
         }
     }
 
+    /// <summary>The built-in effort scales, the swimmer's own (null until saved) and which one metrics use by default.</summary>
+    [HttpGet("effort-scales")]
+    public async Task<IActionResult> GetEffortScales(CancellationToken cancellationToken)
+    {
+        var saved = await preferences.GetAsync(currentUser.UserId, cancellationToken);
+        return Ok(new EffortScalesResponse(
+            EffortVocabulary.Default.Scales.Select(EffortScaleResponse.From).ToList(),
+            saved.CustomEffortScale is { } custom ? EffortScaleResponse.From(EffortScale.Custom(custom)) : null,
+            saved.EffortScale));
+    }
+
     [HttpGet("preferences")]
     public async Task<IActionResult> GetPreferences(CancellationToken cancellationToken) =>
-        Ok(new SessionPreferencesResponse(await preferences.GetDefaultEffortAsync(currentUser.UserId, cancellationToken)));
+        Ok(SessionPreferencesResponse.From(await preferences.GetAsync(currentUser.UserId, cancellationToken)));
 
+    /// <summary>Only the fields sent change. <c>customEffortScale: []</c> removes the saved custom scale.</summary>
     [HttpPut("preferences")]
-    public async Task<IActionResult> SetPreferences([FromBody] SessionPreferencesResponse request, CancellationToken cancellationToken)
+    public async Task<IActionResult> SetPreferences([FromBody] SessionPreferencesRequest request, CancellationToken cancellationToken)
     {
         try
         {
-            await preferences.SetDefaultEffortAsync(currentUser.UserId, request.DefaultEffort, cancellationToken);
-            return Ok(request);
+            var updated = await preferences.UpdateAsync(
+                currentUser.UserId,
+                new SessionPreferencesUpdate(request.DefaultEffort, request.EffortScale, request.CustomEffortScale?.Select(b => b.ToBand()).ToList()),
+                cancellationToken);
+            return Ok(SessionPreferencesResponse.From(updated));
         }
         catch (InvalidSessionPreferencesException ex)
         {
@@ -119,7 +144,24 @@ public sealed class SessionsController(
     }
 }
 
-public sealed record SessionPreferencesResponse(int DefaultEffort);
+public sealed record EffortBandDto(string Key, string? Label, int Min, int Max)
+{
+    public EffortBand ToBand() => new(Key ?? string.Empty, Label ?? string.Empty, Min, Max);
+}
+
+public sealed record EffortScaleResponse(string Id, string Name, IReadOnlyList<EffortBand> Bands)
+{
+    public static EffortScaleResponse From(EffortScale scale) => new(scale.Id, scale.Name, scale.Bands);
+}
+
+public sealed record EffortScalesResponse(IReadOnlyList<EffortScaleResponse> Scales, EffortScaleResponse? Custom, string Selected);
+
+public sealed record SessionPreferencesRequest(int? DefaultEffort, string? EffortScale, List<EffortBandDto>? CustomEffortScale);
+
+public sealed record SessionPreferencesResponse(int DefaultEffort, string EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale)
+{
+    public static SessionPreferencesResponse From(SessionPreferencesView view) => new(view.DefaultEffort, view.EffortScale, view.CustomEffortScale);
+}
 
 public enum SessionInclude { Content }
 

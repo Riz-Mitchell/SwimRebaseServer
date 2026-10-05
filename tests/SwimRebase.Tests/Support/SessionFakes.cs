@@ -8,7 +8,7 @@ namespace SwimRebase.Tests;
 /// <summary>Builds the real ingest/service wiring over in-memory storage.</summary>
 internal static class TestSessions
 {
-    public static SessionIngest Ingest() => new(new IntensityResolver([new WordsIntensityMapper()]));
+    public static SessionIngest Ingest() => new(new IntensityResolver([new VocabularyIntensityMapper()]));
 
     public static SessionService Service(InMemorySessionRepository repository) => new(repository, Ingest(), new NoOpUnitOfWork());
 }

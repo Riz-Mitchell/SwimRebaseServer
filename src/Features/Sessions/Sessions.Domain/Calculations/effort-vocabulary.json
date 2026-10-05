@@ -1,0 +1,37 @@
+{
+  "entries": [
+    { "scale": "words", "percent": 10, "phrases": ["very easy"] },
+    { "scale": "words", "percent": 20, "phrases": ["easy", "ez", "recovery", "relaxed", "relax", "loosen"] },
+    { "scale": "words", "percent": 30, "phrases": ["smooth"] },
+    { "scale": "words", "percent": 40, "phrases": ["steady", "aerobic"] },
+    { "scale": "words", "percent": 50, "phrases": ["moderate", "medium", "build"] },
+    { "scale": "words", "percent": 70, "phrases": ["strong"] },
+    { "scale": "words", "percent": 80, "phrases": ["hard", "fast"] },
+    { "scale": "words", "percent": 83, "phrases": ["threshold"] },
+    { "scale": "words", "percent": 88, "phrases": ["race pace", "race"] },
+    { "scale": "words", "percent": 90, "phrases": ["very hard", "sub max", "sub-max", "submax", "sub maximal", "sub-maximal", "submaximal"] },
+    { "scale": "words", "percent": 100, "phrases": ["max", "all out", "sprint"] },
+    { "scale": "zones", "percent": 40, "phrases": ["a0"] },
+    { "scale": "zones", "percent": 60, "phrases": ["a1"] },
+    { "scale": "zones", "percent": 70, "phrases": ["a2"] },
+    { "scale": "zones", "percent": 76, "phrases": ["a3"] },
+    { "scale": "zones", "percent": 83, "phrases": ["th"] },
+    { "scale": "zones", "percent": 88, "phrases": ["vo2 max", "vo2"] }
+  ],
+  "systems": [
+    {
+      "id": "zones",
+      "name": "Zones",
+      "bands": [
+        { "key": "A0", "label": "Recovery", "min": 1, "max": 55 },
+        { "key": "A1", "label": "Aerobic base", "min": 56, "max": 65 },
+        { "key": "A2", "label": "Aerobic endurance", "min": 66, "max": 72 },
+        { "key": "A3", "label": "Aerobic power", "min": 73, "max": 79 },
+        { "key": "TH", "label": "Threshold", "min": 80, "max": 85 },
+        { "key": "VO2", "label": "VO2 max", "min": 86, "max": 89 },
+        { "key": "Sub Max", "label": "Sub max", "min": 90, "max": 97 },
+        { "key": "Max", "label": "Max", "min": 98, "max": 100 }
+      ]
+    }
+  ]
+}

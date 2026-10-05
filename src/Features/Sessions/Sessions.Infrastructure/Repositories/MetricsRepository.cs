@@ -14,8 +14,8 @@ public sealed class MetricsRepository(SessionsDbContext db) : IMetricsRepository
         if (query.To is { } to) facts = facts.Where(f => f.PerformedOn <= to);
         if (query.Strokes is { Count: > 0 } strokes) facts = facts.Where(f => strokes.Contains(f.Stroke));
         if (query.Modes is { Count: > 0 } modes) facts = facts.Where(f => modes.Contains(f.Mode));
-        if (query.MinIntensity is { } min) facts = facts.Where(f => f.Intensity >= min);
-        if (query.MaxIntensity is { } max) facts = facts.Where(f => f.Intensity <= max);
+        if (query.MinPercent is { } min) facts = facts.Where(f => f.Intensity >= min);
+        if (query.MaxPercent is { } max) facts = facts.Where(f => f.Intensity <= max);
 
         // Summed per session, stroke, mode and intensity: small however many sessions there are, and enough for the calculator to
         // group by anything (including sessions and time buckets) and count sessions.
@@ -31,8 +31,8 @@ public sealed class MetricsRepository(SessionsDbContext db) : IMetricsRepository
         if (query.To is { } tsTo) timedSwims = timedSwims.Where(t => t.PerformedOn <= tsTo);
         if (query.Strokes is { Count: > 0 } tsStrokes) timedSwims = timedSwims.Where(t => tsStrokes.Contains(t.Stroke));
         if (query.Modes is { Count: > 0 } tsModes) timedSwims = timedSwims.Where(t => tsModes.Contains(t.Mode));
-        if (query.MinIntensity is { } tsMin) timedSwims = timedSwims.Where(t => t.Intensity >= tsMin);
-        if (query.MaxIntensity is { } tsMax) timedSwims = timedSwims.Where(t => t.Intensity <= tsMax);
+        if (query.MinPercent is { } tsMin) timedSwims = timedSwims.Where(t => t.Intensity >= tsMin);
+        if (query.MaxPercent is { } tsMax) timedSwims = timedSwims.Where(t => t.Intensity <= tsMax);
 
         var timedSwimTotals = TimedSwimFacts.ToFactTotals(await timedSwims.ToListAsync(cancellationToken));
 

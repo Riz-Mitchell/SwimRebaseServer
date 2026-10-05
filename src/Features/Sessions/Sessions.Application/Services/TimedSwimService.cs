@@ -49,7 +49,7 @@ public sealed class TimedSwimNotFoundException(Guid id) : Exception($"No timed s
 /// </summary>
 public sealed class TimedSwimService(
     ITimedSwimRepository timedSwims,
-    IEnumerable<IIntensityMapper> mappers,
+    IntensityResolver intensity,
     [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
 {
     /// <exception cref="InvalidTimedSwimException">The swim is not valid.</exception>
@@ -75,7 +75,7 @@ public sealed class TimedSwimService(
             Mode = request.Mode,
             Seconds = request.Seconds,
             Effort = request.Effort,
-            Intensity = ResolveIntensity(request.Effort),
+            Intensity = intensity.Resolve(request.Effort)?.Percent,
             StartType = request.StartType,
             Finish = request.Finish,
             ResistanceType = resistance?.Type,
@@ -97,23 +97,4 @@ public sealed class TimedSwimService(
 
     public async Task<IReadOnlyList<TimedSwimView>> ListAsync(Guid userId, TimedSwimFilter filter, CancellationToken cancellationToken) =>
         (await timedSwims.ListAsync(userId, filter, cancellationToken)).Select(TimedSwimView.Of).ToList();
-
-    // Effort text is the truth, same as a session's Part.Effort - mapped fresh on every save.
-    private int? ResolveIntensity(string? effort)
-    {
-        if (string.IsNullOrWhiteSpace(effort))
-        {
-            return null;
-        }
-
-        foreach (var mapper in mappers)
-        {
-            if (mapper.TryMap(effort, out var intensity))
-            {
-                return intensity.Level;
-            }
-        }
-
-        return null;
-    }
 }
