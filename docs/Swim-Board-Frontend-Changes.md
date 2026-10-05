@@ -9,7 +9,7 @@ Applies to the `read_swim_board` flow (user attaches a workout-board photo and a
 1. `POST conversations/messages` (message + `imageIds`) streams: `sub_agent_started` -> `questions_asked` (**one event, all questions**).
 2. User answers once. `POST tool-requests/{questionsRequestId}/answer` with `{ "answers": [...] }`.
 3. That response stream continues: `turn_started` -> `usage` -> `sub_agent_completed` -> `text_delta` -> `permission_required` (`toolName: "save_session"`, with `preview`) -> `completed`. **No model reply sits between the answers and the save card.**
-4. User taps Save -> `POST tool-requests/{saveRequestId}/resolve` `{ "approve": true }`. The stream runs the save (`tool_started`/`tool_completed`) and ends with a short assistant confirmation.
+4. User taps Save -> `POST tool-requests/{saveRequestId}/resolve` `{ "approve": true }`. The stream runs the save (`tool_started`/`tool_completed`) and ends with a short assistant confirmation. The `tool_completed` carries `resources: [{ "kind": "session", "id": "<sessionId>", "action": "created", "label": "<title>" }]` - render it as a tappable card that opens `GET /api/sessions/{id}`.
 5. User wants changes -> `{ "approve": false, "denialReason": "the last set was kicks" }` (or just cancels the card). The assistant asks what to change and edits the draft; a new `save_session` card follows later as before.
 
 ## `questions_asked` (changed)

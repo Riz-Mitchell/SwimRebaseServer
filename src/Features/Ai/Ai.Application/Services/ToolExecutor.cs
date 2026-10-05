@@ -19,7 +19,7 @@ public sealed class ToolExecutor(IAiToolRegistry toolRegistry)
                 ?? throw new InvalidOperationException($"Unknown or non-executable tool '{toolName}'.");
 
             var result = await tool.ExecuteAsync(new ToolExecutionContext(userId, conversationId, toolUseId), inputJson, cancellationToken);
-            return new ToolResultSummary(toolUseId, toolName, displayName, effect, Success: true, result.AffectedCount, result.ResultJson);
+            return new ToolResultSummary(toolUseId, toolName, displayName, effect, Success: true, result.AffectedCount, result.ResultJson, result.Resources);
         }
         catch (Exception ex)
         {

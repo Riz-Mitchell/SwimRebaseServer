@@ -89,7 +89,10 @@ public sealed class CreateFocusTool(FocusService focuses) : IAiTool
             },
             ToolJsonOptions.Web);
 
-        return new ToolExecutionResult(resultJson, AffectedCount: 1);
+        return new ToolExecutionResult(
+            resultJson,
+            AffectedCount: 1,
+            [new ToolResource(ToolResourceKinds.Focus, focus.Id, ToolResourceActions.Created, focus.TagLine)]);
     }
 
     private static IReadOnlyList<ComparisonPointInput> ToPoints(IReadOnlyList<PointPayload>? points) =>

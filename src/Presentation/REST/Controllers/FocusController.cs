@@ -24,6 +24,13 @@ public sealed class FocusController(FocusService focusService, ICurrentUserAcces
         return Ok(focuses.Select(FocusResponse.FromEntity));
     }
 
+    [HttpGet("{focusId:guid}")]
+    public async Task<IActionResult> Get(Guid focusId, CancellationToken cancellationToken)
+    {
+        var focus = await focusService.GetAsync(currentUser.UserId, focusId, cancellationToken);
+        return focus is null ? NotFound() : Ok(FocusResponse.FromEntity(focus));
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateFocusRequest request, CancellationToken cancellationToken)
     {

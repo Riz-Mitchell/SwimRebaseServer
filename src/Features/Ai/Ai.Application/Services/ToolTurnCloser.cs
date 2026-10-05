@@ -159,7 +159,7 @@ public sealed class ToolTurnCloser(
                 : summary);
 
             yield return new AiChatToolCompleted(
-                request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect, summary.Success, summary.AffectedCount);
+                request.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, displayName, effect, summary.Success, summary.AffectedCount, summary.Resources);
         }
 
         var sequenceNumber = await conversations.GetNextSequenceNumberAsync(request.ConversationId, cancellationToken);

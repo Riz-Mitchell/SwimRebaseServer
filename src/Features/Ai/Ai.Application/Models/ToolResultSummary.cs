@@ -6,7 +6,8 @@ namespace Ai.Application.Models;
 /// for a one-line summary ("Fetched 6 sessions"), the raw result for a details/expand view.
 /// </summary>
 public sealed record ToolResultSummary(
-    string ToolUseId, string ToolName, string DisplayName, ToolEffect Effect, bool Success, int AffectedCount, string ResultJson)
+    string ToolUseId, string ToolName, string DisplayName, ToolEffect Effect, bool Success, int AffectedCount, string ResultJson,
+    IReadOnlyList<ToolResource>? Resources = null)
 {
     public ToolResultContentBlock ToContentBlock() => new(ToolUseId, ResultJson, !Success);
 }

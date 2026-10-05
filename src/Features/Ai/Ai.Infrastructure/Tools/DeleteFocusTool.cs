@@ -37,7 +37,10 @@ public sealed class DeleteFocusTool(FocusService focuses) : IAiTool
             ?? throw new InvalidOperationException("Missing tool input.");
 
         var deleted = await focuses.DeleteAsync(context.UserId, input.FocusId, cancellationToken);
-        return new ToolExecutionResult(JsonSerializer.Serialize(new { deleted }, ToolJsonOptions.Web), AffectedCount: deleted ? 1 : 0);
+        return new ToolExecutionResult(
+            JsonSerializer.Serialize(new { deleted }, ToolJsonOptions.Web),
+            AffectedCount: deleted ? 1 : 0,
+            deleted ? [new ToolResource(ToolResourceKinds.Focus, input.FocusId, ToolResourceActions.Deleted)] : null);
     }
 
     private sealed record Input(Guid FocusId);
