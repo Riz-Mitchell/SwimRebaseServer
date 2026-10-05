@@ -10,25 +10,26 @@ public interface IIntensityMapper
     bool TryMap(string raw, out Intensity intensity);
 }
 
-/// <summary>Everyday effort words ("easy", "build", "race pace") and percentages ("80%").</summary>
-public sealed partial class WordsIntensityMapper : IIntensityMapper
+/// <summary>Effort words ("easy", "sub max"), zone names ("A2", "TH") and percentages ("80%"), as listed in <see cref="EffortVocabulary"/>.</summary>
+public sealed partial class VocabularyIntensityMapper : IIntensityMapper
 {
-    public const string WordsScale = "words";
     public const string PercentScale = "percent";
 
-    // Most specific first: a phrase is removed from the text once it matches, so "very easy" is not also read as "easy".
-    private static readonly (string Phrase, int Level)[] Words =
-    [
-        ("very easy", 1), ("very hard", 9),
-        ("all out", 10), ("max", 10), ("sprint", 10),
-        ("race pace", 9), ("race", 9),
-        ("hard", 8), ("fast", 8),
-        ("strong", 7), ("threshold", 7),
-        ("moderate", 5), ("medium", 5), ("build", 5),
-        ("steady", 4), ("aerobic", 4),
-        ("smooth", 3),
-        ("easy", 2), ("ez", 2), ("recovery", 2), ("relaxed", 2), ("loosen", 2),
-    ];
+    private readonly (Regex Pattern, EffortEntry Entry)[] _phrases;
+
+    public VocabularyIntensityMapper() : this(EffortVocabulary.Default)
+    {
+    }
+
+    public VocabularyIntensityMapper(EffortVocabulary vocabulary)
+    {
+        // Longest phrase first: a phrase is removed from the text once it matches, so "sub max" is not also read as "max".
+        _phrases = vocabulary.Entries
+            .SelectMany(entry => entry.Phrases.Select(phrase => (Phrase: phrase.ToLowerInvariant(), Entry: entry)))
+            .OrderByDescending(p => p.Phrase.Length)
+            .Select(p => (new Regex($@"\b{Regex.Escape(p.Phrase)}\b", RegexOptions.Compiled), p.Entry))
+            .ToArray();
+    }
 
     public bool TryMap(string raw, out Intensity intensity)
     {
@@ -42,27 +43,30 @@ public sealed partial class WordsIntensityMapper : IIntensityMapper
         if (PercentPattern().Match(text) is { Success: true } percent && text.Length == percent.Length)
         {
             var value = int.Parse(percent.Groups[1].Value);
-            intensity = new Intensity { Level = Math.Clamp((int)Math.Round(value / 10.0, MidpointRounding.AwayFromZero), Intensity.Min, Intensity.Max), Scale = PercentScale };
+            intensity = new Intensity { Percent = Math.Clamp(value, Intensity.Min, Intensity.Max), Scale = PercentScale };
             return true;
         }
 
-        var levels = new HashSet<int>();
-        foreach (var (phrase, level) in Words)
+        var matched = new List<EffortEntry>();
+        foreach (var (pattern, entry) in _phrases)
         {
-            var pattern = new Regex($@"\b{Regex.Escape(phrase)}\b");
             if (pattern.IsMatch(text))
             {
-                levels.Add(level);
+                matched.Add(entry);
                 text = pattern.Replace(text, " ");
             }
         }
 
-        if (levels.Count != 1)
+        if (matched.Select(e => e.Percent).Distinct().Count() != 1)
         {
             return false;
         }
 
-        intensity = new Intensity { Level = levels.Single(), Scale = WordsScale };
+        intensity = new Intensity
+        {
+            Percent = matched[0].Percent,
+            Scale = matched.Any(e => e.Scale == EffortVocabulary.WordsScale) ? EffortVocabulary.WordsScale : matched[0].Scale,
+        };
         return true;
     }
 

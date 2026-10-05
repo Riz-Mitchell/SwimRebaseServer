@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Calculations\effort-vocabulary.json" LogicalName="effort-vocabulary.json" />
+  </ItemGroup>
+
 </Project>

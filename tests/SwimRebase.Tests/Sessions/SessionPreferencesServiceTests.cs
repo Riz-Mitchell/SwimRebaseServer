@@ -1,4 +1,5 @@
 using Sessions.Application.Services;
+using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
 
 namespace SwimRebase.Tests.Sessions;
@@ -23,9 +24,9 @@ public class SessionPreferencesServiceTests
         var repository = new InMemoryPreferencesRepository();
         var service = Service(repository);
 
-        await service.SetDefaultEffortAsync(UserId, 8, CancellationToken.None);
+        await service.SetDefaultEffortAsync(UserId, 80, CancellationToken.None);
 
-        Assert.Equal(8, await service.GetDefaultEffortAsync(UserId, CancellationToken.None));
+        Assert.Equal(80, await service.GetDefaultEffortAsync(UserId, CancellationToken.None));
     }
 
     [Fact]
@@ -34,11 +35,11 @@ public class SessionPreferencesServiceTests
         var repository = new InMemoryPreferencesRepository();
         var service = Service(repository);
 
-        await service.SetDefaultEffortAsync(UserId, 8, CancellationToken.None);
-        await service.SetDefaultEffortAsync(UserId, 3, CancellationToken.None);
+        await service.SetDefaultEffortAsync(UserId, 80, CancellationToken.None);
+        await service.SetDefaultEffortAsync(UserId, 30, CancellationToken.None);
 
         var row = Assert.Single(repository.Rows);
-        Assert.Equal(3, row.DefaultEffort);
+        Assert.Equal(30, row.DefaultEffort);
     }
 
     [Fact]
@@ -46,20 +47,93 @@ public class SessionPreferencesServiceTests
     {
         var service = Service(new InMemoryPreferencesRepository());
 
-        await service.SetDefaultEffortAsync(UserId, 8, CancellationToken.None);
+        await service.SetDefaultEffortAsync(UserId, 80, CancellationToken.None);
 
         Assert.Equal(SessionPreferences.BuiltInDefaultEffort, await service.GetDefaultEffortAsync(Guid.NewGuid(), CancellationToken.None));
     }
 
     [Theory]
     [InlineData(0)]
-    [InlineData(11)]
-    public async Task A_default_effort_outside_the_scale_is_rejected_and_nothing_is_stored(int level)
+    [InlineData(101)]
+    public async Task A_default_effort_outside_the_scale_is_rejected_and_nothing_is_stored(int percent)
     {
         var repository = new InMemoryPreferencesRepository();
 
-        await Assert.ThrowsAsync<InvalidSessionPreferencesException>(() => Service(repository).SetDefaultEffortAsync(UserId, level, CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidSessionPreferencesException>(() => Service(repository).SetDefaultEffortAsync(UserId, percent, CancellationToken.None));
 
         Assert.Empty(repository.Rows);
+    }
+
+    private static readonly EffortBand[] TwoBands = [new("easy", "Easy", 1, 60), new("hard", "Hard", 61, 100)];
+
+    [Fact]
+    public async Task The_effort_scale_defaults_to_tens_and_a_chosen_one_is_stored()
+    {
+        var service = Service(new InMemoryPreferencesRepository());
+        Assert.Equal("tens", (await service.GetAsync(UserId, CancellationToken.None)).EffortScale);
+
+        var updated = await service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, "ZONES", null), CancellationToken.None);
+
+        Assert.Equal("zones", updated.EffortScale);
+        Assert.Equal(SessionPreferences.BuiltInDefaultEffort, updated.DefaultEffort);
+    }
+
+    [Fact]
+    public async Task A_custom_scale_is_saved_selected_and_can_be_removed()
+    {
+        var service = Service(new InMemoryPreferencesRepository());
+
+        var saved = await service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, "custom", TwoBands), CancellationToken.None);
+        Assert.Equal("custom", saved.EffortScale);
+        Assert.Equal(TwoBands, saved.CustomEffortScale);
+
+        var removed = await service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, []), CancellationToken.None);
+        Assert.Equal("tens", removed.EffortScale);
+        Assert.Null(removed.CustomEffortScale);
+    }
+
+    [Fact]
+    public async Task Fields_that_are_not_sent_keep_their_value()
+    {
+        var service = Service(new InMemoryPreferencesRepository());
+        await service.UpdateAsync(UserId, new SessionPreferencesUpdate(70, "zones", null), CancellationToken.None);
+
+        var updated = await service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, TwoBands), CancellationToken.None);
+
+        Assert.Equal(70, updated.DefaultEffort);
+        Assert.Equal("zones", updated.EffortScale);
+        Assert.Equal(TwoBands, updated.CustomEffortScale);
+    }
+
+    [Fact]
+    public async Task An_unknown_scale_or_custom_without_bands_is_rejected_and_nothing_is_stored()
+    {
+        var repository = new InMemoryPreferencesRepository();
+        var service = Service(repository);
+
+        await Assert.ThrowsAsync<InvalidSessionPreferencesException>(() => service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, "nonsense", null), CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidSessionPreferencesException>(() => service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, "custom", null), CancellationToken.None));
+
+        Assert.Empty(repository.Rows);
+    }
+
+    [Fact]
+    public async Task Bands_that_leave_a_gap_or_do_not_cover_the_scale_are_rejected()
+    {
+        var service = Service(new InMemoryPreferencesRepository());
+        EffortBand[][] invalid =
+        [
+            [new("a", "A", 1, 40), new("b", "B", 50, 100)],
+            [new("a", "A", 1, 40), new("b", "B", 41, 90)],
+            [new("a", "A", 5, 50), new("b", "B", 51, 100)],
+            [new("a", "A", 1, 100)],
+            [new("a", "A", 1, 50), new("A", "Again", 51, 100)],
+            [new("a", "A", 1, 50), new("unspecified", "None", 51, 100)],
+        ];
+
+        foreach (var bands in invalid)
+        {
+            await Assert.ThrowsAsync<InvalidSessionPreferencesException>(() => service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, bands), CancellationToken.None));
+        }
     }
 }

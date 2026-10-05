@@ -34,7 +34,7 @@ public class SessionServiceTests
         var content = SessionJson.Deserialize<SwimSession>(stored.ContentJson);
         var first = Assert.IsType<SetItem>(content.Sets[0]);
         Assert.False(string.IsNullOrEmpty(first.Id));
-        Assert.Equal(2, first.Parts[0].Intensity!.Level);
+        Assert.Equal(20, first.Parts[0].Intensity!.Percent);
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class SessionServiceTests
         Assert.Equal(1700 + 200, edited.TotalDistance);
         Assert.Equal(1900, repository.Sessions[0].TotalDistance);
         Assert.Equal(1900, repository.Facts.Sum(f => f.Distance));
-        Assert.Equal(200, repository.Facts.Where(f => f.Mode == SwimMode.Kick && f.Intensity == 8).Sum(f => f.Distance));
+        Assert.Equal(200, repository.Facts.Where(f => f.Mode == SwimMode.Kick && f.Intensity == 80).Sum(f => f.Distance));
         Assert.Equal(firstItemId, SessionJson.Deserialize<SwimSession>(repository.Sessions[0].ContentJson).Sets[0].Id);
         Assert.All(repository.Facts, f => Assert.Equal(saved.Id, f.SessionId));
     }

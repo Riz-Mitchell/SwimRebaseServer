@@ -21,8 +21,11 @@ public static class SessionRules
 /// </summary>
 public sealed record SwimSession
 {
+    /// <summary>The version a session is written with: 2 stores intensity as a percent (version 1 stored a 1-10 level).</summary>
+    public const int CurrentSchemaVersion = 2;
+
     /// <summary>Bumped when the shape of the stored tree changes, so old sessions can be upgraded when read.</summary>
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
     /// <summary>The group/lane the swimmer answered as; null when the board is for everyone.</summary>
     public string? Group { get; init; }

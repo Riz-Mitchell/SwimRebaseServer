@@ -41,8 +41,8 @@ public sealed record TimedSwimFilter(
     DateOnly? To,
     IReadOnlyList<decimal>? Distances,
     IReadOnlyList<Stroke>? Strokes,
-    int? MinIntensity,
-    int? MaxIntensity,
+    int? MinPercent,
+    int? MaxPercent,
     IReadOnlyList<StartType>? StartTypes,
     IReadOnlyList<string>? ResistanceTypes,
     bool? HasResistance);

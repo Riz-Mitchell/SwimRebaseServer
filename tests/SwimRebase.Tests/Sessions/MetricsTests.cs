@@ -1,4 +1,5 @@
 using Sessions.Application.Metrics;
+using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
 
 namespace SwimRebase.Tests.Sessions;
@@ -14,12 +15,12 @@ public class MetricsTests
 
     private static List<FactTotal> Facts() =>
     [
-        Fact(SessionA, "2026-09-14", Stroke.Free, SwimMode.Swim, 2, 400),
-        Fact(SessionA, "2026-09-14", Stroke.Fly, SwimMode.Swim, 8, 200),
-        Fact(SessionB, "2026-09-16", Stroke.Fly, SwimMode.Kick, 5, 300),
+        Fact(SessionA, "2026-09-14", Stroke.Free, SwimMode.Swim, 20, 400),
+        Fact(SessionA, "2026-09-14", Stroke.Fly, SwimMode.Swim, 80, 200),
+        Fact(SessionB, "2026-09-16", Stroke.Fly, SwimMode.Kick, 50, 300),
         Fact(SessionB, "2026-09-16", Stroke.Free, SwimMode.Swim, null, 100),
-        Fact(SessionC, "2026-09-22", Stroke.Fly, SwimMode.Swim, 9, 100),
-        Fact(SessionD, "2026-10-02", Stroke.Back, SwimMode.Swim, 8, 500),
+        Fact(SessionC, "2026-09-22", Stroke.Fly, SwimMode.Swim, 90, 100),
+        Fact(SessionD, "2026-10-02", Stroke.Back, SwimMode.Swim, 80, 500),
     ];
 
     private static FactTotal Fact(Guid session, string date, Stroke stroke, SwimMode mode, int? intensity, long distance) =>
@@ -32,8 +33,9 @@ public class MetricsTests
         int? min = null,
         int? max = null,
         string? from = null,
-        string? to = null) =>
-        new(from is null ? null : DateOnly.Parse(from), to is null ? null : DateOnly.Parse(to), strokes, null, min, max, groupBy ?? [], measure);
+        string? to = null,
+        EffortScale? scale = null) =>
+        new(from is null ? null : DateOnly.Parse(from), to is null ? null : DateOnly.Parse(to), strokes, null, min, max, groupBy ?? [], measure, Scale: scale);
 
     private static Dictionary<string, double?> Table(MetricsResult result) => result.Rows.ToDictionary(r => string.Join('|', r.Keys), r => r.Value);
 
@@ -68,7 +70,7 @@ public class MetricsTests
     [Fact]
     public void Distance_at_hard_effort_per_week_leaves_out_unspecified_intensity()
     {
-        var result = MetricsCalculator.Compute(Query(min: 8, groupBy: [MetricDimension.Week]), Facts());
+        var result = MetricsCalculator.Compute(Query(min: 80, groupBy: [MetricDimension.Week]), Facts());
 
         // Weeks are named by their Monday and read in date order.
         Assert.Equal(new[] { "2026-09-14", "2026-09-21", "2026-09-28" }, result.Rows.Select(r => r.Keys.Single()));
@@ -86,7 +88,7 @@ public class MetricsTests
     }
 
     [Fact]
-    public void Intensity_distribution_reads_in_numeric_order_with_unspecified_last()
+    public void Intensity_distribution_reads_in_band_order_with_unspecified_last()
     {
         var result = MetricsCalculator.Compute(Query(groupBy: [MetricDimension.Intensity]), Facts());
 
@@ -121,8 +123,8 @@ public class MetricsTests
     {
         var result = MetricsCalculator.Compute(Query(MetricMeasure.AvgIntensity, from: "2026-09-14", to: "2026-09-16"), Facts());
 
-        // (400*2 + 200*8 + 300*5) / 900; the 100 with no intensity is left out.
-        Assert.Equal(Math.Round((400 * 2 + 200 * 8 + 300 * 5) / 900.0, 2), Assert.Single(result.Rows).Value);
+        // (400*20 + 200*80 + 300*50) / 900; the 100 with no intensity is left out.
+        Assert.Equal(Math.Round((400 * 20 + 200 * 80 + 300 * 50) / 900.0, 2), Assert.Single(result.Rows).Value);
     }
 
     [Fact]
@@ -163,7 +165,7 @@ public class MetricsTests
         Assert.Throws<InvalidMetricsQueryException>(() =>
             MetricsCalculator.Compute(Query(groupBy: [MetricDimension.Stroke, MetricDimension.Stroke]), []));
         Assert.Throws<InvalidMetricsQueryException>(() => MetricsCalculator.Compute(Query(from: "2026-10-01", to: "2026-09-01"), []));
-        Assert.Throws<InvalidMetricsQueryException>(() => MetricsCalculator.Compute(Query(min: 9, max: 3), []));
+        Assert.Throws<InvalidMetricsQueryException>(() => MetricsCalculator.Compute(Query(min: 90, max: 30), []));
     }
 
     [Fact]
@@ -175,7 +177,7 @@ public class MetricsTests
 
         Assert.Equal(new DateOnly(2026, 9, 1), query.From);
         Assert.Equal(new[] { Stroke.Fly }, query.Strokes);
-        Assert.Equal(8, query.MinIntensity);
+        Assert.Equal(75, query.MinPercent);
         Assert.Equal(new[] { MetricDimension.Week }, query.GroupBy);
         Assert.Equal(MetricMeasure.AvgIntensity, query.Measure);
     }
@@ -199,5 +201,50 @@ public class MetricsTests
         Assert.Contains("\"groupBy\":[\"stroke\"]", text);
         Assert.Contains("\"key\":[\"fly\"],\"value\":600", text);
         Assert.DoesNotContain("note", text);
+    }
+
+    [Fact]
+    public void Intensity_can_be_grouped_by_the_zones_scale()
+    {
+        var zones = EffortVocabulary.Default.FindScale("zones")!;
+
+        var result = MetricsCalculator.Compute(Query(groupBy: [MetricDimension.Intensity], scale: zones), Facts());
+
+        // 20 and 50 are A0; 80 is TH; 90 is Sub Max; the fact with no intensity is last.
+        Assert.Equal(new[] { "A0", "TH", "Sub Max", "unspecified" }, result.Rows.Select(r => r.Keys.Single()));
+        Assert.Equal(new Dictionary<string, double?> { ["A0"] = 700, ["TH"] = 700, ["Sub Max"] = 100, ["unspecified"] = 100 }, Table(result));
+    }
+
+    [Fact]
+    public void Intensity_can_be_grouped_by_a_custom_scale()
+    {
+        var custom = EffortScale.Custom([new EffortBand("easy", "Easy", 1, 60), new EffortBand("hard", "Hard", 61, 100)]);
+
+        var result = MetricsCalculator.Compute(Query(groupBy: [MetricDimension.Intensity], scale: custom), Facts());
+
+        Assert.Equal(new Dictionary<string, double?> { ["easy"] = 700, ["hard"] = 800, ["unspecified"] = 100 }, Table(result));
+        Assert.Equal(new[] { "easy", "hard", "unspecified" }, result.Rows.Select(r => r.Keys.Single()));
+    }
+
+    [Fact]
+    public void A_percent_filter_and_the_earlier_level_filter_agree()
+    {
+        var byLevel = MetricsTool.Parse("""{"minIntensity":8,"maxIntensity":9}""");
+        var byPercent = MetricsTool.Parse("""{"minPercent":75,"maxPercent":94}""");
+
+        Assert.Equal((byPercent.MinPercent, byPercent.MaxPercent), (byLevel.MinPercent, byLevel.MaxPercent));
+        Assert.Equal("zones", MetricsTool.Parse("""{"scale":"zones"}""").ScaleId);
+    }
+
+    [Fact]
+    public void A_request_names_its_scale_else_the_saved_choice_applies()
+    {
+        var saved = new SessionPreferences { EffortScale = "zones" };
+
+        Assert.Equal("zones", EffortScaleChoice.Resolve(null, saved).Id);
+        Assert.Equal("tens", EffortScaleChoice.Resolve("tens", saved).Id);
+        Assert.Equal("tens", EffortScaleChoice.Resolve(null, null).Id);
+        Assert.Throws<InvalidMetricsQueryException>(() => EffortScaleChoice.Resolve("nonsense", saved));
+        Assert.Throws<InvalidMetricsQueryException>(() => EffortScaleChoice.Resolve("custom", saved));
     }
 }

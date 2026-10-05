@@ -1,3 +1,4 @@
+using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
 
 namespace Sessions.Application.Metrics;
@@ -12,28 +13,33 @@ public enum MetricMeasure
     /// <summary>How many sessions.</summary>
     Sessions,
 
-    /// <summary>Distance-weighted average intensity of the distance that has one.</summary>
+    /// <summary>Distance-weighted average intensity, in percent, of the distance that has one.</summary>
     AvgIntensity,
 }
 
 /// <summary>
 /// One question about what was swum: filter the facts, group them (0-2 dimensions), measure each group. Everything from "fly this month" to
-/// "distance at intensity 8+ per week" is a query of this shape.
+/// "distance at 80%+ effort per week" is a query of this shape.
 /// </summary>
 public sealed record MetricsQuery(
     DateOnly? From,
     DateOnly? To,
     IReadOnlyList<Stroke>? Strokes,
     IReadOnlyList<SwimMode>? Modes,
-    int? MinIntensity,
-    int? MaxIntensity,
+    int? MinPercent,
+    int? MaxPercent,
     IReadOnlyList<MetricDimension> GroupBy,
-    MetricMeasure Measure)
+    MetricMeasure Measure,
+    string? ScaleId = null,
+    EffortScale? Scale = null)
 {
     public const int MaxDimensions = 2;
 
     /// <summary>True when an intensity bound is set, which excludes distance whose intensity is unspecified.</summary>
-    public bool FiltersIntensity => MinIntensity is not null || MaxIntensity is not null;
+    public bool FiltersIntensity => MinPercent is not null || MaxPercent is not null;
+
+    /// <summary>How the intensity dimension is bucketed once <see cref="MetricsService"/> has resolved <see cref="ScaleId"/>; the tens scale until then.</summary>
+    public EffortScale EffectiveScale => Scale ?? EffortScale.Tens;
 }
 
 /// <summary>The facts of one session narrowed to what a metric can group by, with distance summed. What the repository returns and the calculator reads.</summary>

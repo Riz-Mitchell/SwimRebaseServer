@@ -87,6 +87,13 @@ using (var migrationScope = app.Services.CreateScope())
     }
 }
 
+// Re-map effort saved before intensity became a percent. Idempotent; turn off with Sessions:BackfillIntensity=false once it has run everywhere.
+if (app.Configuration.GetValue("Sessions:BackfillIntensity", true))
+{
+    using var backfillScope = app.Services.CreateScope();
+    await backfillScope.ServiceProvider.GetRequiredService<IntensityBackfill>().RunAsync(CancellationToken.None);
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

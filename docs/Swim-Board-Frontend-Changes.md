@@ -64,3 +64,14 @@ Body unchanged: `{ "answers": ["...", ...] }`, one entry per question **in the o
 - [ ] Stop expecting a second `questions_asked` after a fork.
 - [ ] Render `preview` in the `save_session` approval card (live and from `/pending`).
 - [ ] Support the no-card fallback and the failure ending.
+
+## Effort and intensity (changed)
+
+Intensity is now a percent of maximum effort (1-100) instead of a 1-10 level. Full reference: `docs/API-Reference.md` ("Effort scales").
+
+- A part's `intensity` is `{ percent, scale, level }`. `level` is the old 1-10 value, still sent, so existing UI keeps working; read `percent` for anything new. `scale` is `words`, `zones` or `percent`.
+- The `effort` text is the coach's wording, kept as written ("sub max", "A2"). Show it as is; the percent is derived from it. Zone names (`A0`, `A1`, `A2`, `A3`, `TH`, `VO2`, `Sub Max`, `Max`) now map to an intensity instead of `null`.
+- The `save_session` card's `preview` shows effort as `(80%)` rather than `(8/10)`.
+- Metrics: `groupBy=intensity` buckets by an effort scale. Pass `scale=tens|zones|custom`, or omit it to use the swimmer's saved scale. Row `keys` are band keys of that scale (`"8"`, `"TH"`), in band order. `GET /api/sessions/effort-scales` lists the choices and `PUT /api/sessions/preferences` saves one, including a custom scale.
+- `avgIntensity` is now an average percent. Filter with `minPercent`/`maxPercent`; `minIntensity`/`maxIntensity` still work as 1-10 bounds.
+- `PUT /api/sessions/preferences`: `defaultEffort` is now a percent (1-100; default 50).

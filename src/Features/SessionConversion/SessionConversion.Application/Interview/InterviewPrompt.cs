@@ -1,3 +1,5 @@
+using Sessions.Domain.Calculations;
+
 namespace SessionConversion.Application.Interview;
 
 /// <summary>The system prompts of the interview's two model calls. Each one is answered as JSON of a fixed schema (<see cref="ConversionSchemas"/>).</summary>
@@ -15,7 +17,7 @@ public static class InterviewPrompt
         - Do not ask for the date, the pool, or whether they changed anything: those are asked separately. A board with no choices at all gets an empty questions array.
         """;
 
-    public const string Conversion = """
+    public static readonly string Conversion = $$"""
         You turn a photo of a swim workout board into a record of what THIS swimmer actually swam. You get the board and the swimmer's answers to questions about the path they took, and sometimes notes from their chat message. Use what the swimmer told you over what the board says. Answer with the JSON only.
 
         LEDGER first: one entry per line or set on the board, in board order. boardLine is its text as written. outcome is swum (as written), modified (swum, but changed, shortened or a different option), skipped, other_group (another group's or lane's set, or an option they did not choose) or added (extra work the swimmer said they did, placed where it happened).
@@ -31,7 +33,7 @@ public static class InterviewPrompt
         - Alternating strokes ("8 x 50 alt fly/back", "fly on evens, back on odds"): a group with repeat = reps / 2 holding one item per stroke, e.g. repeat 4 of [1 x 50 fly, 1 x 50 back]. An odd count is that group plus one extra item.
         - stroke (every part needs one): free, back, breast, fly, im (a quarter of each in order fly, back, breast, free; its dist must divide by 4), or choice. "choice"/"any" -> the stroke they said, else "choice".
         - mode: kick, pull, drill (name it in note), scull, else swim. equip: fins, paddles, buoy, snorkel, board, band, parachute; an empty array when there is none.
-        - effort (on the part): words as written (easy, build, fast, 80%, race pace), else null. Anything else, e.g. "descend 1-4" or "odds/evens", goes in the item's note; note and timing are null when there is nothing to say.
+        - effort (on the part): the board's own effort wording, copied exactly as written and never reworded, shortened or swapped for a similar term ("sub max" stays "sub max", "A2" stays "A2", "80%" stays "80%"). {{EffortVocabulary.Default.PromptText()}} Effort wording not in that list is still copied as written; null when the board gives none. Anything that is not an effort, e.g. "descend 1-4" or "odds/evens", goes in the item's note; note and timing are null when there is nothing to say.
         - timing: {kind: rest, seconds} for "15 sec rest"; {kind: sendOff, seconds} for "@1:30" / "on 1:30" (seconds = 90); null when the board gives none.
         - Never total anything; distances are computed for you.
         """;

@@ -31,9 +31,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISessionPreferencesRepository, SessionPreferencesRepository>();
 
         // One mapper per external intensity scale; add a scale by registering another IIntensityMapper.
-        services.AddSingleton<IIntensityMapper, WordsIntensityMapper>();
+        services.AddSingleton<IIntensityMapper, VocabularyIntensityMapper>();
         services.AddSingleton<IntensityResolver>();
         services.AddSingleton<SessionIngest>();
+        services.AddScoped<IntensityBackfill>();
 
         services.AddScoped<SessionService>();
         services.AddScoped<MetricsService>();

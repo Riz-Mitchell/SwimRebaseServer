@@ -412,7 +412,7 @@ Abandon a focus.
 
 Saved swims: a record of what was swum, logged after the fact. Today they are created by the AI's `save_session` tool (see Sub-agents above); these endpoints read them, correct them, and add them up. Distances are always computed from the session's structure, never entered. Every distance (`dist`, `totalDistance`, `distanceFromStart`, metric totals) is a decimal number with at most 2 decimal places, so odd pool lengths like `12.5` work.
 
-A session's `content` is a tree. `sets` holds **items** (`{ kind: "item", reps, timing?, parts, note? }` - `parts` is what one rep is made of, each `{ dist, stroke, mode, equip, effort, intensity? }`) and **groups** (`{ kind: "group", repeat, items }`, nesting at most 3 deep). `stroke` is `free | back | breast | fly | im | choice`; an `im` part counts as a quarter of each stroke. `intensity` is `{ level, scale }` on one global 1-10 scale, mapped from `effort` (words like "easy"/"hard" or a percentage); it is `null` when the effort could not be mapped.
+A session's `content` is a tree. `sets` holds **items** (`{ kind: "item", reps, timing?, parts, note? }` - `parts` is what one rep is made of, each `{ dist, stroke, mode, equip, effort, intensity? }`) and **groups** (`{ kind: "group", repeat, items }`, nesting at most 3 deep). `stroke` is `free | back | breast | fly | im | choice`; an `im` part counts as a quarter of each stroke. `intensity` is `{ percent, scale, level }`, mapped from `effort`; it is `null` when the effort could not be mapped. `percent` (1-100) is the effort as a percent of maximum and is what is stored and filtered on; `scale` is where the text came from (`words` for "easy"/"sub max", `zones` for `A0`-`A3`/`TH`/`VO2`, `percent` for "80%"); `level` is the same effort on the 1-10 tens scale, written out for clients that still read it. The `effort` text is the coach's own wording and is kept as written; the percent is worked out from it, so it can be re-mapped later. See [Effort scales](#effort-scales).
 
 In API responses enum values are PascalCase (`Free`, `Kick`, `SendOff`; the lowercase forms above are what the AI tools read and write) and missing values are `null` rather than left out (`timing`, `note`, `effort`, `intensity`). Decode enums case-insensitively to be safe.
 
@@ -448,24 +448,37 @@ Filter, group and measure what was swum. All parameters optional; repeat a param
 | `from`, `to` | Date range (yyyy-MM-dd), inclusive |
 | `strokes` | `free | back | breast | fly | im | choice` (an IM part counts towards fly, back, breast and free) |
 | `modes` | `swim | kick | pull | drill | scull` |
-| `minIntensity`, `maxIntensity` | Bounds on the 1-10 scale. Setting either leaves out distance with no intensity |
+| `minPercent`, `maxPercent` | Bounds on intensity, 1-100. Setting either leaves out distance with no intensity |
+| `minIntensity`, `maxIntensity` | The earlier 1-10 bounds, kept for existing clients: a level covers the percents of its tens band (`minIntensity=8` is 75 and above). `minPercent`/`maxPercent` win when both are sent |
+| `scale` | `tens`, `zones` or `custom`: how `groupBy=intensity` buckets intensity. Omit it to use the swimmer's saved scale (`tens` until they choose one) |
 | `groupBy` | Up to 2 of `stroke | mode | intensity | day | week | month | session` (weeks start Monday and are named by that date) |
-| `measure` | `distance` (default), `sessions`, or `avgIntensity` (weighted by distance) |
+| `measure` | `distance` (default), `sessions`, or `avgIntensity` (average percent, weighted by distance) |
 
-Examples: `?strokes=fly&groupBy=month` (how much fly per month), `?minIntensity=8&groupBy=week` (distance at hard effort per week), `?measure=avgIntensity&groupBy=month`.
+Examples: `?strokes=fly&groupBy=month` (how much fly per month), `?minPercent=80&groupBy=week` (distance at 80%+ effort per week), `?groupBy=intensity&scale=zones` (distance per zone), `?measure=avgIntensity&groupBy=month`.
 
 **Response:**
 ```json
 { "measure": "Distance", "groupBy": ["Stroke"], "totalDistance": 1600, "units": ["Metres"],
   "rows": [ { "keys": ["fly"], "value": 600 }, { "keys": ["free"], "value": 500 } ] }
 ```
-`rows` reads in date/intensity order when grouped by time or intensity, otherwise biggest first. `units` lists every distance unit present; more than one means metres and yards are mixed - nothing is converted. `value` is `null` when the measure does not apply (an average with no intensity). `400` with `{ error }` for a question that cannot be answered (e.g. more than 2 `groupBy`).
+`rows` reads in date order when grouped by time, and in band order (with `unspecified` last) when grouped by intensity - the `keys` are the band keys of the chosen scale, e.g. `"8"` on `tens` or `"Sub Max"` on `zones`. Otherwise rows are biggest first. `units` lists every distance unit present; more than one means metres and yards are mixed - nothing is converted. `value` is `null` when the measure does not apply (an average with no intensity). `400` with `{ error }` for a question that cannot be answered (e.g. more than 2 `groupBy`, an unknown `scale`, or `scale=custom` with no custom scale saved).
+
+### Effort scales
+Intensity is always stored as a percent of maximum effort. An **effort scale** is a named set of ordered bands that together cover 1-100; it only decides how intensity is bucketed when grouped. Built in:
+- `tens` - ten bands, keys `"1"` to `"10"` (a level is the percent rounded to the nearest ten). The default, and what clients read before percentages existed.
+- `zones` - `A0` (1-55), `A1` (56-65), `A2` (66-72), `A3` (73-79), `TH` (80-85), `VO2` (86-89), `Sub Max` (90-97), `Max` (98-100).
+- `custom` - the swimmer's own bands (see preferences).
+
+How effort text becomes a percent is a fixed vocabulary shared with the conversion model: words (`easy` 20, `build` 50, `hard`/`fast` 80, `threshold` 83, `race pace` 88, `sub max` 90, `max`/`sprint` 100 ...), zone names (`A0` 40, `A1` 60, `A2` 70, `A3` 76, `TH` 83, `VO2` 88) and percentages (`80%` is 80). Text that is ambiguous ("easy/hard") or not in the vocabulary has no intensity.
+
+### `GET /api/sessions/effort-scales`
+**Response:** `{ "scales": [ { "id": "tens", "name": "1-10", "bands": [ { "key": "1", "label": "1", "min": 1, "max": 14 }, ... ] }, { "id": "zones", ... } ], "custom": { "id": "custom", "name": "Custom", "bands": [...] } | null, "selected": "tens" }`. `selected` is the swimmer's saved scale.
 
 ### `GET /api/sessions/preferences`
-**Response:** `{ "defaultEffort": 5 }`. The swimmer's default effort level on the 1-10 scale; 5 until they choose one. It is stored for load tracking, which is not available yet, so nothing uses it at the moment.
+**Response:** `{ "defaultEffort": 50, "effortScale": "tens", "customEffortScale": [ { "key": "easy", "label": "Easy", "min": 1, "max": 60 }, ... ] | null }`. `defaultEffort` is the swimmer's default effort as a percent (1-100); 50 until they choose one. It is stored for load tracking, which is not available yet, so nothing uses it at the moment. `effortScale` is the scale metrics group intensity by when a request names none.
 
 ### `PUT /api/sessions/preferences`
-**Body:** `{ "defaultEffort": 6 }`. **Response:** the saved preferences. `400` with `{ error }` if the level is outside 1-10.
+**Body:** any of `{ "defaultEffort": 60, "effortScale": "zones" | "tens" | "custom", "customEffortScale": [ { "key", "label"?, "min", "max" } ] }`. Only the fields sent change; `customEffortScale: []` removes the saved custom scale (and falls back to `tens` if it was selected). A custom scale needs 2-12 bands with unique keys (1-16 characters, not `unspecified`), listed in order, each starting one above the previous band's `max`, from 1 to 100. **Response:** the saved preferences. `400` with `{ error }` for a `defaultEffort` outside 1-100, an unknown `effortScale`, `effortScale: "custom"` with no custom scale, or bands that are not a usable scale.
 
 ---
 
@@ -499,7 +512,7 @@ Enums are accepted in any case on input and returned PascalCase (`Free`, `Scm`, 
 `sessionId`, `effort`, `startType`, `finish`, `resistance`, `splits` and `includeInMetrics` are optional.
 
 - `seconds` is the whole swim's time and is always required; splits are extra detail on top of it.
-- `effort` is free text ("easy", "80%", "race pace") and is mapped to the same 1-10 `intensity` as a session part. It is `null` when the text can't be mapped.
+- `effort` is free text ("easy", "80%", "race pace") and is mapped to the same percent `intensity` as a session part. It is `null` when the text can't be mapped.
 - A split is a checkpoint before the finish, so `distanceFromStart` must be below `dist`. The finish time is `seconds`, not a split.
 - `strokeRateCyclesPerMinute` counts full stroke cycles, not individual arm strokes.
 - `includeInMetrics` defaults to `false`; see below.
@@ -517,7 +530,8 @@ Fastest first. All parameters optional; repeat a parameter for several values (`
 | `from`, `to` | Date range (yyyy-MM-dd), inclusive |
 | `distances` | Exact distances, e.g. `distances=50&distances=12.5` |
 | `strokes` | `free | back | breast | fly | im | choice` |
-| `minIntensity`, `maxIntensity` | Bounds on the 1-10 scale. Swims with no intensity are left out when either is set |
+| `minPercent`, `maxPercent` | Bounds on intensity, 1-100. Swims with no intensity are left out when either is set |
+| `minIntensity`, `maxIntensity` | The earlier 1-10 bounds (a level covers the percents of its tens band); `minPercent`/`maxPercent` win when both are sent |
 | `startTypes` | `Push | Dive` |
 | `resistanceTypes` | Resistance type names to match |
 | `hasResistance` | `true` for swims with resistance, `false` for without |
@@ -544,7 +558,7 @@ The list is not paginated.
   "mode": "Swim",
   "seconds": 27.84,
   "effort": "string|null",
-  "intensity": 9,
+  "intensity": 90,
   "startType": "Push | Dive | null",
   "finish": "Hand | Head | Feet | null",
   "resistance": { "type": "string", "load": "string|null" },

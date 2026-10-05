@@ -18,6 +18,25 @@ public sealed class IntensityResolver(IEnumerable<IIntensityMapper> mappers)
 
     public SwimSession Resolve(SwimSession session) => session with { Sets = session.Sets.Select(Resolve).ToList() };
 
+    /// <summary>Null when the text is blank or no mapper recognises it.</summary>
+    public Intensity? Resolve(string? effort)
+    {
+        if (string.IsNullOrWhiteSpace(effort))
+        {
+            return null;
+        }
+
+        foreach (var mapper in _mappers)
+        {
+            if (mapper.TryMap(effort, out var intensity))
+            {
+                return intensity;
+            }
+        }
+
+        return null;
+    }
+
     private SessionNode Resolve(SessionNode node) => node switch
     {
         SetGroup group => group with { Items = group.Items.Select(Resolve).ToList() },
@@ -33,15 +52,7 @@ public sealed class IntensityResolver(IEnumerable<IIntensityMapper> mappers)
             return part;
         }
 
-        foreach (var mapper in _mappers)
-        {
-            if (mapper.TryMap(part.Effort, out var intensity))
-            {
-                return part with { Intensity = intensity };
-            }
-        }
-
-        return part with { Intensity = null };
+        return part with { Intensity = Resolve(part.Effort) };
     }
 }
 

@@ -16,7 +16,7 @@ public class TimedSwimFactsTests
         Stroke = Stroke.Free,
         Mode = SwimMode.Swim,
         Seconds = 30,
-        Intensity = 9,
+        Intensity = 90,
         IncludeInMetrics = includeInMetrics,
     };
 
@@ -30,7 +30,7 @@ public class TimedSwimFactsTests
         Assert.Equal(sessionId, total.SessionId);
         Assert.Equal(50, total.Distance);
         Assert.Equal(Stroke.Free, total.Stroke);
-        Assert.Equal(9, total.Intensity);
+        Assert.Equal(90, total.Intensity);
     }
 
     [Fact]

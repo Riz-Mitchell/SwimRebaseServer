@@ -23,8 +23,8 @@ public class FactTests
         {
             Sets =
             [
-                Item(1, Swim(300, Stroke.Free, effort: "easy", level: 2)),
-                new SetGroup { Repeat = 4, Items = [Item(1, Swim(100, Stroke.Fly, level: 8)), Item(1, Swim(50, Stroke.Free, SwimMode.Kick, level: 3, equip: "fins"))] },
+                Item(1, Swim(300, Stroke.Free, effort: "easy", percent: 20)),
+                new SetGroup { Repeat = 4, Items = [Item(1, Swim(100, Stroke.Fly, percent: 80)), Item(1, Swim(50, Stroke.Free, SwimMode.Kick, percent: 30, equip: "fins"))] },
                 Item(1, Swim(200, Stroke.Im)),
             ],
         });
@@ -43,7 +43,7 @@ public class FactTests
             Assert.Equal(SessionSource.Ai, f.Source);
             Assert.True(f.Distance > 0);
         });
-        Assert.Equal(400, facts.Where(f => f.Stroke == Stroke.Fly && f.Intensity == 8).Sum(f => f.Distance));
+        Assert.Equal(400, facts.Where(f => f.Stroke == Stroke.Fly && f.Intensity == 80).Sum(f => f.Distance));
         Assert.Equal(200, facts.Where(f => f.Mode == SwimMode.Kick).Sum(f => f.Distance));
         Assert.Equal(new[] { "fins" }, facts.Single(f => f.Mode == SwimMode.Kick).Equip);
     }
