@@ -32,7 +32,9 @@ public sealed record MetricsQuery(
     MetricMeasure Measure,
     string? ScaleId = null,
     EffortScale? Scale = null,
-    Guid? SessionId = null)
+    Guid? SessionId = null,
+    bool ApplyDefaultEffort = true,
+    int? DefaultEffort = null)
 {
     public const int MaxDimensions = 2;
 
@@ -50,13 +52,19 @@ public sealed record FactTotal(DateOnly PerformedOn, Guid SessionId, Stroke Stro
 /// <param name="Value">Null when the measure does not apply (an average over distance with no intensity).</param>
 public sealed record MetricRow(IReadOnlyList<string> Keys, double? Value);
 
+/// <param name="Scale">The effort scale intensity was bucketed by.</param>
+/// <param name="DefaultEffort">The percent that distance with no stated effort was counted at; null when that was not applied.</param>
+/// <param name="AssumedDistance">How much distance was counted at <paramref name="DefaultEffort"/>.</param>
 /// <param name="Units">Every distance unit present in the matching facts. More than one means distances mix metres and yards - nothing is converted.</param>
 public sealed record MetricsResult(
     MetricMeasure Measure,
     IReadOnlyList<MetricDimension> GroupBy,
     IReadOnlyList<MetricRow> Rows,
     decimal TotalDistance,
-    IReadOnlyList<DistanceUnit> Units);
+    IReadOnlyList<DistanceUnit> Units,
+    EffortScale Scale,
+    int? DefaultEffort,
+    decimal AssumedDistance);
 
 /// <summary>The query cannot be answered as asked. The message is written for whoever (or whatever) made it.</summary>
 public sealed class InvalidMetricsQueryException(string message) : Exception(message);

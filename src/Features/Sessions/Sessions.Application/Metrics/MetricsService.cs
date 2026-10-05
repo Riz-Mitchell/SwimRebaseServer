@@ -1,4 +1,5 @@
 using Sessions.Application.Interfaces;
+using Sessions.Domain.Models;
 
 namespace Sessions.Application.Metrics;
 
@@ -10,7 +11,12 @@ public sealed class MetricsService(IMetricsRepository metrics, ISessionPreferenc
         // Compute once up front so a bad query is rejected before any database work.
         MetricsCalculator.Compute(query, []);
 
-        var resolved = query with { Scale = EffortScaleChoice.Resolve(query.ScaleId, await preferences.FindAsync(userId, cancellationToken)) };
+        var saved = await preferences.FindAsync(userId, cancellationToken);
+        var resolved = query with
+        {
+            Scale = EffortScaleChoice.Resolve(query.ScaleId, saved),
+            DefaultEffort = query.ApplyDefaultEffort ? saved?.DefaultEffort ?? SessionPreferences.BuiltInDefaultEffort : null,
+        };
         var totals = await metrics.GetTotalsAsync(userId, resolved, cancellationToken);
         return MetricsCalculator.Compute(resolved, totals);
     }
