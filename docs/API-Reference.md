@@ -450,10 +450,11 @@ Filter, group and measure what was swum. All parameters optional; repeat a param
 | `from`, `to` | Date range (yyyy-MM-dd), inclusive |
 | `strokes` | `free | back | breast | fly | im | choice` (an IM part counts towards fly, back, breast and free) |
 | `modes` | `swim | kick | pull | drill | scull` |
-| `minPercent`, `maxPercent` | Bounds on intensity, 1-100. Setting either leaves out distance with no intensity |
+| `minPercent`, `maxPercent` | Bounds on intensity, 1-100. Distance with no stated effort counts at the swimmer's default effort (see `applyDefault`); with `applyDefault=false` setting either leaves it out |
 | `minIntensity`, `maxIntensity` | The earlier 1-10 bounds, kept for existing clients: a level covers the percents of its tens band (`minIntensity=8` is 75 and above). `minPercent`/`maxPercent` win when both are sent |
 | `scale` | `tens`, `zones` or `custom`: how `groupBy=intensity` buckets intensity. Omit it to use the swimmer's saved scale (`tens` until they choose one) |
 | `groupBy` | Up to 2 of `stroke | mode | intensity | day | week | month | session` (weeks start Monday and are named by that date) |
+| `applyDefault` | `true` (default): distance whose effort could not be mapped is counted at the swimmer's `defaultEffort`, so it falls in that effort's band, in `avgIntensity` and in `minPercent`/`maxPercent` ranges. `false`: it stays `unspecified` and is left out of intensity ranges and averages |
 | `measure` | `distance` (default), `sessions`, or `avgIntensity` (average percent, weighted by distance) |
 
 Examples: `?strokes=fly&groupBy=month` (how much fly per month), `?minPercent=80&groupBy=week` (distance at 80%+ effort per week), `?groupBy=intensity&scale=zones` (distance per zone), `?measure=avgIntensity&groupBy=month`, `?sessionId={id}&groupBy=intensity&scale=zones` (one session's effort split).
@@ -461,9 +462,11 @@ Examples: `?strokes=fly&groupBy=month` (how much fly per month), `?minPercent=80
 **Response:**
 ```json
 { "measure": "Distance", "groupBy": ["Stroke"], "totalDistance": 1600, "units": ["Metres"],
+  "scale": { "id": "zones", "name": "Zones", "bands": [ { "key": "A0", "label": "A0", "min": 1, "max": 55 }, ... ] },
+  "defaultEffort": 50, "assumedDistance": 100,
   "rows": [ { "keys": ["fly"], "value": 600 }, { "keys": ["free"], "value": 500 } ] }
 ```
-`rows` reads in date order when grouped by time, and in band order (with `unspecified` last) when grouped by intensity - the `keys` are the band keys of the chosen scale, e.g. `"8"` on `tens` or `"Sub Max"` on `zones`. Otherwise rows are biggest first. `units` lists every distance unit present; more than one means metres and yards are mixed - nothing is converted. `value` is `null` when the measure does not apply (an average with no intensity). `400` with `{ error }` for a question that cannot be answered (e.g. more than 2 `groupBy`, an unknown `scale`, or `scale=custom` with no custom scale saved).
+`rows` reads in date order when grouped by time, and in band order (with `unspecified` last) when grouped by intensity - the `keys` are the band keys of the chosen scale, e.g. `"8"` on `tens` or `"Sub Max"` on `zones`. Otherwise rows are biggest first. `scale` is the effort scale the intensity keys belong to (the one named by `scale`, else the swimmer's saved one), so a response can be rendered without a second call. `defaultEffort` is the percent unspecified distance was counted at (`null` with `applyDefault=false`) and `assumedDistance` is how much distance that was, for flagging it in the UI. `units` lists every distance unit present; more than one means metres and yards are mixed - nothing is converted. `value` is `null` when the measure does not apply (an average with no intensity). `400` with `{ error }` for a question that cannot be answered (e.g. more than 2 `groupBy`, an unknown `scale`, or `scale=custom` with no custom scale saved).
 
 ### Effort scales
 Intensity is always stored as a percent of maximum effort. An **effort scale** is a named set of ordered bands that together cover 1-100; it only decides how intensity is bucketed when grouped. Built in:
@@ -474,10 +477,16 @@ Intensity is always stored as a percent of maximum effort. An **effort scale** i
 How effort text becomes a percent is a fixed vocabulary shared with the conversion model: words (`easy` 20, `build` 50, `hard`/`fast` 80, `threshold` 83, `race pace` 88, `sub max` 90, `max`/`sprint` 100 ...), zone names (`A0` 40, `A1` 60, `A2` 70, `A3` 76, `TH` 83, `VO2` 88) and percentages (`80%` is 80). Text that is ambiguous ("easy/hard") or not in the vocabulary has no intensity.
 
 ### `GET /api/sessions/effort-scales`
-**Response:** `{ "scales": [ { "id": "tens", "name": "1-10", "bands": [ { "key": "1", "label": "1", "min": 1, "max": 14 }, ... ] }, { "id": "zones", ... } ], "custom": { "id": "custom", "name": "Custom", "bands": [...] } | null, "selected": "tens" }`. `selected` is the swimmer's saved scale.
+**Response:** `{ "scales": [ { "id": "tens", "name": "1-10", "bands": [ { "key": "1", "label": "1", "min": 1, "max": 14 }, ... ] }, { "id": "zones", ... } ], "custom": { "id": "custom", "name": "Custom", "bands": [...] } | null, "selected": "tens", "defaultEffort": 50 }`. `selected` is the swimmer's saved scale.
+
+### `GET /api/sessions/effort-scale`
+The scale metrics use when a request names none, already resolved, plus the default effort. **Response:** `{ "selected": "zones", "scale": { "id": "zones", "name": "Zones", "bands": [ ... ] }, "custom": { "id": "custom", "name": "Custom", "bands": [...] } | null, "defaultEffort": 50 }`. `scale` is what a metrics response without a `scale` parameter reports; `custom` is the swimmer's own scale whether or not it is selected.
+
+### `PUT /api/sessions/effort-scale`
+**Body:** `{ "scale": "tens" | "zones" | "custom", "customBands"?: [ { "key", "label"?, "min", "max" } ] }`. `scale` is required; `customBands` saves the swimmer's own bands (the same rules as `customEffortScale` below) and is required the first time `scale` is `custom`. **Response:** as `GET`. `400` with `{ error }` for a missing or unknown `scale`, `custom` with no bands saved, or bands that are not a usable scale. `defaultEffort` is changed through `PUT /api/sessions/preferences`.
 
 ### `GET /api/sessions/preferences`
-**Response:** `{ "defaultEffort": 50, "effortScale": "tens", "customEffortScale": [ { "key": "easy", "label": "Easy", "min": 1, "max": 60 }, ... ] | null }`. `defaultEffort` is the swimmer's default effort as a percent (1-100); 50 until they choose one. It is stored for load tracking, which is not available yet, so nothing uses it at the moment. `effortScale` is the scale metrics group intensity by when a request names none.
+**Response:** `{ "defaultEffort": 50, "effortScale": "tens", "customEffortScale": [ { "key": "easy", "label": "Easy", "min": 1, "max": 60 }, ... ] | null }`. `defaultEffort` is the swimmer's default effort as a percent (1-100); 50 until they choose one. Metrics count distance with no stated effort at this percent (see `applyDefault` on `GET /api/sessions/metrics`). `effortScale` is the scale metrics group intensity by when a request names none.
 
 ### `PUT /api/sessions/preferences`
 **Body:** any of `{ "defaultEffort": 60, "effortScale": "zones" | "tens" | "custom", "customEffortScale": [ { "key", "label"?, "min", "max" } ] }`. Only the fields sent change; `customEffortScale: []` removes the saved custom scale (and falls back to `tens` if it was selected). A custom scale needs 2-12 bands with unique keys (1-16 characters, not `unspecified`), listed in order, each starting one above the previous band's `max`, from 1 to 100. **Response:** the saved preferences. `400` with `{ error }` for a `defaultEffort` outside 1-100, an unknown `effortScale`, `effortScale: "custom"` with no custom scale, or bands that are not a usable scale.

@@ -79,7 +79,7 @@ public sealed class SessionsController(
 
     /// <summary>
     /// Filter, group and measure what was swum, e.g. <c>?strokes=fly&amp;groupBy=month</c> or <c>?sessionId=...&amp;groupBy=stroke</c> for one session or <c>?minPercent=80&amp;groupBy=week</c>.
-    /// <c>scale</c> picks how <c>groupBy=intensity</c> is bucketed; <c>minIntensity</c>/<c>maxIntensity</c> are the earlier 1-10 bounds.
+    /// <c>scale</c> picks how <c>groupBy=intensity</c> is bucketed; <c>applyDefault=false</c> stops distance with no stated effort being counted at the swimmer's default effort; <c>minIntensity</c>/<c>maxIntensity</c> are the earlier 1-10 bounds.
     /// </summary>
     [HttpGet("metrics")]
     public async Task<IActionResult> GetMetrics(
@@ -95,6 +95,7 @@ public sealed class SessionsController(
         [FromQuery] string? scale,
         [FromQuery] MetricDimension[]? groupBy,
         [FromQuery] MetricMeasure measure = MetricMeasure.Distance,
+        [FromQuery] bool applyDefault = true,
         CancellationToken cancellationToken = default)
     {
         try
@@ -102,7 +103,7 @@ public sealed class SessionsController(
             var query = new MetricsQuery(
                 from, to, strokes, modes,
                 EffortScale.MinPercent(minPercent, minIntensity), EffortScale.MaxPercent(maxPercent, maxIntensity),
-                groupBy ?? [], measure, scale, SessionId: sessionId);
+                groupBy ?? [], measure, scale, SessionId: sessionId, ApplyDefaultEffort: applyDefault);
             return Ok(await metrics.QueryAsync(currentUser.UserId, query, cancellationToken));
         }
         catch (InvalidMetricsQueryException ex)
@@ -119,7 +120,36 @@ public sealed class SessionsController(
         return Ok(new EffortScalesResponse(
             EffortVocabulary.Default.Scales.Select(EffortScaleResponse.From).ToList(),
             saved.CustomEffortScale is { } custom ? EffortScaleResponse.From(EffortScale.Custom(custom)) : null,
-            saved.EffortScale));
+            saved.EffortScale,
+            saved.DefaultEffort));
+    }
+
+    /// <summary>The scale metrics group intensity by when a request names none, resolved, with the swimmer's default effort.</summary>
+    [HttpGet("effort-scale")]
+    public async Task<IActionResult> GetEffortScale(CancellationToken cancellationToken) =>
+        Ok(EffortScaleSettingResponse.From(await preferences.GetAsync(currentUser.UserId, cancellationToken)));
+
+    /// <summary>Chooses the scale; <c>customBands</c> saves the swimmer's own bands (required the first time <c>scale</c> is "custom").</summary>
+    [HttpPut("effort-scale")]
+    public async Task<IActionResult> SetEffortScale([FromBody] EffortScaleChoiceRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Scale))
+        {
+            return BadRequest(new { error = "scale is required." });
+        }
+
+        try
+        {
+            var updated = await preferences.UpdateAsync(
+                currentUser.UserId,
+                new SessionPreferencesUpdate(null, request.Scale, request.CustomBands?.Select(b => b.ToBand()).ToList()),
+                cancellationToken);
+            return Ok(EffortScaleSettingResponse.From(updated));
+        }
+        catch (InvalidSessionPreferencesException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpGet("preferences")]
@@ -155,7 +185,21 @@ public sealed record EffortScaleResponse(string Id, string Name, IReadOnlyList<E
     public static EffortScaleResponse From(EffortScale scale) => new(scale.Id, scale.Name, scale.Bands);
 }
 
-public sealed record EffortScalesResponse(IReadOnlyList<EffortScaleResponse> Scales, EffortScaleResponse? Custom, string Selected);
+public sealed record EffortScalesResponse(IReadOnlyList<EffortScaleResponse> Scales, EffortScaleResponse? Custom, string Selected, int DefaultEffort);
+
+public sealed record EffortScaleChoiceRequest(string? Scale, List<EffortBandDto>? CustomBands);
+
+public sealed record EffortScaleSettingResponse(string Selected, EffortScaleResponse Scale, EffortScaleResponse? Custom, int DefaultEffort)
+{
+    public static EffortScaleSettingResponse From(SessionPreferencesView view)
+    {
+        var custom = view.CustomEffortScale is { } bands ? EffortScale.Custom(bands) : null;
+        var active = view.EffortScale == EffortScale.CustomId && custom is not null
+            ? custom
+            : EffortVocabulary.Default.FindScale(view.EffortScale) ?? EffortScale.Tens;
+        return new(view.EffortScale, EffortScaleResponse.From(active), custom is null ? null : EffortScaleResponse.From(custom), view.DefaultEffort);
+    }
+}
 
 public sealed record SessionPreferencesRequest(int? DefaultEffort, string? EffortScale, List<EffortBandDto>? CustomEffortScale);
 

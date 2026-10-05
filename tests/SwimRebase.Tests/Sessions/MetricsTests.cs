@@ -35,8 +35,9 @@ public class MetricsTests
         string? from = null,
         string? to = null,
         EffortScale? scale = null,
-        Guid? sessionId = null) =>
-        new(from is null ? null : DateOnly.Parse(from), to is null ? null : DateOnly.Parse(to), strokes, null, min, max, groupBy ?? [], measure, Scale: scale, SessionId: sessionId);
+        Guid? sessionId = null,
+        int? defaultEffort = null) =>
+        new(from is null ? null : DateOnly.Parse(from), to is null ? null : DateOnly.Parse(to), strokes, null, min, max, groupBy ?? [], measure, Scale: scale, SessionId: sessionId, DefaultEffort: defaultEffort);
 
     private static Dictionary<string, double?> Table(MetricsResult result) => result.Rows.ToDictionary(r => string.Join('|', r.Keys), r => r.Value);
 
@@ -162,6 +163,51 @@ public class MetricsTests
         var unspecified = new List<FactTotal> { Fact(SessionA, "2026-09-14", Stroke.Free, SwimMode.Swim, null, 400) };
 
         Assert.Null(Assert.Single(MetricsCalculator.Compute(Query(MetricMeasure.AvgIntensity), unspecified).Rows).Value);
+    }
+
+    [Fact]
+    public void Distance_with_no_effort_counts_at_the_default_and_is_reported_as_assumed()
+    {
+        var result = MetricsCalculator.Compute(Query(MetricMeasure.AvgIntensity, from: "2026-09-14", to: "2026-09-16", defaultEffort: 60), Facts());
+
+        Assert.Equal(Math.Round((400 * 20 + 200 * 80 + 300 * 50 + 100 * 60) / 1000.0, 2), Assert.Single(result.Rows).Value);
+        Assert.Equal(100, result.AssumedDistance);
+        Assert.Equal(60, result.DefaultEffort);
+    }
+
+    [Fact]
+    public void The_default_lands_in_its_band_instead_of_unspecified()
+    {
+        var table = Table(MetricsCalculator.Compute(Query(groupBy: [MetricDimension.Intensity], defaultEffort: 50), Facts()));
+
+        Assert.DoesNotContain("unspecified", table.Keys);
+        Assert.Equal(400, table["5"]);
+    }
+
+    [Fact]
+    public void An_intensity_range_includes_unspecified_distance_only_when_the_default_is_in_range()
+    {
+        Assert.Equal(400, MetricsCalculator.Compute(Query(min: 40, max: 60, defaultEffort: 50), Facts()).TotalDistance);
+        Assert.Equal(300, MetricsCalculator.Compute(Query(min: 40, max: 60), Facts()).TotalDistance);
+        Assert.Equal(0, MetricsCalculator.Compute(Query(min: 90, defaultEffort: 50), Facts()).AssumedDistance);
+    }
+
+    [Fact]
+    public void Without_a_default_the_result_reports_nothing_assumed_and_names_the_scale()
+    {
+        var result = MetricsCalculator.Compute(Query(scale: EffortScale.Tens), Facts());
+
+        Assert.Equal(0, result.AssumedDistance);
+        Assert.Null(result.DefaultEffort);
+        Assert.Equal(EffortScale.TensId, result.Scale.Id);
+        Assert.DoesNotContain("assumedNote\":\"", MetricsTool.Format(result));
+    }
+
+    [Fact]
+    public void The_model_can_turn_the_default_off()
+    {
+        Assert.True(MetricsTool.Parse("{}").ApplyDefaultEffort);
+        Assert.False(MetricsTool.Parse("{\"applyDefault\":false}").ApplyDefaultEffort);
     }
 
     [Fact]

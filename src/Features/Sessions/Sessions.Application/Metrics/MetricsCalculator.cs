@@ -11,7 +11,12 @@ public static class MetricsCalculator
         Validate(query);
 
         // The repository filters in SQL; the same rule is applied here so the calculator is correct on its own.
-        var facts = totals.Where(f => Matches(query, f)).ToList();
+        var candidates = totals
+            .Select(f => f.Intensity is null && query.DefaultEffort is { } fallback ? (Fact: f with { Intensity = fallback }, Assumed: true) : (Fact: f, Assumed: false))
+            .Where(c => Matches(query, c.Fact))
+            .ToList();
+        var facts = candidates.Select(c => c.Fact).ToList();
+        var assumed = candidates.Where(c => c.Assumed).Sum(c => c.Fact.Distance);
 
         var grouped = facts
             .GroupBy(f => query.GroupBy.Select(d => Key(d, f, query.EffectiveScale)).ToArray(), KeyComparer.Instance)
@@ -24,7 +29,7 @@ public static class MetricsCalculator
             ? grouped.OrderBy(r => r.Keys, order).ThenByDescending(r => r.Value)
             : grouped.OrderByDescending(r => r.Value).ThenBy(r => r.Keys, order)).ToList();
 
-        return new MetricsResult(query.Measure, query.GroupBy, rows, facts.Sum(f => f.Distance), facts.Select(f => f.Unit).Distinct().Order().ToList());
+        return new MetricsResult(query.Measure, query.GroupBy, rows, facts.Sum(f => f.Distance), facts.Select(f => f.Unit).Distinct().Order().ToList(), query.EffectiveScale, query.DefaultEffort, assumed);
     }
 
     private static void Validate(MetricsQuery query)

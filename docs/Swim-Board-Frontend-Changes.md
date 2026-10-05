@@ -76,6 +76,12 @@ Intensity is now a percent of maximum effort (1-100) instead of a 1-10 level. Fu
 - `avgIntensity` is now an average percent. Filter with `minPercent`/`maxPercent`; `minIntensity`/`maxIntensity` still work as 1-10 bounds.
 - `PUT /api/sessions/preferences`: `defaultEffort` is now a percent (1-100; default 50).
 
+## Effort scale and default effort (changed)
+
+- `GET/PUT /api/sessions/effort-scale` read and set the swimmer's scale (`tens`, `zones`, `custom`; custom bands via `customBands`) and return it resolved, with `defaultEffort`. `GET /api/sessions/effort-scales` also carries `defaultEffort` now.
+- Every metrics response includes `scale` (`{ id, name, bands }`): use it to label and order the `groupBy=intensity` rows instead of caching the scale yourself.
+- **Behaviour change:** distance with no stated effort is now counted at the swimmer's `defaultEffort` (50 unless set). It lands in that effort's band instead of an `unspecified` row, counts in `avgIntensity`, and passes `minPercent`/`maxPercent` ranges that include the default. `assumedDistance` says how much was counted this way (show a footnote when it is above 0). Send `applyDefault=false` for the raw view with an `unspecified` row.
+
 ## Titles (changed)
 
 - **Chat titles:** a new chat is first listed with the start of its first message, then gets a generated 2-6 word title. Handle the new SSE event `{ "type": "title_updated", "conversationId": "...", "title": "..." }`: replace that conversation's title in the sidebar/list. It arrives once, just before `completed`, only for the first message of a new chat, and only if a title was generated. Renaming still works, and a rename is never overwritten. If your client never sees the event (older client, dropped stream), the next `GET /api/ai/conversations` returns the new title.
