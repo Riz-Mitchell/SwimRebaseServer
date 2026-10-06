@@ -7,7 +7,13 @@ namespace SwimRebase.Tests.Profile;
 public sealed class OnboardingServiceTests
 {
     private static readonly Guid UserId = Guid.NewGuid();
-    private static readonly Dictionary<string, string> ValidAnswers = new() { ["level"] = "Regional", ["goal"] = "DataInsights" };
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> ValidAnswers = Answers(("level", ["Regional"]), ("goal", ["DataInsights"]));
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> Answers(params (string Key, string[] Values)[] pairs) =>
+        pairs.ToDictionary(p => p.Key, p => (IReadOnlyList<string>)p.Values);
+
+    private static string[] Saved(UserProfile profile, string key) =>
+        profile.Answers.Where(a => a.QuestionKey == key).Select(a => a.AnswerValue).Order().ToArray();
 
     private readonly InMemoryProfileRepository repository = new();
     private readonly OnboardingService service;
@@ -26,7 +32,7 @@ public sealed class OnboardingServiceTests
     [Fact]
     public async Task PartialAnswers_KeepUserOnQuestionnaire()
     {
-        var profile = await service.SaveAnswersAsync(UserId, new Dictionary<string, string> { ["level"] = "Regional" }, CancellationToken.None);
+        var profile = await service.SaveAnswersAsync(UserId, Answers(("level", ["Regional"])), CancellationToken.None);
 
         Assert.Equal(OnboardingStep.Questionnaire, profile.CurrentStep);
     }
@@ -43,10 +49,10 @@ public sealed class OnboardingServiceTests
     public async Task ReAnswering_DoesNotMoveUserBackwards()
     {
         await service.SaveAnswersAsync(UserId, ValidAnswers, CancellationToken.None);
-        var profile = await service.SaveAnswersAsync(UserId, new Dictionary<string, string> { ["goal"] = "Other" }, CancellationToken.None);
+        var profile = await service.SaveAnswersAsync(UserId, Answers(("goal", ["Other"])), CancellationToken.None);
 
         Assert.Equal(OnboardingStep.FirstSession, profile.CurrentStep);
-        Assert.Equal("Other", profile.Answers.Single(a => a.QuestionKey == "goal").AnswerValue);
+        Assert.Equal(["Other"], Saved(profile, "goal"));
     }
 
     [Theory]
@@ -54,7 +60,77 @@ public sealed class OnboardingServiceTests
     [InlineData("level", "Elite")]
     public async Task UnknownQuestionOrAnswer_IsRejected(string key, string value) =>
         await Assert.ThrowsAsync<InvalidOnboardingRequestException>(() =>
-            service.SaveAnswersAsync(UserId, new Dictionary<string, string> { [key] = value }, CancellationToken.None));
+            service.SaveAnswersAsync(UserId, Answers((key, [value])), CancellationToken.None));
+
+    [Fact]
+    public async Task GoalAcceptsSeveralAnswers_AndAdvancesOnceEveryQuestionHasOne()
+    {
+        var profile = await service.SaveAnswersAsync(
+            UserId, Answers(("level", ["Regional"]), ("goal", ["DataInsights", "GeneralFitness", "CompetitiveImprovement"])), CancellationToken.None);
+
+        Assert.Equal(["CompetitiveImprovement", "DataInsights", "GeneralFitness"], Saved(profile, "goal"));
+        Assert.Equal(OnboardingStep.FirstSession, profile.CurrentStep);
+    }
+
+    [Fact]
+    public async Task ReSavingGoal_ReplacesTheWholeSelection()
+    {
+        await service.SaveAnswersAsync(UserId, Answers(("level", ["Regional"]), ("goal", ["DataInsights", "GeneralFitness"])), CancellationToken.None);
+
+        var profile = await service.SaveAnswersAsync(UserId, Answers(("goal", ["GeneralFitness", "SocialCommunityAndGamification"])), CancellationToken.None);
+
+        Assert.Equal(["GeneralFitness", "SocialCommunityAndGamification"], Saved(profile, "goal"));
+        Assert.Equal(["Regional"], Saved(profile, "level"));
+    }
+
+    [Fact]
+    public async Task DuplicateValuesInASelection_AreCountedOnce()
+    {
+        var profile = await service.SaveAnswersAsync(UserId, Answers(("goal", ["DataInsights", "DataInsights"])), CancellationToken.None);
+
+        Assert.Equal(["DataInsights"], Saved(profile, "goal"));
+    }
+
+    [Fact]
+    public async Task Other_CannotBeCombinedWithAnotherGoal()
+    {
+        await Assert.ThrowsAsync<InvalidOnboardingRequestException>(() =>
+            service.SaveAnswersAsync(UserId, Answers(("goal", ["Other", "DataInsights"])), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ChoosingOther_ReplacesTheEarlierGoals()
+    {
+        await service.SaveAnswersAsync(UserId, Answers(("goal", ["DataInsights", "GeneralFitness"])), CancellationToken.None);
+
+        var profile = await service.SaveAnswersAsync(UserId, Answers(("goal", ["Other"])), CancellationToken.None);
+
+        Assert.Equal(["Other"], Saved(profile, "goal"));
+    }
+
+    [Fact]
+    public async Task LevelStillTakesExactlyOneAnswer()
+    {
+        await Assert.ThrowsAsync<InvalidOnboardingRequestException>(() =>
+            service.SaveAnswersAsync(UserId, Answers(("level", ["Regional", "StateQualified"])), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AnEmptySelection_IsRejected()
+    {
+        await Assert.ThrowsAsync<InvalidOnboardingRequestException>(() =>
+            service.SaveAnswersAsync(UserId, Answers(("goal", [])), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ChangingLevel_ReplacesTheOldAnswer()
+    {
+        await service.SaveAnswersAsync(UserId, ValidAnswers, CancellationToken.None);
+
+        var profile = await service.SaveAnswersAsync(UserId, Answers(("level", ["StateQualified"])), CancellationToken.None);
+
+        Assert.Equal(["StateQualified"], Saved(profile, "level"));
+    }
 
     [Fact]
     public async Task CompletingAheadOfCurrentStep_IsRejected()
@@ -141,6 +217,10 @@ public sealed class OnboardingServiceTests
         }
 
         public void AddAnswer(ProfileAnswer answer)
+        {
+        }
+
+        public void RemoveAnswer(ProfileAnswer answer)
         {
         }
     }

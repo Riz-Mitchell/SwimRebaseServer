@@ -25,4 +25,6 @@ public sealed class UserProfileRepository(ProfileDbContext db) : IUserProfileRep
     }
 
     public void AddAnswer(ProfileAnswer answer) => db.ProfileAnswers.Add(answer);
+
+    public void RemoveAnswer(ProfileAnswer answer) => db.ProfileAnswers.Remove(answer);
 }

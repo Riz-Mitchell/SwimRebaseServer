@@ -82,6 +82,14 @@ Intensity is now a percent of maximum effort (1-100) instead of a 1-10 level. Fu
 - Every metrics response includes `scale` (`{ id, name, bands }`): use it to label and order the `groupBy=intensity` rows instead of caching the scale yourself.
 - **Behaviour change:** distance with no stated effort is now counted at the swimmer's `defaultEffort` (50 unless set). It lands in that effort's band instead of an `unspecified` row, counts in `avgIntensity`, and passes `minPercent`/`maxPercent` ranges that include the default. `assumedDistance` says how much was counted this way (show a footnote when it is above 0). Send `applyDefault=false` for the raw view with an `unspecified` row.
 
+## Onboarding goal is multi-select (changed)
+
+- `GET /api/profile/onboarding/questionnaire`: each question now has `multiple` and `answers`, and each option has `exclusive`. `goal` is `multiple: true`; render those questions as checkboxes and the rest as radio buttons, from the flag, not from the question key. For a multiple question `answer` is null; read `answers` (an array, empty until answered).
+- The `Other` goal option is `exclusive: true`: when the user ticks it, untick everything else; when they tick another option, untick it. The server rejects the combination with `400`.
+- No cap on the number of goals. At least one is required.
+- `PUT .../onboarding/questionnaire`: send `"goal": ["DataInsights", "GeneralFitness"]` (the full selection each time; it replaces the saved one). A plain string is still accepted as a one-item selection, so `level` is unchanged.
+- `GET /api/profile` `answers`: `goal` is now an array (`"goal": ["DataInsights"]`), `level` is still a string. Anything that read `answers.goal` as a string must handle an array. A user who answered before this change has a one-item array.
+
 ## Titles (changed)
 
 - **Chat titles:** a new chat is first listed with the start of its first message, then gets a generated 2-6 word title. Handle the new SSE event `{ "type": "title_updated", "conversationId": "...", "title": "..." }`: replace that conversation's title in the sidebar/list. It arrives once, just before `completed`, only for the first message of a new chat, and only if a title was generated. Renaming still works, and a rename is never overwritten. If your client never sees the event (older client, dropped stream), the next `GET /api/ai/conversations` returns the new title.
