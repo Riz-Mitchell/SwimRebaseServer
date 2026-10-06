@@ -662,7 +662,7 @@ Onboarding progress is tracked server-side so a user who closes the app can resu
 Steps, in order: `Questionnaire` → `FirstSession` → `ReviewWorkout` → `Schedule` → `ProTrial` → `Completed`. Only `Schedule` and `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
 
 ### `GET /api/profile`
-**Response:** `{ "onboardingCompleted": bool, "answers": { "level": "Regional" }, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null }`
+**Response:** `{ "onboardingCompleted": bool, "answers": { "level": "Regional", "goal": ["DataInsights", "GeneralFitness"] }, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null }`
 
 ### `GET /api/profile/onboarding`
 **Response:**
@@ -681,14 +681,16 @@ Steps, in order: `Questionnaire` → `FirstSession` → `ReviewWorkout` → `Sch
 ### `GET /api/profile/onboarding/questionnaire`
 The questions and their options, plus the user's saved answers - render the questionnaire from this so new questions need no app change.
 
-**Response:** `{ "questions": [{ "key": "level", "prompt": "string", "options": [{ "value": "Regional", "label": "Regional" }], "answer": "string | null" }], "complete": bool }`
+**Response:** `{ "questions": [{ "key": "level", "prompt": "string", "multiple": false, "options": [{ "value": "Regional", "label": "Regional", "exclusive": false }], "answer": "string | null", "answers": ["string"] }], "complete": bool }`
 
-Current questions: `level` (`Regional`, `StateQualified`, `NationalQualified`, `OlympicTrialQualified`) and `goal` (`CompetitiveImprovement`, `DataInsights`, `GeneralFitness`, `SocialCommunityAndGamification`, `Other`).
+`multiple` says whether several options can be chosen (checkboxes rather than radio buttons). `exclusive` on an option means choosing it excludes the others: clear the other selections when it is picked. For a single-answer question read `answer` (null until answered); for a multiple-answer question `answer` is always null and `answers` lists every chosen value (for single-answer questions `answers` holds that one value too).
+
+Current questions: `level` (one answer: `Regional`, `StateQualified`, `NationalQualified`, `OlympicTrialQualified`) and `goal` (any number of: `CompetitiveImprovement`, `DataInsights`, `GeneralFitness`, `SocialCommunityAndGamification`; or `Other` on its own, which is exclusive).
 
 ### `PUT /api/profile/onboarding/questionnaire`
-**Body:** `{ "answers": { "level": "Regional", "goal": "DataInsights" } }`
+**Body:** `{ "answers": { "level": "Regional", "goal": ["DataInsights", "GeneralFitness"] } }`
 
-Partial saves are fine; once every question is answered the user advances to `FirstSession`. Unknown questions or values return `400`. **Response:** same shape as `GET /api/profile/onboarding`.
+Each answer is the chosen value, or an array of values; a plain string is a one-item selection, so `"goal": "DataInsights"` still works. Saving a question replaces everything previously saved for it (send the whole selection, not a delta), and a question left out of the body keeps its answers. Partial saves are fine; once every question has at least one answer the user advances to `FirstSession`. `400` for an unknown question or value, an empty selection, several answers to a single-answer question, or an exclusive option (`Other`) sent together with others. **Response:** same shape as `GET /api/profile/onboarding`.
 
 ### `PUT /api/profile/onboarding/first-session`
 Records which branch the user picked for the first session: `{ "path": "Upload" | "Sample" }`. Returns `409` before the questionnaire is done. **Response:** onboarding status.

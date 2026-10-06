@@ -1,8 +1,10 @@
 namespace Profile.Application.Services;
 
-public sealed record QuestionOption(string Value, string Label);
+/// <param name="Exclusive">Picking it excludes every other option of a multiple-answer question.</param>
+public sealed record QuestionOption(string Value, string Label, bool Exclusive = false);
 
-public sealed record QuestionDefinition(string Key, string Prompt, IReadOnlyList<QuestionOption> Options);
+/// <param name="Multiple">Whether more than one option can be chosen.</param>
+public sealed record QuestionDefinition(string Key, string Prompt, IReadOnlyList<QuestionOption> Options, bool Multiple = false);
 
 /// <summary>
 /// The onboarding questions. Answers are stored by key, so adding an entry here is all a new
@@ -25,7 +27,7 @@ public static class QuestionnaireCatalog
             new("DataInsights", "Data insights"),
             new("GeneralFitness", "General fitness"),
             new("SocialCommunityAndGamification", "Social, community and gamification"),
-            new("Other", "Other"),
-        ]),
+            new("Other", "Other", Exclusive: true),
+        ], Multiple: true),
     ];
 }

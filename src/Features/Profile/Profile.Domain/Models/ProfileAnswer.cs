@@ -1,6 +1,6 @@
 namespace Profile.Domain.Models;
 
-/// <summary>One answered questionnaire question. Rows rather than columns so new questions need no schema change.</summary>
+/// <summary>One chosen answer to a questionnaire question: a multiple-answer question has a row per choice. Rows rather than columns so new questions need no schema change.</summary>
 public class ProfileAnswer
 {
     public Guid UserId { get; set; }

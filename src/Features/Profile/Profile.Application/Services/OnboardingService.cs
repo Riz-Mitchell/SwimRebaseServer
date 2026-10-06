@@ -22,31 +22,28 @@ public sealed class OnboardingService(
         return (await profiles.FindAsync(userId, cancellationToken))!;
     }
 
+    /// <summary>Each question's answers replace what was saved for it; a question not in <paramref name="answers"/> keeps its answers.</summary>
     public async Task<UserProfile> SaveAnswersAsync(
-        Guid userId, IReadOnlyDictionary<string, string> answers, CancellationToken cancellationToken)
+        Guid userId, IReadOnlyDictionary<string, IReadOnlyList<string>> answers, CancellationToken cancellationToken)
     {
-        foreach (var (key, value) in answers)
+        var chosen = new Dictionary<string, List<string>>();
+        foreach (var (key, values) in answers)
         {
-            var question = QuestionnaireCatalog.Questions.FirstOrDefault(q => q.Key == key)
-                ?? throw new InvalidOnboardingRequestException($"Unknown question '{key}'.");
-            if (question.Options.All(o => o.Value != value))
-            {
-                throw new InvalidOnboardingRequestException($"'{value}' is not a valid answer to '{key}'.");
-            }
+            chosen[key] = Validate(key, values);
         }
 
         var profile = await GetAsync(userId, cancellationToken);
         var now = DateTimeOffset.UtcNow;
 
-        foreach (var (key, value) in answers)
+        foreach (var (key, values) in chosen)
         {
-            var existing = profile.Answers.FirstOrDefault(a => a.QuestionKey == key);
-            if (existing is not null)
+            foreach (var stale in profile.Answers.Where(a => a.QuestionKey == key && !values.Contains(a.AnswerValue)).ToList())
             {
-                existing.AnswerValue = value;
-                existing.AnsweredAt = now;
+                profile.Answers.Remove(stale);
+                profiles.RemoveAnswer(stale);
             }
-            else
+
+            foreach (var value in values.Where(v => profile.Answers.All(a => a.QuestionKey != key || a.AnswerValue != v)))
             {
                 var answer = new ProfileAnswer { UserId = userId, QuestionKey = key, AnswerValue = value, AnsweredAt = now };
                 profile.Answers.Add(answer);
@@ -68,6 +65,34 @@ public sealed class OnboardingService(
         }
 
         return profile;
+    }
+
+    private static List<string> Validate(string key, IReadOnlyList<string> values)
+    {
+        var question = QuestionnaireCatalog.Questions.FirstOrDefault(q => q.Key == key)
+            ?? throw new InvalidOnboardingRequestException($"Unknown question '{key}'.");
+        var distinct = values.Distinct().ToList();
+        if (distinct.Count == 0)
+        {
+            throw new InvalidOnboardingRequestException($"Choose an answer to '{key}'.");
+        }
+
+        if (!question.Multiple && distinct.Count > 1)
+        {
+            throw new InvalidOnboardingRequestException($"'{key}' takes one answer.");
+        }
+
+        foreach (var value in distinct)
+        {
+            var option = question.Options.FirstOrDefault(o => o.Value == value)
+                ?? throw new InvalidOnboardingRequestException($"'{value}' is not a valid answer to '{key}'.");
+            if (option.Exclusive && distinct.Count > 1)
+            {
+                throw new InvalidOnboardingRequestException($"'{value}' cannot be combined with other answers to '{key}'.");
+            }
+        }
+
+        return distinct;
     }
 
     public async Task<UserProfile> ChooseFirstSessionPathAsync(

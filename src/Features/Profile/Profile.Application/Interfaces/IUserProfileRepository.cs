@@ -12,4 +12,6 @@ public interface IUserProfileRepository
     Task EnsureExistsAsync(Guid userId, DateTimeOffset now, CancellationToken cancellationToken);
 
     void AddAnswer(ProfileAnswer answer);
+
+    void RemoveAnswer(ProfileAnswer answer);
 }

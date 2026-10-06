@@ -9,7 +9,7 @@ public sealed class ProfileAnswerConfiguration : IEntityTypeConfiguration<Profil
     public void Configure(EntityTypeBuilder<ProfileAnswer> builder)
     {
         builder.ToTable("profile_answers");
-        builder.HasKey(a => new { a.UserId, a.QuestionKey });
+        builder.HasKey(a => new { a.UserId, a.QuestionKey, a.AnswerValue });
 
         builder.Property(a => a.QuestionKey).HasMaxLength(50);
         builder.Property(a => a.AnswerValue).HasMaxLength(100).IsRequired();
