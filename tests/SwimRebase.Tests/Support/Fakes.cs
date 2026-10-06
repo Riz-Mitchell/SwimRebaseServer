@@ -289,3 +289,28 @@ internal sealed class ScriptedChatClient(params ScriptedReply[] replies) : IAiCh
         await Task.CompletedTask;
     }
 }
+
+internal sealed class RecordingConversionQuota : Billing.Application.Interfaces.IConversionQuota
+{
+    public bool Allow { get; set; } = true;
+
+    public List<Guid> Consumed { get; } = [];
+
+    public List<Guid> Refunded { get; } = [];
+
+    public Task<Billing.Application.Models.QuotaDecision> TryConsumeAsync(Guid userId, Guid conversationId, CancellationToken cancellationToken)
+    {
+        if (Allow)
+        {
+            Consumed.Add(conversationId);
+        }
+
+        return Task.FromResult(new Billing.Application.Models.QuotaDecision(Allow, new Billing.Application.Models.QuotaSnapshot(2, Allow ? 1 : 2, new DateTimeOffset(2026, 10, 12, 0, 0, 0, TimeSpan.Zero))));
+    }
+
+    public Task RefundAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        Refunded.Add(conversationId);
+        return Task.CompletedTask;
+    }
+}

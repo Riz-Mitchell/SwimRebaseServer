@@ -4,7 +4,7 @@ _Last updated: 03/10/2026_
 
 Base URL: `https://swimrebase-pro.azurewebsites.net` (production) / `https://swimrebase-dev.azurewebsites.net` (staging)
 
-All endpoints require `Authorization: Bearer <supabase-jwt>`. Requests without a valid token return `401 Unauthorized`.
+All endpoints require `Authorization: Bearer <supabase-jwt>` unless stated otherwise (the only exception is the RevenueCat webhook, see [Billing](#billing--apibilling)). Requests without a valid token return `401 Unauthorized`.
 
 ---
 
@@ -259,6 +259,7 @@ The two message-sending endpoints and the tool-resolve/answer endpoints all stre
 | `questions_asked` | `conversationId`, `toolExecutionRequestId`, `questions` | A sub-agent is asking several questions at once - needs an `answer` call with one entry in `answers` per question, in order (`""` for a hidden one). Each question is `{ text, kind, options, id, showIf, fieldType }`; `kind` is `Detail`, `Fork` or `Field`. `showIf` (`{ questionId, option }`, nullable) hides the question unless that earlier question was answered with that option; `fieldType` (`date` or `course`) says which input a `Field` question needs. `options` are quick-reply suggestions only (a number or typed text both work); always offer free-text entry |
 | `sub_agent_started` | `parentConversationId`, `toolExecutionRequestId`, `toolUseId`, `childConversationId`, `displayName` | A tool call started a sub-agent in its own conversation. Render everything until the matching `sub_agent_completed` as nested under that tool call (`toolUseId`) in the same chat. Its events carry `childConversationId` as their `conversationId` |
 | `sub_agent_completed` | `parentConversationId`, `toolExecutionRequestId`, `childConversationId`, `displayName`, `success` | The sub-agent finished (or was cancelled); the main chat resumes right after - or, for a finished swim-board conversion with a date and course, a `permission_required` for `save_session` follows instead |
+| `quota_exceeded` | `conversationId`, `limit`, `used`, `resetsAt` | A `read_swim_board` call was refused because this week's conversions are used up. Show the upgrade prompt. No conversation was started and no model call was made; the assistant is told and will say so in its reply. `resetsAt` is when the count starts again |
 | `title_updated` | `conversationId`, `title` | A new chat has been given a generated title - replace the one the list showed. Sent at most once, only for a chat's first message, before `completed` (or last, if the stream ends without it). Not sent if generation failed or the user renamed the chat meanwhile |
 | `usage` | `conversationId`, `model`, `inputTokens`, `outputTokens`, `cacheCreationInputTokens`, `cacheReadInputTokens` | Token usage for the turn that just completed |
 | `completed` | `conversationId`, `assistantMessageId` | The turn finished normally |
@@ -281,6 +282,28 @@ Consume with `curl -N` (disables buffering) or an `EventSource`/SSE client.
 | `timetable_slot` | slot id (stable across versions) | `GET /api/timetable` and find the entry whose `slotId` matches |
 
 `action` is `created`, `updated` or `deleted`. A `deleted` resource no longer exists, so render it as a non-tappable card. `label` is a short title for the card (absent for `deleted`).
+
+---
+
+## Billing — `/api/billing`
+
+Subscriptions are sold through the stores and managed by RevenueCat; the server only learns about them from RevenueCat's webhook. A user's **plan** is `pro` (an active paid subscription), `trial` (inside the 21-day trial that starts when onboarding completes, see `proTrial` on the profile endpoints) or `free`. Paid beats trial beats free.
+
+Swim-board conversions (`read_swim_board`) are limited per week, Monday 00:00 UTC to the next Monday: **2** on `free`, and a fair-use ceiling (50) on `trial` and `pro`. Everything else, including viewing history and metrics, is unaffected by plan. A conversion that fails without producing a draft does not count.
+
+### `GET /api/billing/entitlement`
+```json
+{
+  "plan": "free",
+  "trialEndsAt": "2026-10-20T03:00:00Z",
+  "subscription": { "productId": "pro_monthly", "store": "APP_STORE", "expiresAt": "2026-11-20T03:00:00Z", "willRenew": true },
+  "conversions": { "limit": 2, "used": 1, "resetsAt": "2026-10-12T00:00:00Z" }
+}
+```
+`trialEndsAt` is null until onboarding completes. `subscription` is present only while the paid subscription grants access (with `willRenew: false` after a cancellation, until the paid period ends), otherwise null. `conversions.limit` is this week's limit for the plan, `used` what has been counted, `resetsAt` when it starts again.
+
+### `POST /api/billing/revenuecat`
+RevenueCat's webhook, not called by the app. It needs no bearer token; it is authenticated by the value configured as `RevenueCat:WebhookSecret`, sent as the `Authorization` header (a `Bearer ` prefix is accepted). Wrong or missing secret returns `401`; anything else returns `200`, including events that are ignored, so RevenueCat does not retry them. Events are applied once by id and never over a newer one. The user is identified by `app_user_id`, which must be the user's id (set it with `Purchases.logIn`); anonymous RevenueCat ids are ignored.
 
 ---
 

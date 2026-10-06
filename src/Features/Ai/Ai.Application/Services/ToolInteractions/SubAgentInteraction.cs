@@ -1,6 +1,7 @@
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Domain.Models;
+using Billing.Application.Interfaces;
 
 namespace Ai.Application.Services.ToolInteractions;
 
@@ -10,7 +11,7 @@ namespace Ai.Application.Services.ToolInteractions;
 /// loop reports it through <see cref="TurnLoopOutcome.ChildConversationId"/> and <see cref="ConversationRunner"/> runs it once
 /// the parent's turn has finished persisting.
 /// </summary>
-public sealed class SubAgentInteraction(IConversationRepository conversations, IEnumerable<ISubAgent> subAgents) : IToolInteraction
+public sealed class SubAgentInteraction(IConversationRepository conversations, IEnumerable<ISubAgent> subAgents, IConversionQuota quota) : IToolInteraction
 {
     public ToolInteractionKind Kind => ToolInteractionKind.SubAgent;
 
@@ -30,10 +31,19 @@ public sealed class SubAgentInteraction(IConversationRepository conversations, I
             return Fail(context, "There is no image attached to this conversation to read.");
         }
 
+        var childId = Guid.NewGuid();
+        var decision = await quota.TryConsumeAsync(context.UserId, childId, cancellationToken);
+        if (!decision.Allowed)
+        {
+            var q = decision.Quota;
+            Fail(context, $"The user has used all {q.Limit} of their conversions this week; it resets on {q.ResetsAt:yyyy-MM-dd}. Free accounts can upgrade for more. Tell them so and do not call this tool again.");
+            return [new AiChatQuotaExceeded(context.ConversationId, q.Limit, q.Used, q.ResetsAt)];
+        }
+
         var now = DateTimeOffset.UtcNow;
         var child = new Conversation
         {
-            Id = Guid.NewGuid(),
+            Id = childId,
             UserId = context.UserId,
             Title = agent.ConversationTitle,
             Kind = agent.Profile.Kind,

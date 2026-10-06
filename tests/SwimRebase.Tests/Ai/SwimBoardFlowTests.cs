@@ -42,6 +42,7 @@ public class SwimBoardFlowTests
         public readonly GatedToolApprovalResolver Resolver;
         public readonly IAiToolRegistry Registry;
         public readonly Conversation Chat;
+        public readonly RecordingConversionQuota Quota = new();
 
         public Harness(bool withImage, params ScriptedReply[] script)
         {
@@ -63,7 +64,7 @@ public class SwimBoardFlowTests
             var executor = new ToolExecutor(Registry);
             var closer = new ToolTurnCloser(ToolExecutions, Conversations, Registry, unitOfWork, new NoOpCompaction(), executor);
             Resolver = new GatedToolApprovalResolver(closer, ToolExecutions, Conversations, Registry, profiles, [agent]);
-            IToolInteraction[] interactions = [new ApprovalInteraction(), new QuestionInteraction(), new SubAgentInteraction(Conversations, [agent])];
+            IToolInteraction[] interactions = [new ApprovalInteraction(), new QuestionInteraction(), new SubAgentInteraction(Conversations, [agent], Quota)];
             var tokenUsage = new InMemoryTokenUsageRepository();
             var loop = new ChatTurnLoop(
                 Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry,
@@ -72,7 +73,7 @@ public class SwimBoardFlowTests
                 Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry, draftService, sessionService,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<SwimBoardConversionDriver>.Instance);
             var followUp = new SubAgentFollowUp(ToolExecutions, Conversations, Registry, [agent], unitOfWork);
-            Runner = new ConversationRunner(loop, Resolver, followUp, Conversations, [driver]);
+            Runner = new ConversationRunner(loop, Resolver, followUp, Conversations, [driver], quota: Quota);
 
             Chat = new Conversation { Id = Guid.NewGuid(), UserId = UserId, Title = "chat", CreatedAt = DateTimeOffset.UtcNow, LastMessageAt = DateTimeOffset.UtcNow };
             Conversations.Add(Chat);
@@ -225,6 +226,45 @@ public class SwimBoardFlowTests
         Assert.Contains(events.OfType<AiChatTextDelta>(), t => t.Text.Contains("Sorry"));
         Assert.False(await h.ToolExecutions.HasOutstandingRequestAsync(UserId, h.Chat.Id, CancellationToken.None));
         Assert.Empty(h.Drafts.Drafts);
+    }
+
+    [Fact]
+    public async Task A_conversion_past_the_weekly_allowance_is_refused_before_any_conversation_or_model_call_is_made()
+    {
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say("You've used this week's conversions."));
+        h.Quota.Allow = false;
+
+        var events = await h.RunAsync(h.Chat.Id);
+
+        var exceeded = Assert.Single(events.OfType<AiChatQuotaExceeded>());
+        Assert.Equal(h.Chat.Id, exceeded.ConversationId);
+        Assert.Equal(2, exceeded.Limit);
+        Assert.Empty(events.OfType<AiChatSubAgentStarted>());
+        Assert.DoesNotContain(h.Conversations.Conversations, c => c.Kind == InterviewTools.AgentKind);
+        Assert.Equal(ToolExecutionStatus.Failed, h.ParentRequest.Status);
+        Assert.Contains("do not call this tool again", Assert.Single(h.ToolResultsIn(h.Chat.Id)));
+        Assert.Equal(2, h.Client.Requests.Count);
+    }
+
+    [Fact]
+    public async Task A_conversion_that_is_allowed_is_counted_against_the_conversation_it_runs_in()
+    {
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(Questionnaire));
+
+        await h.RunAsync(h.Chat.Id);
+
+        Assert.Equal([h.Child.Id], h.Quota.Consumed);
+        Assert.Empty(h.Quota.Refunded);
+    }
+
+    [Fact]
+    public async Task A_conversion_that_fails_without_a_draft_gives_its_use_back()
+    {
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say("I can't read that board."), ScriptedReply.Say("Sorry, I couldn't read it."));
+
+        await h.RunAsync(h.Chat.Id);
+
+        Assert.Equal([h.Child.Id], h.Quota.Refunded);
     }
 
     [Fact]

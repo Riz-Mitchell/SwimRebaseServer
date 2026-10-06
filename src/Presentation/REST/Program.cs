@@ -2,6 +2,7 @@ using Ai.Infrastructure;
 using Analytics.Infrastructure;
 using Auth.Infrastructure;
 using Auth.Infrastructure.Middleware;
+using Billing.Infrastructure;
 using Azure.Identity;
 using Microsoft.EntityFrameworkCore;
 using Profile.Infrastructure;
@@ -46,7 +47,9 @@ builder.Services.AddOpenApi();
 builder.Services.AddSharedInfrastructure(builder.Configuration);
 builder.Services.AddAnalyticsInfrastructure(builder.Configuration);
 builder.Services.AddAuthInfrastructure(builder.Configuration);
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddProfileInfrastructure(builder.Configuration);
+builder.Services.AddBillingInfrastructure(builder.Configuration);
 builder.Services.AddAiInfrastructure(builder.Configuration);
 builder.Services.AddTrainingInfrastructure(builder.Configuration);
 builder.Services.AddSessionsInfrastructure(builder.Configuration);
@@ -64,6 +67,7 @@ using (var migrationScope = app.Services.CreateScope())
         ("Ai", () => migrationScope.ServiceProvider.GetRequiredService<AiDbContext>().Database.MigrateAsync()),
         ("Analytics", () => migrationScope.ServiceProvider.GetRequiredService<AnalyticsDbContext>().Database.MigrateAsync()),
         ("Auth", () => migrationScope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync()),
+        ("Billing", () => migrationScope.ServiceProvider.GetRequiredService<BillingDbContext>().Database.MigrateAsync()),
         ("Profile", () => migrationScope.ServiceProvider.GetRequiredService<ProfileDbContext>().Database.MigrateAsync()),
         ("Training", () => migrationScope.ServiceProvider.GetRequiredService<TrainingDbContext>().Database.MigrateAsync()),
         ("Sessions", () => migrationScope.ServiceProvider.GetRequiredService<SessionsDbContext>().Database.MigrateAsync()),

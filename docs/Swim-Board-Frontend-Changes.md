@@ -82,6 +82,14 @@ Intensity is now a percent of maximum effort (1-100) instead of a 1-10 level. Fu
 - Every metrics response includes `scale` (`{ id, name, bands }`): use it to label and order the `groupBy=intensity` rows instead of caching the scale yourself.
 - **Behaviour change:** distance with no stated effort is now counted at the swimmer's `defaultEffort` (50 unless set). It lands in that effort's band instead of an `unspecified` row, counts in `avgIntensity`, and passes `minPercent`/`maxPercent` ranges that include the default. `assumedDistance` says how much was counted this way (show a footnote when it is above 0). Send `applyDefault=false` for the raw view with an `unspecified` row.
 
+## Plans and the weekly conversion limit (new)
+
+- `GET /api/billing/entitlement` returns `plan` (`trial`, `pro`, `free`), `trialEndsAt`, `subscription` and `conversions: { limit, used, resetsAt }`. Use it for the plan badge, a "1 of 2 conversions left this week" line, and to decide whether to show the paywall. `proTrial` on the profile endpoints still works and says the same about the trial.
+- New SSE event `{ "type": "quota_exceeded", "conversationId", "limit", "used", "resetsAt" }`: a `read_swim_board` call was refused because the week's conversions are used up. Open the paywall (and say when it resets). The assistant also tells the user in text. Nothing was converted and nothing was counted.
+- Free users get 2 conversions a week (Monday 00:00 UTC resets). Trial and Pro users have a much higher fair-use ceiling, which the same event reports if reached. Only the conversion is limited: history, metrics and manual edits stay open on every plan.
+- Refetch the entitlement after a purchase or restore. The server learns about a purchase from RevenueCat's webhook, which can lag the app by a few seconds, so retry briefly if the plan has not changed.
+- The RevenueCat SDK must be logged in with the user's id (`Purchases.logIn(userId)`) or the server cannot match purchases to users. See `docs/RevenueCat-Setup.md`.
+
 ## Titles (changed)
 
 - **Chat titles:** a new chat is first listed with the start of its first message, then gets a generated 2-6 word title. Handle the new SSE event `{ "type": "title_updated", "conversationId": "...", "title": "..." }`: replace that conversation's title in the sidebar/list. It arrives once, just before `completed`, only for the first message of a new chat, and only if a title was generated. Renaming still works, and a rename is never overwritten. If your client never sees the event (older client, dropped stream), the next `GET /api/ai/conversations` returns the new title.
