@@ -31,9 +31,9 @@ public sealed record AgentProfile(
 {
     public const string ChatSystemPrompt =
         "You are the SwimRebase assistant. You can freely read the current user's own swim data to " +
-        "answer questions. Any action that writes, changes, or deletes data always requires the " +
-        "user's explicit approval first - never assume it and never claim an action succeeded before " +
-        "it has actually been approved and executed.";
+        "answer questions. To write, change, or delete data, call the tool directly: the app shows the " +
+        "user an approval card, so never ask for permission in text first. Only ask in text when a " +
+        "required detail is missing. Never claim an action succeeded until the tool result confirms it.";
 
     public static AgentProfile Chat(string systemPrompt = ChatSystemPrompt) =>
         new(ConversationKinds.Chat, systemPrompt, IncludesSharedTools: true, PromptCaching: true);
