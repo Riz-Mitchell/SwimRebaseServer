@@ -23,13 +23,67 @@ public sealed class TimetableService(
     public async Task<TimetableEntry> UpsertSlotAsync(
         Guid userId, Guid? slotId, TimetableSlotInput input, DateOnly effectiveFrom, CancellationToken cancellationToken)
     {
-        if (input.SessionType != SessionType.Swim && input.ExpectedSession is not null)
+        ValidateSlot(input);
+
+        await userProvisioning.EnsureExistsAsync(userId, cancellationToken);
+
+        var version = await StageSlotAsync(userId, slotId, input, effectiveFrom, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await eventTracker.TrackAsync(userId, EventTypes.TimetableSlotUpserted, null, cancellationToken);
+        return version;
+    }
+
+    /// <summary>
+    /// Upserts several slots effective from the same date in one save, so either all of them land or none do.
+    /// Every slot is validated before any is staged.
+    /// </summary>
+    public async Task<IReadOnlyList<TimetableEntry>> UpsertSlotsAsync(
+        Guid userId, IReadOnlyList<TimetableSlotUpsert> slots, DateOnly effectiveFrom, CancellationToken cancellationToken)
+    {
+        if (slots.Count == 0)
         {
-            throw new ArgumentException("An expected session can only be set on a Swim slot.", nameof(input));
+            throw new ArgumentException("At least one slot is required.", nameof(slots));
+        }
+
+        var duplicated = slots.Where(s => s.SlotId is not null).GroupBy(s => s.SlotId).FirstOrDefault(g => g.Count() > 1);
+        if (duplicated is not null)
+        {
+            throw new ArgumentException($"Slot {duplicated.Key} appears more than once.", nameof(slots));
+        }
+
+        foreach (var slot in slots)
+        {
+            ValidateSlot(slot.Input);
         }
 
         await userProvisioning.EnsureExistsAsync(userId, cancellationToken);
 
+        var versions = new List<TimetableEntry>(slots.Count);
+        foreach (var slot in slots)
+        {
+            versions.Add(await StageSlotAsync(userId, slot.SlotId, slot.Input, effectiveFrom, cancellationToken));
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        foreach (var _ in versions)
+        {
+            await eventTracker.TrackAsync(userId, EventTypes.TimetableSlotUpserted, null, cancellationToken);
+        }
+
+        return versions;
+    }
+
+    private static void ValidateSlot(TimetableSlotInput input)
+    {
+        if (input.SessionType != SessionType.Swim && input.ExpectedSession is not null)
+        {
+            throw new ArgumentException("An expected session can only be set on a Swim slot.", nameof(input));
+        }
+    }
+
+    private async Task<TimetableEntry> StageSlotAsync(
+        Guid userId, Guid? slotId, TimetableSlotInput input, DateOnly effectiveFrom, CancellationToken cancellationToken)
+    {
         var resolvedSlotId = slotId ?? Guid.NewGuid();
         if (slotId is { } existingSlotId)
         {
@@ -63,8 +117,6 @@ public sealed class TimetableService(
         };
 
         timetable.Add(version);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        await eventTracker.TrackAsync(userId, EventTypes.TimetableSlotUpserted, null, cancellationToken);
         return version;
     }
 
