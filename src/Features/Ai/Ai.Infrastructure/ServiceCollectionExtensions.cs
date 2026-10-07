@@ -51,6 +51,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
         services.AddAiTool<GetTimetableTool>();
         services.AddAiTool<UpsertTimetableSlotTool>();
+        services.AddAiTool<UpsertTimetableSlotsTool>();
         services.AddAiTool<DeleteTimetableSlotTool>();
         services.AddAiTool<CreateFocusTool>();
         services.AddAiTool<EditFocusTool>();
