@@ -15,6 +15,7 @@ public static class InterviewPrompt
         - showIf: a question that only matters on one branch of a fork sets showIf to {qid: that fork's id, opt: the exact opts text of that branch}. A question that applies whichever branch they took has showIf null.
         - Do not ask what the board already states. Do not ask hypothetical or speculative questions. Give 2-5 short opts when the board suggests them, otherwise an empty opts array; the swimmer can always type anything.
         - Do not ask for the date, the pool, or whether they changed anything: those are asked separately. A board with no choices at all gets an empty questions array.
+        - efforts: every effort wording the board uses (zone names, pace names, intensity words like "A2", "threshold", "Wolf pace"), each once, copied exactly as written. Not instructions such as "descend 1-4" or "odds/evens". An empty array when the board has none. Never turn these into questions.
         """;
 
     public static readonly string Conversion = $$"""

@@ -37,6 +37,7 @@ public class SwimBoardFlowTests
         public readonly InMemoryToolExecutionRepository ToolExecutions;
         public readonly InMemoryDraftRepository Drafts = new();
         public readonly InMemorySessionRepository Sessions = new();
+        public readonly InMemoryUserEffortTermRepository EffortTerms = new();
         public readonly ScriptedChatClient Client;
         public readonly ConversationRunner Runner;
         public readonly GatedToolApprovalResolver Resolver;
@@ -48,7 +49,8 @@ public class SwimBoardFlowTests
             ToolExecutions = new InMemoryToolExecutionRepository(Conversations);
             Client = new ScriptedChatClient(script);
             var unitOfWork = new NoOpUnitOfWork();
-            var draftService = new SessionDraftService(Drafts, TestSessions.Ingest(), unitOfWork);
+            var terms = TestSessions.Terms(EffortTerms);
+            var draftService = new SessionDraftService(Drafts, TestSessions.Ingest(), terms, unitOfWork);
             var sessionService = TestSessions.Service(Sessions);
 
             Registry = new AiToolRegistry(
@@ -69,7 +71,7 @@ public class SwimBoardFlowTests
                 Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry,
                 new NoOpCompaction(), executor, closer, profiles, interactions, Microsoft.Extensions.Logging.Abstractions.NullLogger<ChatTurnLoop>.Instance);
             var driver = new SwimBoardConversionDriver(
-                Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry, draftService, sessionService,
+                Conversations, ToolExecutions, tokenUsage, unitOfWork, Client, Registry, draftService, sessionService, terms,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<SwimBoardConversionDriver>.Instance);
             var followUp = new SubAgentFollowUp(ToolExecutions, Conversations, Registry, [agent], unitOfWork);
             Runner = new ConversationRunner(loop, Resolver, followUp, Conversations, [driver]);
@@ -210,6 +212,27 @@ public class SwimBoardFlowTests
         var board = Assert.Single(conversion.Messages);
         Assert.Contains(board.Content, b => b is ImageContentBlock { ObjectKey: "boards/today.png" });
         Assert.Contains(board.Content, b => b is TextContentBlock t && t.Text.Contains("Which lane? -> Lane 2") && t.Text.Contains("Kick or swim? -> Kick"));
+    }
+
+    [Fact]
+    public async Task Effort_wording_nobody_knows_is_asked_about_and_the_answer_is_applied_to_the_draft_and_remembered()
+    {
+        var questionnaire = """{"questions":[],"efforts":["Wolf pace","easy","A2"]}""";
+        var session = """{"group":null,"sets":[{"kind":"item","reps":4,"parts":[{"dist":100,"stroke":"free","effort":"Wolf pace"}],"timing":null}]}""";
+        var h = new Harness(withImage: true, StartBoard(), ScriptedReply.Say(questionnaire), ScriptedReply.Say(session));
+
+        var events = await h.RunAsync(h.Chat.Id);
+        var asked = Assert.Single(events.OfType<AiChatQuestionsAsked>());
+        var effort = Assert.Single(asked.Questions, q => q.FieldType == InterviewFields.EffortMapType);
+        Assert.Equal("effort:Wolf pace", effort.Id);
+        Assert.Equal(AskedQuestionKind.Field, effort.Kind);
+
+        await h.AnswerAsync("1", "2026-09-21", "1", "85%");
+
+        var part = Assert.Single(Assert.IsType<SetItem>(Assert.Single(SessionJson.Deserialize<SwimSession>(h.Drafts.Drafts.Single().ContentJson).Sets)).Parts);
+        Assert.Equal(85, part.Intensity?.Percent);
+        var saved = Assert.Single(h.EffortTerms.Terms);
+        Assert.Equal(("wolf pace", 85), (saved.Phrase, saved.Percent));
     }
 
     [Fact]
