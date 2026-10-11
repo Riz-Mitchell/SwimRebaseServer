@@ -136,7 +136,7 @@ public sealed class OnboardingServiceTests
     public async Task CompletingAheadOfCurrentStep_IsRejected()
     {
         await Assert.ThrowsAsync<OnboardingStepConflictException>(() =>
-            service.CompleteStepAsync(UserId, OnboardingStep.Schedule, CancellationToken.None));
+            service.CompleteStepAsync(UserId, OnboardingStep.ProTrial, CancellationToken.None));
     }
 
     [Fact]
@@ -180,7 +180,6 @@ public sealed class OnboardingServiceTests
         await service.ChooseFirstSessionPathAsync(UserId, FirstSessionPath.Sample, CancellationToken.None);
         await service.CompleteStepAsync(UserId, OnboardingStep.FirstSession, CancellationToken.None);
         await service.CompleteStepAsync(UserId, OnboardingStep.ReviewWorkout, CancellationToken.None);
-        await service.SkipStepAsync(UserId, OnboardingStep.Schedule, CancellationToken.None);
         var before = DateTimeOffset.UtcNow;
         var profile = await service.CompleteStepAsync(UserId, OnboardingStep.ProTrial, CancellationToken.None);
 

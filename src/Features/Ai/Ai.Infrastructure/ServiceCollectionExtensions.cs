@@ -49,10 +49,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenUsageRepository, TokenUsageRepository>();
         services.AddScoped<IUploadedImageRepository, UploadedImageRepository>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
-        services.AddAiTool<GetTimetableTool>();
-        services.AddAiTool<UpsertTimetableSlotTool>();
-        services.AddAiTool<UpsertTimetableSlotsTool>();
-        services.AddAiTool<DeleteTimetableSlotTool>();
         services.AddAiTool<CreateFocusTool>();
         services.AddAiTool<EditFocusTool>();
         services.AddAiTool<DeleteFocusTool>();

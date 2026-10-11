@@ -6,7 +6,6 @@ public enum OnboardingStep
     Questionnaire,
     FirstSession,
     ReviewWorkout,
-    Schedule,
     ProTrial,
     Completed,
 }
