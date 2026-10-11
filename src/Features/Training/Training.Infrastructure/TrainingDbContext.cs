@@ -7,10 +7,6 @@ public sealed class TrainingDbContext(DbContextOptions<TrainingDbContext> option
 {
     public DbSet<TrainingUser> TrainingUsers => Set<TrainingUser>();
 
-    public DbSet<TimetableEntry> TimetableEntries => Set<TimetableEntry>();
-
-    public DbSet<ExpectedSession> ExpectedSessions => Set<ExpectedSession>();
-
     public DbSet<Focus> Focuses => Set<Focus>();
 
     public DbSet<ComparisonPoint> ComparisonPoints => Set<ComparisonPoint>();

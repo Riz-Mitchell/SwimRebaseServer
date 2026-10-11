@@ -25,8 +25,6 @@ public static class ServiceCollectionExtensions
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<TrainingDbContext>>(TrainingKeys.UnitOfWork);
         services.AddScoped<ITrainingUserRepository, TrainingUserRepository>();
         services.AddScoped<ITrainingUserProvisioningService, TrainingUserProvisioningService>();
-        services.AddScoped<ITimetableRepository, TimetableRepository>();
-        services.AddScoped<TimetableService>();
         services.AddScoped<IFocusRepository, FocusRepository>();
         services.AddScoped<FocusService>();
 

@@ -83,7 +83,7 @@ public sealed record AskedQuestionCondition(string QuestionId, string Option);
 
 /// <param name="Id">Stable within the questionnaire; conditions refer to it. Null for a single ad-hoc question.</param>
 /// <param name="ShowIf">When set, hide the question unless its condition holds. A hidden question is answered with an empty string.</param>
-/// <param name="FieldType">For <see cref="AskedQuestionKind.Field"/>: "date" (yyyy-MM-dd) or "course" (one of the options).</param>
+/// <param name="FieldType">For <see cref="AskedQuestionKind.Field"/>: "date" (yyyy-MM-dd), "course" (one of the options) or "effortMap" (one of the options, or a percent such as "76%").</param>
 public sealed record AskedQuestion(
     string Text, AskedQuestionKind Kind, IReadOnlyList<string> Options,
     string? Id = null, AskedQuestionCondition? ShowIf = null, string? FieldType = null);

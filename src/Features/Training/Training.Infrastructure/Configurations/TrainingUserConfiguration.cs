@@ -20,11 +20,6 @@ public sealed class TrainingUserConfiguration : IEntityTypeConfiguration<Trainin
         builder.Property(u => u.CreatedAt).IsRequired();
         builder.Property(u => u.LastActiveAt).IsRequired();
 
-        builder.HasMany(u => u.TimetableEntries)
-            .WithOne(t => t.TrainingUser)
-            .HasForeignKey(t => t.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         builder.HasMany(u => u.Focuses)
             .WithOne(f => f.TrainingUser)
             .HasForeignKey(f => f.UserId)

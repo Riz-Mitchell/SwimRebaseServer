@@ -31,6 +31,7 @@ Sent once per conversion. There are no more follow-up rounds after a fork.
 - **`showIf`**: show the question only if the question `showIf.questionId` is visible and its answer equals `showIf.option` (case-insensitive). Evaluate top to bottom, so a question under a hidden fork is hidden too. Re-evaluate live as the user changes a fork answer.
 - **`Field` questions** are asked by the app, always last. `fieldType: "date"` -> date picker, send `yyyy-MM-dd`, default to the user's local today. `fieldType: "course"` -> pick one of `options` (`scy`/`scm`/`lcm`; label them however you like, send the raw value). Send both if you can: they are what turns on the one-tap save.
 - Options are still suggestions: always allow free text on `Detail`/`Fork` questions.
+- **`fieldType: "effortMap"`** (new, only when the board uses effort wording the app does not know, at most 4): the question `id` is `effort:<wording>`, e.g. `effort:Wolf pace`. Show the wording and ask how hard it is: "same as" chips from `options` (effort words and zones, easiest first) **or** a 1-100 slider. Send the chosen option's text (`"a2"`), or the slider value **with a percent sign** (`"85%"`); a bare number would be read as an option number. Send `""` to skip. The meaning is saved for that user, so the same wording is understood from then on and is never asked again. These come after the date and pool questions and are only ever `Field` questions, so older clients that show them as free text still work.
 
 ## Answering
 
@@ -60,6 +61,7 @@ Body unchanged: `{ "answers": ["...", ...] }`, one entry per question **in the o
 - [ ] Parse `id`, `showIf`, `fieldType`; handle `kind: "Field"`.
 - [ ] Render all questions in one form; hide/show branches with `showIf`.
 - [ ] Date picker + course selector for the two `Field` questions; send them in `answers`.
+- [ ] `effortMap` field: option chips plus a 0-100 slider; send the option text or `"<n>%"`.
 - [ ] Send `""` for hidden questions; keep answer order.
 - [ ] Stop expecting a second `questions_asked` after a fork.
 - [ ] Render `preview` in the `save_session` approval card (live and from `/pending`).
@@ -89,6 +91,14 @@ Intensity is now a percent of maximum effort (1-100) instead of a 1-10 level. Fu
 - Free users get 2 conversions a week (Monday 00:00 UTC resets). Trial and Pro users have a much higher fair-use ceiling, which the same event reports if reached. Only the conversion is limited: history, metrics and manual edits stay open on every plan.
 - Refetch the entitlement after a purchase or restore. The server learns about a purchase from RevenueCat's webhook, which can lag the app by a few seconds, so retry briefly if the plan has not changed.
 - The RevenueCat SDK must be logged in with the user's id (`Purchases.logIn(userId)`) or the server cannot match purchases to users. See `docs/RevenueCat-Setup.md`.
+
+## Onboarding goal is multi-select (changed)
+
+- `GET /api/profile/onboarding/questionnaire`: each question now has `multiple` and `answers`, and each option has `exclusive`. `goal` is `multiple: true`; render those questions as checkboxes and the rest as radio buttons, from the flag, not from the question key. For a multiple question `answer` is null; read `answers` (an array, empty until answered).
+- The `Other` goal option is `exclusive: true`: when the user ticks it, untick everything else; when they tick another option, untick it. The server rejects the combination with `400`.
+- No cap on the number of goals. At least one is required.
+- `PUT .../onboarding/questionnaire`: send `"goal": ["DataInsights", "GeneralFitness"]` (the full selection each time; it replaces the saved one). A plain string is still accepted as a one-item selection, so `level` is unchanged.
+- `GET /api/profile` `answers`: `goal` is now an array (`"goal": ["DataInsights"]`), `level` is still a string. Anything that read `answers.goal` as a string must handle an array. A user who answered before this change has a one-item array.
 
 ## Titles (changed)
 

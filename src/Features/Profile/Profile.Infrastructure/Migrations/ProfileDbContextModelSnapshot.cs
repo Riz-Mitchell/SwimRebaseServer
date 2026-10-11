@@ -34,7 +34,6 @@ namespace Profile.Infrastructure.Migrations
                         .HasColumnName("question_key");
 
                     b.Property<string>("AnswerValue")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("answer_value");
@@ -43,7 +42,7 @@ namespace Profile.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("answered_at");
 
-                    b.HasKey("UserId", "QuestionKey")
+                    b.HasKey("UserId", "QuestionKey", "AnswerValue")
                         .HasName("pk_profile_answers");
 
                     b.ToTable("profile_answers", (string)null);

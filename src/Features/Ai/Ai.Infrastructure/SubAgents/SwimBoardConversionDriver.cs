@@ -30,6 +30,7 @@ public sealed class SwimBoardConversionDriver(
     IAiToolRegistry toolRegistry,
     SessionDraftService drafts,
     SessionService sessions,
+    IEffortTermLearning effortTerms,
     ILogger<SwimBoardConversionDriver> logger) : IConversationDriver
 {
     private const int QuestionnaireMaxTokens = 4000;
@@ -106,7 +107,8 @@ public sealed class SwimBoardConversionDriver(
         {
             try
             {
-                questionnaire = InterviewQuestions.Compose(reply.Text);
+                var unknown = await effortTerms.UnknownAsync(userId, EffortQuestions.Read(reply.Text), cancellationToken);
+                questionnaire = InterviewQuestions.Compose(reply.Text, unknown);
             }
             catch (JsonException ex)
             {
@@ -145,6 +147,7 @@ public sealed class SwimBoardConversionDriver(
         yield return new AiChatTurnStarted(conversationId);
 
         var transcript = InterviewTranscript.Build([(answered.InputJson, answered.ResultJson)]);
+        await effortTerms.SaveAsync(userId, EffortQuestions.Answered(answered.InputJson, answered.ResultJson), cancellationToken);
 
         // In the user message rather than the system prompt, so the cached prompt is the same for everyone.
         var recentTitles = await sessions.RecentTitlesAsync(userId, RecentTitleCount, cancellationToken);

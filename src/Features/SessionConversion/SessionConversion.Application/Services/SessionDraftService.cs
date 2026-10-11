@@ -19,12 +19,13 @@ public sealed class DraftNotFoundException(Guid draftId) : Exception($"No draft 
 public sealed class SessionDraftService(
     ISessionDraftRepository drafts,
     SessionIngest ingest,
+    IPersonalIntensityProvider personal,
     [FromKeyedServices(SessionConversionKeys.UnitOfWork)] IUnitOfWork unitOfWork)
 {
     /// <exception cref="InvalidSessionException">The JSON could not be read as a session, or it failed validation.</exception>
     public async Task<DraftView> CreateAsync(Guid userId, Guid? sourceConversationId, string sessionJson, CancellationToken cancellationToken)
     {
-        var session = ingest.Prepare(ingest.Parse(sessionJson));
+        var session = ingest.Prepare(ingest.Parse(sessionJson), await personal.MapperAsync(userId, cancellationToken));
 
         var now = DateTimeOffset.UtcNow;
         var draft = new SessionDraft
@@ -50,7 +51,8 @@ public sealed class SessionDraftService(
     {
         var draft = await drafts.FindAsync(userId, draftId, cancellationToken) ?? throw new DraftNotFoundException(draftId);
 
-        var edited = ingest.Prepare(SessionEditor.Apply(SessionJson.Deserialize<SwimSession>(draft.ContentJson), edits));
+        var edited = ingest.Prepare(
+            SessionEditor.Apply(SessionJson.Deserialize<SwimSession>(draft.ContentJson), edits), await personal.MapperAsync(userId, cancellationToken));
 
         draft.ContentJson = SessionJson.Serialize(edited);
         draft.Version++;

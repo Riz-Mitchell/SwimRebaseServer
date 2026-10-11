@@ -324,6 +324,36 @@ namespace Sessions.Infrastructure.Migrations
                     b.ToTable("timed_swims", (string)null);
                 });
 
+            modelBuilder.Entity("Sessions.Domain.Models.UserEffortTerm", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<int>("Percent")
+                        .HasColumnType("integer")
+                        .HasColumnName("percent");
+
+                    b.Property<string>("Phrase")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("phrase");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_effort_terms");
+
+                    b.HasIndex("OwnerId", "Phrase")
+                        .IsUnique()
+                        .HasDatabaseName("ix_user_effort_terms_owner_id_phrase");
+
+                    b.ToTable("user_effort_terms", (string)null);
+                });
+
             modelBuilder.Entity("Sessions.Domain.Models.SessionFact", b =>
                 {
                     b.HasOne("Sessions.Domain.Models.Session", null)

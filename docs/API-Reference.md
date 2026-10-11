@@ -83,7 +83,7 @@ Delete an uploaded image - removes both the blob from storage and the record of 
 ---
 
 ### `POST /api/ai/tool-requests/{toolExecutionRequestId}/resolve`
-Approve or deny a gated tool call (a write/destructive action the AI wants to perform, e.g. creating a focus or timetable slot). Returns `400`-equivalent (`error` SSE event) if the request is actually an `ask_user_question` — answer those via the `/answer` endpoint below instead.
+Approve or deny a gated tool call (a write/destructive action the AI wants to perform, e.g. creating a focus). Returns `400`-equivalent (`error` SSE event) if the request is actually an `ask_user_question` — answer those via the `/answer` endpoint below instead.
 
 **Path params:** `toolExecutionRequestId` (guid)
 
@@ -193,8 +193,8 @@ For a `Tool`-role message, `content` is itself a JSON-encoded array (still a str
 [
   {
     "toolUseId": "string",
-    "toolName": "get_timetable",
-    "displayName": "Checking your timetable",
+    "toolName": "get_session",
+    "displayName": "Fetching your session",
     "effect": "Neutral",
     "success": true,
     "affectedCount": 6,
@@ -251,12 +251,12 @@ The two message-sending endpoints and the tool-resolve/answer endpoints all stre
 |---|---|---|
 | `text_delta` | `text` | A chunk of the assistant's reply text |
 | `turn_started` | `conversationId` | A new model call just started — show a "thinking" indicator until text or a tool event arrives |
-| `tool_started` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect` | A tool is about to run (auto-executed read tool, or a freshly-approved gated one) — `displayName` is the UI-friendly label, e.g. "Checking your timetable"; `effect` is `Neutral`/`Creative`/`Destructive` |
+| `tool_started` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect` | A tool is about to run (auto-executed read tool, or a freshly-approved gated one) — `displayName` is the UI-friendly label, e.g. "Fetching your session"; `effect` is `Neutral`/`Creative`/`Destructive` |
 | `tool_completed` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect`, `success`, `affectedCount`, `resources` | The tool finished — `affectedCount` is tool-defined (e.g. sessions fetched, rows created/deleted). `resources` (nullable) lists what it created, changed or removed — see [Tool resources](#tool-resources) |
 | `permission_required` | `conversationId`, `toolExecutionRequestId`, `toolName`, `displayName`, `effect`, `inputJson`, `preview` | The AI wants to run a gated tool — needs a `resolve` call. `preview` (nullable) is a readable rendering of what approving would do, e.g. the drafted session for `save_session` |
 | `permission_resolved` | `conversationId`, `toolExecutionRequestId`, `approved` | Confirms a resolve was recorded (sibling gated calls from the same turn still pending) |
 | `question_asked` | `conversationId`, `toolExecutionRequestId`, `question`, `options` | The AI is asking a clarifying question — needs an `answer` call. `options` are advisory quick-reply suggestions only; always also offer free-text entry |
-| `questions_asked` | `conversationId`, `toolExecutionRequestId`, `questions` | A sub-agent is asking several questions at once - needs an `answer` call with one entry in `answers` per question, in order (`""` for a hidden one). Each question is `{ text, kind, options, id, showIf, fieldType }`; `kind` is `Detail`, `Fork` or `Field`. `showIf` (`{ questionId, option }`, nullable) hides the question unless that earlier question was answered with that option; `fieldType` (`date` or `course`) says which input a `Field` question needs. `options` are quick-reply suggestions only (a number or typed text both work); always offer free-text entry |
+| `questions_asked` | `conversationId`, `toolExecutionRequestId`, `questions` | A sub-agent is asking several questions at once - needs an `answer` call with one entry in `answers` per question, in order (`""` for a hidden one). Each question is `{ text, kind, options, id, showIf, fieldType }`; `kind` is `Detail`, `Fork` or `Field`. `showIf` (`{ questionId, option }`, nullable) hides the question unless that earlier question was answered with that option; `fieldType` (`date`, `course` or `effortMap`) says which input a `Field` question needs. `options` are quick-reply suggestions only (a number or typed text both work); always offer free-text entry |
 | `sub_agent_started` | `parentConversationId`, `toolExecutionRequestId`, `toolUseId`, `childConversationId`, `displayName` | A tool call started a sub-agent in its own conversation. Render everything until the matching `sub_agent_completed` as nested under that tool call (`toolUseId`) in the same chat. Its events carry `childConversationId` as their `conversationId` |
 | `sub_agent_completed` | `parentConversationId`, `toolExecutionRequestId`, `childConversationId`, `displayName`, `success` | The sub-agent finished (or was cancelled); the main chat resumes right after - or, for a finished swim-board conversion with a date and course, a `permission_required` for `save_session` follows instead |
 | `quota_exceeded` | `conversationId`, `limit`, `used`, `resetsAt` | A `read_swim_board` call was refused because this week's conversions are used up. Show the upgrade prompt. No conversation was started and no model call was made; the assistant is told and will say so in its reply. `resetsAt` is when the count starts again |
@@ -279,7 +279,6 @@ Consume with `curl -N` (disables buffering) or an `EventSource`/SSE client.
 |---|---|---|
 | `session` | session id | `GET /api/sessions/{id}` |
 | `focus` | focus id | `GET /api/focuses/{id}` |
-| `timetable_slot` | slot id (stable across versions) | `GET /api/timetable` and find the entry whose `slotId` matches |
 
 `action` is `created`, `updated` or `deleted`. A `deleted` resource no longer exists, so render it as a non-tappable card. `label` is a short title for the card (absent for `deleted`).
 
@@ -609,83 +608,14 @@ A timed swim counts towards `GET /api/sessions/metrics` as training volume (its 
 
 ---
 
-## Timetable — `/api/timetable`
-
-### `GET /api/timetable?asOf={date}`
-Get the timetable as it stood on a given date. `asOf` (yyyy-MM-dd) optional, defaults to today.
-
-**Response:** array of `TimetableEntryResponse` (see shape below).
-
----
-
-### `PUT /api/timetable/slots/{slotId?}`
-Create a new slot (omit `slotId`) or version a slot into a new state (provide `slotId`). The timetable is versioned — this never edits in place.
-
-**Path params:** `slotId` (guid, optional)
-
-**Body:**
-```json
-{
-  "dayOfWeek": "Monday",
-  "startTime": "06:00:00",
-  "endTime": "07:30:00",
-  "sessionType": "Swim",
-  "label": "string|null",
-  "effectiveFrom": "yyyy-MM-dd",
-  "expectedSession": {
-    "summary": "string",
-    "totalDistanceMeters": 3000,
-    "primaryEffortZone": "Aerobic"
-  }
-}
-```
-`label` and `expectedSession` are optional.
-
-**Response:** `TimetableEntryResponse`.
-
----
-
-### `DELETE /api/timetable/slots/{slotId}?effectiveTo={date}`
-Close out a slot as of a date.
-
-**Path params:** `slotId` (guid)
-**Query params:** `effectiveTo` (yyyy-MM-dd) — required.
-
-**Response:** `204 No Content` / `404 Not Found`.
-
----
-
-### `TimetableEntryResponse` shape
-```json
-{
-  "id": "guid",
-  "slotId": "guid",
-  "dayOfWeek": "Monday",
-  "startTime": "06:00:00",
-  "endTime": "07:30:00",
-  "sessionType": "Swim",
-  "label": "string|null",
-  "effectiveFrom": "yyyy-MM-dd",
-  "effectiveTo": "yyyy-MM-dd|null",
-  "expectedSession": {
-    "summary": "string",
-    "totalDistanceMeters": 3000,
-    "primaryEffortZone": "Aerobic"
-  }
-}
-```
-`expectedSession` is `null` if none was set.
-
----
-
 ## Profile & onboarding — `/api/profile`
 
 Onboarding progress is tracked server-side so a user who closes the app can resume. On launch call `GET /api/profile/onboarding`: if `status` is `Completed`, go straight into the app, otherwise resume at `resumeStep`. A profile is created on first call (existing users before launch are already `Completed`).
 
-Steps, in order: `Questionnaire` → `FirstSession` → `ReviewWorkout` → `Schedule` → `ProTrial` → `Completed`. Only `Schedule` and `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
+Steps, in order: `Questionnaire` → `FirstSession` → `ReviewWorkout` → `ProTrial` → `Completed`. Only `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
 
 ### `GET /api/profile`
-**Response:** `{ "onboardingCompleted": bool, "answers": { "level": "Regional" }, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null }`
+**Response:** `{ "onboardingCompleted": bool, "answers": { "level": "Regional", "goal": ["DataInsights", "GeneralFitness"] }, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null }`
 
 ### `GET /api/profile/onboarding`
 **Response:**
@@ -704,14 +634,16 @@ Steps, in order: `Questionnaire` → `FirstSession` → `ReviewWorkout` → `Sch
 ### `GET /api/profile/onboarding/questionnaire`
 The questions and their options, plus the user's saved answers - render the questionnaire from this so new questions need no app change.
 
-**Response:** `{ "questions": [{ "key": "level", "prompt": "string", "options": [{ "value": "Regional", "label": "Regional" }], "answer": "string | null" }], "complete": bool }`
+**Response:** `{ "questions": [{ "key": "level", "prompt": "string", "multiple": false, "options": [{ "value": "Regional", "label": "Regional", "exclusive": false }], "answer": "string | null", "answers": ["string"] }], "complete": bool }`
 
-Current questions: `level` (`Regional`, `StateQualified`, `NationalQualified`, `OlympicTrialQualified`) and `goal` (`CompetitiveImprovement`, `DataInsights`, `GeneralFitness`, `SocialCommunityAndGamification`, `Other`).
+`multiple` says whether several options can be chosen (checkboxes rather than radio buttons). `exclusive` on an option means choosing it excludes the others: clear the other selections when it is picked. For a single-answer question read `answer` (null until answered); for a multiple-answer question `answer` is always null and `answers` lists every chosen value (for single-answer questions `answers` holds that one value too).
+
+Current questions: `level` (one answer: `Regional`, `StateQualified`, `NationalQualified`, `OlympicTrialQualified`) and `goal` (any number of: `CompetitiveImprovement`, `DataInsights`, `GeneralFitness`, `SocialCommunityAndGamification`; or `Other` on its own, which is exclusive).
 
 ### `PUT /api/profile/onboarding/questionnaire`
-**Body:** `{ "answers": { "level": "Regional", "goal": "DataInsights" } }`
+**Body:** `{ "answers": { "level": "Regional", "goal": ["DataInsights", "GeneralFitness"] } }`
 
-Partial saves are fine; once every question is answered the user advances to `FirstSession`. Unknown questions or values return `400`. **Response:** same shape as `GET /api/profile/onboarding`.
+Each answer is the chosen value, or an array of values; a plain string is a one-item selection, so `"goal": "DataInsights"` still works. Saving a question replaces everything previously saved for it (send the whole selection, not a delta), and a question left out of the body keeps its answers. Partial saves are fine; once every question has at least one answer the user advances to `FirstSession`. `400` for an unknown question or value, an empty selection, several answers to a single-answer question, or an exclusive option (`Other`) sent together with others. **Response:** same shape as `GET /api/profile/onboarding`.
 
 ### `PUT /api/profile/onboarding/first-session`
 Records which branch the user picked for the first session: `{ "path": "Upload" | "Sample" }`. Returns `409` before the questionnaire is done. **Response:** onboarding status.
@@ -720,12 +652,10 @@ Records which branch the user picked for the first session: `{ "path": "Upload" 
 Marks the current step done and advances. Completing a step the user is already past is a no-op; completing one ahead of the current step returns `409`. `Questionnaire` needs all answers and `FirstSession` needs a chosen path, otherwise `400`. Completing `ProTrial` finishes onboarding. **Response:** onboarding status.
 
 ### `POST /api/profile/onboarding/steps/{step}/skip`
-Only valid for `Schedule` and `ProTrial` (`400` otherwise). **Response:** onboarding status.
+Only valid for `ProTrial` (`400` otherwise). **Response:** onboarding status.
 
 ### `PUT /api/profile/notification-preferences`
 **Body:** `{ "remindersEnabled": true, "reminderLeadMinutes": 60 }` - lead time must be 5-1440. **Response:** profile (as `GET /api/profile`).
-
-The `Schedule` step itself uses the [Timetable](#timetable--apitimetable) endpoints, then the app calls `complete` or `skip`.
 
 ---
 
