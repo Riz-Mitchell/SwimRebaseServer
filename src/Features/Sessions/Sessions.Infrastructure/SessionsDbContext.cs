@@ -13,6 +13,8 @@ public sealed class SessionsDbContext(DbContextOptions<SessionsDbContext> option
 
     public DbSet<SessionPreferences> SessionPreferences => Set<SessionPreferences>();
 
+    public DbSet<UserEffortTerm> UserEffortTerms => Set<UserEffortTerm>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SessionsDbContext).Assembly);

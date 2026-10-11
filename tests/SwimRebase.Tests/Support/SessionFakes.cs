@@ -8,9 +8,27 @@ namespace SwimRebase.Tests;
 /// <summary>Builds the real ingest/service wiring over in-memory storage.</summary>
 internal static class TestSessions
 {
-    public static SessionIngest Ingest() => new(new IntensityResolver([new VocabularyIntensityMapper()]));
+    public static IntensityResolver Resolver() => new([new VocabularyIntensityMapper()]);
 
-    public static SessionService Service(InMemorySessionRepository repository) => new(repository, Ingest(), new NoOpUnitOfWork());
+    public static SessionIngest Ingest() => new(Resolver());
+
+    public static UserEffortTermService Terms(InMemoryUserEffortTermRepository? repository = null) =>
+        new(repository ?? new InMemoryUserEffortTermRepository(), Resolver(), new NoOpUnitOfWork());
+
+    public static SessionService Service(InMemorySessionRepository repository) => new(repository, Ingest(), Terms(), new NoOpUnitOfWork());
+}
+
+internal sealed class InMemoryUserEffortTermRepository : IUserEffortTermRepository
+{
+    public List<UserEffortTerm> Terms { get; } = [];
+
+    public Task<IReadOnlyList<UserEffortTerm>> ListAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<UserEffortTerm>>(Terms.Where(t => t.OwnerId == userId).ToList());
+
+    public Task<UserEffortTerm?> FindAsync(Guid userId, string phrase, CancellationToken cancellationToken) =>
+        Task.FromResult(Terms.FirstOrDefault(t => t.OwnerId == userId && t.Phrase == phrase));
+
+    public void Add(UserEffortTerm term) => Terms.Add(term);
 }
 
 internal sealed class InMemorySessionRepository : ISessionRepository

@@ -33,6 +33,7 @@ public sealed class SessionNotFoundException(Guid id) : Exception($"No session w
 public sealed class SessionService(
     ISessionRepository sessions,
     SessionIngest ingest,
+    IPersonalIntensityProvider personal,
     [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
 {
     /// <summary>The most sessions one list call returns when it carries their content.</summary>
@@ -57,7 +58,7 @@ public sealed class SessionService(
             return SessionView.Of(existing);
         }
 
-        var prepared = NodeIds.Assign(ingest.Prepare(content)) with { Title = null };
+        var prepared = NodeIds.Assign(ingest.Prepare(content, await personal.MapperAsync(userId, cancellationToken))) with { Title = null };
         var now = DateTimeOffset.UtcNow;
         var session = new Session
         {
@@ -89,7 +90,8 @@ public sealed class SessionService(
     {
         var session = await sessions.FindAsync(userId, id, cancellationToken) ?? throw new SessionNotFoundException(id);
 
-        var edited = NodeIds.Assign(ingest.Prepare(SessionEditor.Apply(SessionJson.Deserialize<SwimSession>(session.ContentJson), edits)));
+        var edited = NodeIds.Assign(ingest.Prepare(
+            SessionEditor.Apply(SessionJson.Deserialize<SwimSession>(session.ContentJson), edits), await personal.MapperAsync(userId, cancellationToken)));
 
         session.ContentJson = SessionJson.Serialize(edited);
         session.TotalDistance = SessionCalculator.Total(edited);

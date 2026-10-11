@@ -30,7 +30,7 @@ public static class ConversionSchemas
             ("opts", ArrayOf(Text())),
             ("showIf", OrNull(condition)));
 
-        return Serialize(Closed(("questions", ArrayOf(question))));
+        return Serialize(Closed(("questions", ArrayOf(question)), ("efforts", ArrayOf(Text()))));
     }
 
     private static string BuildSession()

@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IMetricsRepository, MetricsRepository>();
         services.AddScoped<ITimedSwimRepository, TimedSwimRepository>();
         services.AddScoped<ISessionPreferencesRepository, SessionPreferencesRepository>();
+        services.AddScoped<IUserEffortTermRepository, UserEffortTermRepository>();
 
         // One mapper per external intensity scale; add a scale by registering another IIntensityMapper.
         services.AddSingleton<IIntensityMapper, VocabularyIntensityMapper>();
@@ -40,6 +41,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<MetricsService>();
         services.AddScoped<TimedSwimService>();
         services.AddScoped<SessionPreferencesService>();
+        services.AddScoped<UserEffortTermService>();
+        services.AddScoped<IPersonalIntensityProvider>(sp => sp.GetRequiredService<UserEffortTermService>());
+        services.AddScoped<IEffortTermLearning>(sp => sp.GetRequiredService<UserEffortTermService>());
 
         return services;
     }

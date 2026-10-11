@@ -27,18 +27,6 @@ public sealed record InterviewQuestion(
     public bool IsFork => Kind == InterviewQuestionKind.Fork;
 }
 
-public static class InterviewFields
-{
-    public const string ChangedId = "changed";
-    public const string DateId = "performedOn";
-    public const string CourseId = "course";
-
-    public const string DateType = "date";
-    public const string CourseType = "course";
-
-    public static readonly string[] Courses = ["scy", "scm", "lcm"];
-}
-
 /// <summary>Reads the swimmer's questionnaire and turns their answers into text.</summary>
 public static class InterviewQuestions
 {
@@ -79,9 +67,9 @@ public static class InterviewQuestions
 
     /// <summary>
     /// The stored questionnaire: what the model wrote, with any condition that points at an unknown or later question dropped (so the
-    /// question is asked rather than never shown), then the fixed questions this app adds.
+    /// question is asked rather than never shown), then the fixed questions this app adds, then one for each effort wording the app does not know.
     /// </summary>
-    public static string Compose(string modelJson)
+    public static string Compose(string modelJson, IReadOnlyList<string>? unknownEfforts = null)
     {
         var asked = new List<InterviewQuestion>();
         var seen = new HashSet<string>();
@@ -100,6 +88,7 @@ public static class InterviewQuestions
             InterviewFields.DateId, "What date did you swim?", InterviewQuestionKind.Field, [], FieldType: InterviewFields.DateType));
         asked.Add(new InterviewQuestion(
             InterviewFields.CourseId, "Which pool?", InterviewQuestionKind.Field, InterviewFields.Courses, FieldType: InterviewFields.CourseType));
+        asked.AddRange(EffortQuestions.Ask(unknownEfforts ?? []));
 
         var array = new JsonArray();
         foreach (var question in asked)
