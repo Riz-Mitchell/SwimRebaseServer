@@ -19,6 +19,7 @@ namespace Ai.Application.Models;
 [JsonDerivedType(typeof(AiChatSubAgentStarted), "sub_agent_started")]
 [JsonDerivedType(typeof(AiChatSubAgentCompleted), "sub_agent_completed")]
 [JsonDerivedType(typeof(AiChatTitleUpdated), "title_updated")]
+[JsonDerivedType(typeof(AiChatQuotaExceeded), "quota_exceeded")]
 [JsonDerivedType(typeof(AiChatUsage), "usage")]
 [JsonDerivedType(typeof(AiChatCompleted), "completed")]
 [JsonDerivedType(typeof(AiChatError), "error")]
@@ -51,6 +52,12 @@ public sealed record AiChatQuestionAsked(
 /// <summary>Token usage for the turn that just completed, so the client can show live usage without a separate poll.</summary>
 public sealed record AiChatUsage(
     Guid ConversationId, string Model, long InputTokens, long OutputTokens, long CacheCreationInputTokens, long CacheReadInputTokens) : AiChatEvent;
+
+/// <summary>
+/// A tool call was refused because the user has used this week's swim-board conversions. Show the upgrade prompt; the model has been told and will
+/// say so. <c>Limit</c> and <c>Used</c> count this week's conversions, which start again at <c>ResetsAt</c>.
+/// </summary>
+public sealed record AiChatQuotaExceeded(Guid ConversationId, int Limit, int Used, DateTimeOffset ResetsAt) : AiChatEvent;
 
 /// <summary>A new chat has been given a generated title. Replace the one the list showed (the start of the first message); sent once, before the turn ends.</summary>
 public sealed record AiChatTitleUpdated(Guid ConversationId, string Title) : AiChatEvent;

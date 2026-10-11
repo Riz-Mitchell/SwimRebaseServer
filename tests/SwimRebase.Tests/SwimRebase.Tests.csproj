@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Features\Ai\Ai.Infrastructure\Ai.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Features\Billing\Billing.Application\Billing.Application.csproj" />
     <ProjectReference Include="..\..\src\Features\Profile\Profile.Application\Profile.Application.csproj" />
     <ProjectReference Include="..\..\src\Features\SessionConversion\SessionConversion.Application\SessionConversion.Application.csproj" />
   </ItemGroup>

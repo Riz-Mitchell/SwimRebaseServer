@@ -10,4 +10,6 @@ public static class EventTypes
     public const string FocusDeleted = "focus_deleted";
     public const string OnboardingStepCompleted = "onboarding_step_completed";
     public const string OnboardingCompleted = "onboarding_completed";
+    public const string ConversionQuotaExceeded = "conversion_quota_exceeded";
+    public const string SubscriptionChanged = "subscription_changed";
 }

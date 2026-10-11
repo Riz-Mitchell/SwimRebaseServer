@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Ai.Application.Interfaces;
 using Ai.Application.Models;
+using Billing.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -18,7 +19,8 @@ public sealed class ConversationRunner(
     SubAgentFollowUp followUp,
     IConversationRepository conversations,
     IEnumerable<IConversationDriver> drivers,
-    ILogger<ConversationRunner>? logger = null)
+    ILogger<ConversationRunner>? logger = null,
+    IConversionQuota? quota = null)
 {
     private readonly ILogger<ConversationRunner> _logger = logger ?? NullLogger<ConversationRunner>.Instance;
 
@@ -53,6 +55,11 @@ public sealed class ConversationRunner(
             _logger.LogInformation(
                 "AI sub-agent conv={ConversationId} ended (terminalTool={Terminal}, endedWithoutToolCall={NoToolCall}); settling parent request {ParentRequestId}",
                 conversationId, outcome.TerminalToolCompleted, outcome.EndedWithoutToolCall, parentRequestId);
+            if (quota is not null && outcome.EndedWithoutToolCall && !outcome.TerminalToolCompleted)
+            {
+                await quota.RefundAsync(conversationId, cancellationToken);
+            }
+
             var resolution = new ToolApprovalResolution();
             await foreach (var chatEvent in approvalResolver.CompleteSubAgentAsync(
                 userId, conversationId, parentRequestId, outcome.TerminalToolCompleted, resolution, cancellationToken))

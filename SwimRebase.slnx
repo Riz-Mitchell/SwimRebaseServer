@@ -23,6 +23,11 @@
     <Project Path="src/Features/Auth/Auth.Domain/Auth.Domain.csproj" />
     <Project Path="src/Features/Auth/Auth.Infrastructure/Auth.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/Features/Billing/">
+    <Project Path="src/Features/Billing/Billing.Application/Billing.Application.csproj" />
+    <Project Path="src/Features/Billing/Billing.Domain/Billing.Domain.csproj" />
+    <Project Path="src/Features/Billing/Billing.Infrastructure/Billing.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/Features/Profile/">
     <Project Path="src/Features/Profile/Profile.Application/Profile.Application.csproj" />
     <Project Path="src/Features/Profile/Profile.Domain/Profile.Domain.csproj" />
