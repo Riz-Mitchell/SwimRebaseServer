@@ -14,7 +14,7 @@ public sealed class OnboardingService(
     [FromKeyedServices(ProfileKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     IEventTracker eventTracker)
 {
-    private static readonly OnboardingStep[] SkippableSteps = [OnboardingStep.Schedule, OnboardingStep.ProTrial];
+    private static readonly OnboardingStep[] SkippableSteps = [OnboardingStep.ProTrial];
 
     public async Task<UserProfile> GetAsync(Guid userId, CancellationToken cancellationToken)
     {

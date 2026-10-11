@@ -589,7 +589,7 @@ A timed swim counts towards `GET /api/sessions/metrics` as training volume (its 
 
 Onboarding progress is tracked server-side so a user who closes the app can resume. On launch call `GET /api/profile/onboarding`: if `status` is `Completed`, go straight into the app, otherwise resume at `resumeStep`. A profile is created on first call (existing users before launch are already `Completed`).
 
-Steps, in order: `Questionnaire` → `FirstSession` → `ReviewWorkout` → `Schedule` → `ProTrial` → `Completed`. Only `Schedule` and `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
+Steps, in order: `Questionnaire` → `FirstSession` → `ReviewWorkout` → `ProTrial` → `Completed`. Only `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
 
 ### `GET /api/profile`
 **Response:** `{ "onboardingCompleted": bool, "answers": { "level": "Regional", "goal": ["DataInsights", "GeneralFitness"] }, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null }`
@@ -629,12 +629,10 @@ Records which branch the user picked for the first session: `{ "path": "Upload" 
 Marks the current step done and advances. Completing a step the user is already past is a no-op; completing one ahead of the current step returns `409`. `Questionnaire` needs all answers and `FirstSession` needs a chosen path, otherwise `400`. Completing `ProTrial` finishes onboarding. **Response:** onboarding status.
 
 ### `POST /api/profile/onboarding/steps/{step}/skip`
-Only valid for `Schedule` and `ProTrial` (`400` otherwise). **Response:** onboarding status.
+Only valid for `ProTrial` (`400` otherwise). **Response:** onboarding status.
 
 ### `PUT /api/profile/notification-preferences`
 **Body:** `{ "remindersEnabled": true, "reminderLeadMinutes": 60 }` - lead time must be 5-1440. **Response:** profile (as `GET /api/profile`).
-
-The `Schedule` step no longer has any backing endpoints (the timetable feature was removed); the app should `skip` it.
 
 ---
 
