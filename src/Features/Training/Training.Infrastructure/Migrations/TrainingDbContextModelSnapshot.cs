@@ -64,34 +64,6 @@ namespace Training.Infrastructure.Migrations
                     b.ToTable("comparison_points", (string)null);
                 });
 
-            modelBuilder.Entity("Training.Domain.Models.ExpectedSession", b =>
-                {
-                    b.Property<Guid>("TimetableEntryId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("timetable_entry_id");
-
-                    b.Property<string>("PrimaryEffortZone")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("primary_effort_zone");
-
-                    b.Property<string>("Summary")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
-                        .HasColumnName("summary");
-
-                    b.Property<int>("TotalDistanceMeters")
-                        .HasColumnType("integer")
-                        .HasColumnName("total_distance_meters");
-
-                    b.HasKey("TimetableEntryId")
-                        .HasName("pk_expected_sessions");
-
-                    b.ToTable("expected_sessions", (string)null);
-                });
-
             modelBuilder.Entity("Training.Domain.Models.Focus", b =>
                 {
                     b.Property<Guid>("Id")
@@ -192,66 +164,6 @@ namespace Training.Infrastructure.Migrations
                     b.ToTable("focus_check_ins", (string)null);
                 });
 
-            modelBuilder.Entity("Training.Domain.Models.TimetableEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("DayOfWeek")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("day_of_week");
-
-                    b.Property<DateOnly>("EffectiveFrom")
-                        .HasColumnType("date")
-                        .HasColumnName("effective_from");
-
-                    b.Property<DateOnly?>("EffectiveTo")
-                        .HasColumnType("date")
-                        .HasColumnName("effective_to");
-
-                    b.Property<TimeOnly>("EndTime")
-                        .HasColumnType("time without time zone")
-                        .HasColumnName("end_time");
-
-                    b.Property<string>("Label")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("label");
-
-                    b.Property<string>("SessionType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("session_type");
-
-                    b.Property<Guid>("SlotId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("slot_id");
-
-                    b.Property<TimeOnly>("StartTime")
-                        .HasColumnType("time without time zone")
-                        .HasColumnName("start_time");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_timetable_entries");
-
-                    b.HasIndex("SlotId", "EffectiveTo")
-                        .HasDatabaseName("ix_timetable_entries_slot_id_effective_to");
-
-                    b.HasIndex("UserId", "EffectiveFrom", "EffectiveTo")
-                        .HasDatabaseName("ix_timetable_entries_user_id_effective_from_effective_to");
-
-                    b.ToTable("timetable_entries", (string)null);
-                });
-
             modelBuilder.Entity("Training.Domain.Models.TrainingUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -284,18 +196,6 @@ namespace Training.Infrastructure.Migrations
                     b.Navigation("Focus");
                 });
 
-            modelBuilder.Entity("Training.Domain.Models.ExpectedSession", b =>
-                {
-                    b.HasOne("Training.Domain.Models.TimetableEntry", "TimetableEntry")
-                        .WithOne("ExpectedSession")
-                        .HasForeignKey("Training.Domain.Models.ExpectedSession", "TimetableEntryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_expected_sessions_timetable_entries_timetable_entry_id");
-
-                    b.Navigation("TimetableEntry");
-                });
-
             modelBuilder.Entity("Training.Domain.Models.Focus", b =>
                 {
                     b.HasOne("Training.Domain.Models.TrainingUser", "TrainingUser")
@@ -320,18 +220,6 @@ namespace Training.Infrastructure.Migrations
                     b.Navigation("Focus");
                 });
 
-            modelBuilder.Entity("Training.Domain.Models.TimetableEntry", b =>
-                {
-                    b.HasOne("Training.Domain.Models.TrainingUser", "TrainingUser")
-                        .WithMany("TimetableEntries")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_timetable_entries_training_users_user_id");
-
-                    b.Navigation("TrainingUser");
-                });
-
             modelBuilder.Entity("Training.Domain.Models.Focus", b =>
                 {
                     b.Navigation("CheckIns");
@@ -339,16 +227,9 @@ namespace Training.Infrastructure.Migrations
                     b.Navigation("ComparisonPoints");
                 });
 
-            modelBuilder.Entity("Training.Domain.Models.TimetableEntry", b =>
-                {
-                    b.Navigation("ExpectedSession");
-                });
-
             modelBuilder.Entity("Training.Domain.Models.TrainingUser", b =>
                 {
                     b.Navigation("Focuses");
-
-                    b.Navigation("TimetableEntries");
                 });
 #pragma warning restore 612, 618
         }

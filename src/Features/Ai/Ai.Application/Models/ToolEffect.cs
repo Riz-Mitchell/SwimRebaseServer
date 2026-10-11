@@ -15,7 +15,7 @@ public enum ToolEffect
 
 /// <summary>
 /// What a tool actually did, alongside the raw JSON it hands back to the model. <see cref="AffectedCount"/>
-/// is tool-defined - "6" for six timetable entries fetched, "1" for one focus created, "0" for a
+/// is tool-defined - "6" for six sessions fetched, "1" for one focus created, "0" for a
 /// delete/edit that found nothing to act on.
 /// </summary>
 public sealed record ToolExecutionResult(string ResultJson, int AffectedCount, IReadOnlyList<ToolResource>? Resources = null);
@@ -27,7 +27,6 @@ public static class ToolResourceKinds
 {
     public const string Session = "session";
     public const string Focus = "focus";
-    public const string TimetableSlot = "timetable_slot";
 }
 
 public static class ToolResourceActions

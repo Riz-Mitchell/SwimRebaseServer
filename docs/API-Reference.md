@@ -83,7 +83,7 @@ Delete an uploaded image - removes both the blob from storage and the record of 
 ---
 
 ### `POST /api/ai/tool-requests/{toolExecutionRequestId}/resolve`
-Approve or deny a gated tool call (a write/destructive action the AI wants to perform, e.g. creating a focus or timetable slot). Returns `400`-equivalent (`error` SSE event) if the request is actually an `ask_user_question` — answer those via the `/answer` endpoint below instead.
+Approve or deny a gated tool call (a write/destructive action the AI wants to perform, e.g. creating a focus). Returns `400`-equivalent (`error` SSE event) if the request is actually an `ask_user_question` — answer those via the `/answer` endpoint below instead.
 
 **Path params:** `toolExecutionRequestId` (guid)
 
@@ -193,8 +193,8 @@ For a `Tool`-role message, `content` is itself a JSON-encoded array (still a str
 [
   {
     "toolUseId": "string",
-    "toolName": "get_timetable",
-    "displayName": "Checking your timetable",
+    "toolName": "get_session",
+    "displayName": "Fetching your session",
     "effect": "Neutral",
     "success": true,
     "affectedCount": 6,
@@ -251,7 +251,7 @@ The two message-sending endpoints and the tool-resolve/answer endpoints all stre
 |---|---|---|
 | `text_delta` | `text` | A chunk of the assistant's reply text |
 | `turn_started` | `conversationId` | A new model call just started — show a "thinking" indicator until text or a tool event arrives |
-| `tool_started` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect` | A tool is about to run (auto-executed read tool, or a freshly-approved gated one) — `displayName` is the UI-friendly label, e.g. "Checking your timetable"; `effect` is `Neutral`/`Creative`/`Destructive` |
+| `tool_started` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect` | A tool is about to run (auto-executed read tool, or a freshly-approved gated one) — `displayName` is the UI-friendly label, e.g. "Fetching your session"; `effect` is `Neutral`/`Creative`/`Destructive` |
 | `tool_completed` | `conversationId`, `toolUseId`, `toolName`, `displayName`, `effect`, `success`, `affectedCount`, `resources` | The tool finished — `affectedCount` is tool-defined (e.g. sessions fetched, rows created/deleted). `resources` (nullable) lists what it created, changed or removed — see [Tool resources](#tool-resources) |
 | `permission_required` | `conversationId`, `toolExecutionRequestId`, `toolName`, `displayName`, `effect`, `inputJson`, `preview` | The AI wants to run a gated tool — needs a `resolve` call. `preview` (nullable) is a readable rendering of what approving would do, e.g. the drafted session for `save_session` |
 | `permission_resolved` | `conversationId`, `toolExecutionRequestId`, `approved` | Confirms a resolve was recorded (sibling gated calls from the same turn still pending) |
@@ -278,7 +278,6 @@ Consume with `curl -N` (disables buffering) or an `EventSource`/SSE client.
 |---|---|---|
 | `session` | session id | `GET /api/sessions/{id}` |
 | `focus` | focus id | `GET /api/focuses/{id}` |
-| `timetable_slot` | slot id (stable across versions) | `GET /api/timetable` and find the entry whose `slotId` matches |
 
 `action` is `created`, `updated` or `deleted`. A `deleted` resource no longer exists, so render it as a non-tappable card. `label` is a short title for the card (absent for `deleted`).
 
@@ -586,75 +585,6 @@ A timed swim counts towards `GET /api/sessions/metrics` as training volume (its 
 
 ---
 
-## Timetable — `/api/timetable`
-
-### `GET /api/timetable?asOf={date}`
-Get the timetable as it stood on a given date. `asOf` (yyyy-MM-dd) optional, defaults to today.
-
-**Response:** array of `TimetableEntryResponse` (see shape below).
-
----
-
-### `PUT /api/timetable/slots/{slotId?}`
-Create a new slot (omit `slotId`) or version a slot into a new state (provide `slotId`). The timetable is versioned — this never edits in place.
-
-**Path params:** `slotId` (guid, optional)
-
-**Body:**
-```json
-{
-  "dayOfWeek": "Monday",
-  "startTime": "06:00:00",
-  "endTime": "07:30:00",
-  "sessionType": "Swim",
-  "label": "string|null",
-  "effectiveFrom": "yyyy-MM-dd",
-  "expectedSession": {
-    "summary": "string",
-    "totalDistanceMeters": 3000,
-    "primaryEffortZone": "Aerobic"
-  }
-}
-```
-`label` and `expectedSession` are optional.
-
-**Response:** `TimetableEntryResponse`.
-
----
-
-### `DELETE /api/timetable/slots/{slotId}?effectiveTo={date}`
-Close out a slot as of a date.
-
-**Path params:** `slotId` (guid)
-**Query params:** `effectiveTo` (yyyy-MM-dd) — required.
-
-**Response:** `204 No Content` / `404 Not Found`.
-
----
-
-### `TimetableEntryResponse` shape
-```json
-{
-  "id": "guid",
-  "slotId": "guid",
-  "dayOfWeek": "Monday",
-  "startTime": "06:00:00",
-  "endTime": "07:30:00",
-  "sessionType": "Swim",
-  "label": "string|null",
-  "effectiveFrom": "yyyy-MM-dd",
-  "effectiveTo": "yyyy-MM-dd|null",
-  "expectedSession": {
-    "summary": "string",
-    "totalDistanceMeters": 3000,
-    "primaryEffortZone": "Aerobic"
-  }
-}
-```
-`expectedSession` is `null` if none was set.
-
----
-
 ## Profile & onboarding — `/api/profile`
 
 Onboarding progress is tracked server-side so a user who closes the app can resume. On launch call `GET /api/profile/onboarding`: if `status` is `Completed`, go straight into the app, otherwise resume at `resumeStep`. A profile is created on first call (existing users before launch are already `Completed`).
@@ -704,7 +634,7 @@ Only valid for `Schedule` and `ProTrial` (`400` otherwise). **Response:** onboar
 ### `PUT /api/profile/notification-preferences`
 **Body:** `{ "remindersEnabled": true, "reminderLeadMinutes": 60 }` - lead time must be 5-1440. **Response:** profile (as `GET /api/profile`).
 
-The `Schedule` step itself uses the [Timetable](#timetable--apitimetable) endpoints, then the app calls `complete` or `skip`.
+The `Schedule` step no longer has any backing endpoints (the timetable feature was removed); the app should `skip` it.
 
 ---
 
