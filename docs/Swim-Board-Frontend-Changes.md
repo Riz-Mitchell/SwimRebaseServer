@@ -31,7 +31,7 @@ Sent once per conversion. There are no more follow-up rounds after a fork.
 - **`showIf`**: show the question only if the question `showIf.questionId` is visible and its answer equals `showIf.option` (case-insensitive). Evaluate top to bottom, so a question under a hidden fork is hidden too. Re-evaluate live as the user changes a fork answer.
 - **`Field` questions** are asked by the app, always last. `fieldType: "date"` -> date picker, send `yyyy-MM-dd`, default to the user's local today. `fieldType: "course"` -> pick one of `options` (`scy`/`scm`/`lcm`; label them however you like, send the raw value). Send both if you can: they are what turns on the one-tap save.
 - Options are still suggestions: always allow free text on `Detail`/`Fork` questions.
-- **`fieldType: "effortMap"`** (new): asks what an unfamiliar effort wording means. See `docs/Custom-Effort-Terms-Frontend-Handoff.md`.
+- **`fieldType: "effortMap"`** (new, only when the board uses effort wording the app does not know, at most 4): the question `id` is `effort:<wording>`, e.g. `effort:Wolf pace`. Show the wording and ask how hard it is: "same as" chips from `options` (effort words and zones, easiest first) **or** a 1-100 slider. Send the chosen option's text (`"a2"`), or the slider value **with a percent sign** (`"85%"`); a bare number would be read as an option number. Send `""` to skip. The meaning is saved for that user, so the same wording is understood from then on and is never asked again. These come after the date and pool questions and are only ever `Field` questions, so older clients that show them as free text still work.
 
 ## Answering
 
@@ -61,7 +61,7 @@ Body unchanged: `{ "answers": ["...", ...] }`, one entry per question **in the o
 - [ ] Parse `id`, `showIf`, `fieldType`; handle `kind: "Field"`.
 - [ ] Render all questions in one form; hide/show branches with `showIf`.
 - [ ] Date picker + course selector for the two `Field` questions; send them in `answers`.
-- [ ] `effortMap` field: see `docs/Custom-Effort-Terms-Frontend-Handoff.md`.
+- [ ] `effortMap` field: option chips plus a 0-100 slider; send the option text or `"<n>%"`.
 - [ ] Send `""` for hidden questions; keep answer order.
 - [ ] Stop expecting a second `questions_asked` after a fork.
 - [ ] Render `preview` in the `save_session` approval card (live and from `/pending`).
