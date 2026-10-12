@@ -659,6 +659,23 @@ Only valid for `ProTrial` (`400` otherwise). **Response:** onboarding status.
 
 ---
 
+## Account — `/api/account`
+
+Deleting an account is two calls, so a stray request can never delete anything. Deletion is permanent: it removes the user's sessions, focuses, chats and uploaded images, profile, subscription record, analytics events and their sign-in. It does **not** cancel an App Store or Google Play subscription - tell the user to cancel it in their store settings.
+
+### `POST /api/account/deletion`
+Starts a deletion; nothing is deleted yet. The user must have signed in (phone OTP) within the last 5 minutes.
+**Response:** `{ "confirmationToken": "...", "expiresAt": "..." }` - the token is valid for 10 minutes and only for this user.
+- `403 { "error": "reauthentication_required" }` - the sign-in is too old. Run phone OTP again, then retry.
+
+### `POST /api/account/deletion/confirm`
+**Body:** `{ "confirmationToken": "..." }`. Deletes the account.
+- `204 No Content` - deleted. The app must now discard its session and call `Purchases.logOut()`; the old access token is refused (`401`) from here on.
+- `400 Bad Request` - the token is invalid, expired or was issued to someone else. Start again from the first call.
+- A `5xx` means it stopped part way. Nothing is lost by retrying with the same token (until it expires) - every step is safe to repeat.
+
+---
+
 ## Notes
 
 - `DayOfWeek`, `SessionType`, `EffortZone`, `FocusStatus`, `FocusOrigin` are enums — check the actual enum definitions in `src/Features/*/Domain/Models/` for their exact member names before relying on the examples above.
