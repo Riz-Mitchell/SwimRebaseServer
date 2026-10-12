@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         // ICurrentUserAccessor is registered by Auth.Infrastructure.AddAuthInfrastructure - the Ai
         // feature only depends on the interface (via Auth.Application), never its implementation.
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<AiDbContext>>(AiKeys.UnitOfWork);
+        services.AddScoped<IUserDataEraser, AiUserDataEraser>();
         services.AddScoped<IAiUserRepository, AiUserRepository>();
         services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IToolExecutionRepository, ToolExecutionRepository>();

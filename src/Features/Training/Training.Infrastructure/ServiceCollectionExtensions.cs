@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
             .UseSnakeCaseNamingConvention());
 
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<TrainingDbContext>>(TrainingKeys.UnitOfWork);
+        services.AddScoped<IUserDataEraser, TrainingUserDataEraser>();
         services.AddScoped<ITrainingUserRepository, TrainingUserRepository>();
         services.AddScoped<ITrainingUserProvisioningService, TrainingUserProvisioningService>();
         services.AddScoped<IFocusRepository, FocusRepository>();

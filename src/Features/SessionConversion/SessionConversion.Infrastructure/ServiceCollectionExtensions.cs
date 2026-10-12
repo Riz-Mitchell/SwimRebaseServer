@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
             .UseSnakeCaseNamingConvention());
 
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<SessionConversionDbContext>>(SessionConversionKeys.UnitOfWork);
+        services.AddScoped<IUserDataEraser, SessionConversionUserDataEraser>();
         services.AddScoped<ISessionDraftRepository, SessionDraftRepository>();
         services.AddScoped<SessionDraftService>();
         services.AddScoped<SessionPromotionService>();

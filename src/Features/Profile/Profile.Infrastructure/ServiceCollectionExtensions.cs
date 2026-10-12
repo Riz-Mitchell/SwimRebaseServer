@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
             .UseSnakeCaseNamingConvention());
 
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<ProfileDbContext>>(ProfileKeys.UnitOfWork);
+        services.AddScoped<IUserDataEraser, ProfileUserDataEraser>();
         services.AddScoped<IUserProfileRepository, UserProfileRepository>();
         services.AddScoped<OnboardingService>();
 

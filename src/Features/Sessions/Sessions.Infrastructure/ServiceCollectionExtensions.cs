@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
             .UseSnakeCaseNamingConvention());
 
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<SessionsDbContext>>(SessionsKeys.UnitOfWork);
+        services.AddScoped<IUserDataEraser, SessionsUserDataEraser>();
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IMetricsRepository, MetricsRepository>();
         services.AddScoped<ITimedSwimRepository, TimedSwimRepository>();

@@ -74,6 +74,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<ICurrentUserAccessor, CurrentUserAccessor>();
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<AuthDbContext>>(AuthKeys.UnitOfWork);
+        services.AddScoped<IUserDataEraser, AuthUserDataEraser>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUserProvisioningService, UserProvisioningService>();
 
