@@ -54,6 +54,14 @@ The server handles one paid line. It does not read entitlement ids, so any produ
 5. After a purchase or restore, refetch `GET /api/billing/entitlement`, retrying for a few seconds until `plan` is `pro` (the webhook can lag the app).
 6. Gate on the server's plan, never on the SDK's `customerInfo` alone.
 
+## Account deletion
+
+Deleting an account also removes the user's RevenueCat subscriber record, which needs a **secret** API key (RevenueCat > Project settings > API keys > secret key, v1 read/write).
+
+1. `az keyvault secret set --vault-name <vault> --name RevenueCat--SecretApiKey --value '<sk_...>'`, then restart the web app. Locally: `dotnet user-secrets set "RevenueCat:SecretApiKey" "<sk_...>" --project src/Presentation/REST`.
+2. Deleting the Supabase user needs the project's service-role key: `az keyvault secret set --vault-name <vault> --name Supabase--ServiceRoleKey --value '<key>'` (Supabase dashboard > Project Settings > API). Locally: `dotnet user-secrets set "Supabase:ServiceRoleKey" "<key>" --project src/Presentation/REST`.
+3. Until both are set, `POST /api/account/deletion/confirm` fails with a `5xx` after the database data has been removed; setting them and retrying completes the deletion.
+
 ## 6. Test it
 
 1. Staging, sandbox tester: buy `pro_monthly`. In RevenueCat's customer view, confirm the event; in the app, confirm `plan: "pro"` and a higher `conversions.limit`.

@@ -34,6 +34,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IConversionQuota, ConversionQuotaService>();
         services.AddScoped<RevenueCatWebhookHandler>();
 
+        services.AddHttpClient<IRevenueCatSubscriberClient, RevenueCatSubscriberClient>(client =>
+            client.BaseAddress = new Uri("https://api.revenuecat.com/"));
+        services.AddScoped<IUserDataEraser, BillingUserDataEraser>();
+
         return services;
     }
 }

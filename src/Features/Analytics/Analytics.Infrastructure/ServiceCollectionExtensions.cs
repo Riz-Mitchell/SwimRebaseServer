@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IEventTracker, EventTracker>();
         services.AddScoped<IEventAnalyticsService, EventAnalyticsService>();
+        services.AddScoped<IUserDataEraser, AnalyticsUserDataEraser>();
 
         return services;
     }

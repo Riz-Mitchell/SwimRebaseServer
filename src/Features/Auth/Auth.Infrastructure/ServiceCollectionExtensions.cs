@@ -74,8 +74,18 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<ICurrentUserAccessor, CurrentUserAccessor>();
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<AuthDbContext>>(AuthKeys.UnitOfWork);
+        services.AddScoped<IUserDataEraser, AuthUserDataEraser>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUserProvisioningService, UserProvisioningService>();
+
+        services.Configure<SupabaseOptions>(configuration.GetSection(SupabaseOptions.SectionName));
+        services.AddHttpClient<ISupabaseAdminClient, SupabaseAdminClient>(client =>
+            client.BaseAddress = new Uri($"{supabaseUrl.TrimEnd('/')}/"));
+        services.AddDataProtection();
+        services.AddSingleton<IDeletionConfirmation, DeletionConfirmation>();
+        services.AddMemoryCache();
+        services.AddSingleton<IDeletedUserList, DeletedUserList>();
+        services.AddScoped<AccountDeletionService>();
 
         return services;
     }
