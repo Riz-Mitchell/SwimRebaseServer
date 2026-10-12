@@ -9,4 +9,7 @@ public interface ICurrentUserAccessor
 {
     /// <summary>Throws if there is no authenticated user on the current request.</summary>
     Guid UserId { get; }
+
+    /// <summary>When the user last actively signed in (not merely refreshed their token), or null if the token does not say.</summary>
+    DateTimeOffset? LastSignInAt { get; }
 }

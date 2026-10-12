@@ -14,7 +14,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Features\Ai\Ai.Infrastructure\Ai.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Features\Analytics\Analytics.Infrastructure\Analytics.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Features\Auth\Auth.Infrastructure\Auth.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Features\Billing\Billing.Infrastructure\Billing.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Features\Profile\Profile.Infrastructure\Profile.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Features\SessionConversion\SessionConversion.Infrastructure\SessionConversion.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Features\Sessions\Sessions.Infrastructure\Sessions.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Features\Training\Training.Infrastructure\Training.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Features\Billing\Billing.Application\Billing.Application.csproj" />
     <ProjectReference Include="..\..\src\Features\Profile\Profile.Application\Profile.Application.csproj" />
     <ProjectReference Include="..\..\src\Features\SessionConversion\SessionConversion.Application\SessionConversion.Application.csproj" />

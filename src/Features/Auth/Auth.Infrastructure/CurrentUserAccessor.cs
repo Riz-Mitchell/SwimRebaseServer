@@ -33,4 +33,8 @@ public sealed class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor
             return userId;
         }
     }
+
+    public DateTimeOffset? LastSignInAt =>
+        SupabaseAmrClaim.LatestSignIn(
+            httpContextAccessor.HttpContext?.User.FindAll("amr").Select(c => c.Value) ?? []);
 }
