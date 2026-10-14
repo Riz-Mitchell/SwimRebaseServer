@@ -14,17 +14,46 @@ namespace REST.Controllers;
 public sealed class CustomMetricsController(
     CustomMetricService metrics,
     CustomMetricEvaluator evaluator,
-    ICurrentUserAccessor currentUser) : ControllerBase
+    ICurrentUserAccessor currentUser,
+    TimeProvider clock) : ControllerBase
 {
     /// <summary>The definitions, for editing.</summary>
     [HttpGet("definitions")]
     public async Task<IActionResult> Definitions(CancellationToken cancellationToken) =>
         Ok(await metrics.ListAsync(currentUser.UserId, cancellationToken));
 
-    /// <summary>Every metric with its current value. <paramref name="today"/> is the swimmer's own date, so "this week" follows their time zone.</summary>
+    /// <summary>Every metric with its current value. <paramref name="today"/> (yyyy-MM-dd) is the swimmer's own date, so "this week" follows their time zone.</summary>
     [HttpGet]
-    public async Task<IActionResult> Values([FromQuery] DateOnly today, CancellationToken cancellationToken) =>
-        Ok(await evaluator.EvaluateAsync(currentUser.UserId, today, cancellationToken));
+    public async Task<IActionResult> Values([FromQuery] string? today, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Ok(await evaluator.EvaluateAsync(currentUser.UserId, CustomMetricDetailRequest.ParseToday(today, ServerToday()), cancellationToken));
+        }
+        catch (InvalidCustomMetricException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// One metric over the whole period around <paramref name="today"/>, for stepping back and forward in time. <paramref name="window"/> and
+    /// <paramref name="groupBy"/> override the saved ones for this request only; nothing is written.
+    /// </summary>
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> Detail(
+        Guid id, [FromQuery] string? today, [FromQuery] string? window, [FromQuery] string? groupBy, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = CustomMetricDetailRequest.Parse(today, window, groupBy, ServerToday());
+            return await evaluator.EvaluateOneAsync(currentUser.UserId, id, request, cancellationToken) is { } detail ? Ok(detail) : NotFound();
+        }
+        catch (InvalidCustomMetricException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CustomMetricDefinition definition, CancellationToken cancellationToken)
@@ -55,4 +84,6 @@ public sealed class CustomMetricsController(
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken) =>
         await metrics.DeleteAsync(currentUser.UserId, id, cancellationToken) ? NoContent() : NotFound();
+
+    private DateOnly ServerToday() => DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
 }

@@ -163,8 +163,9 @@ public class CustomMetricTests
         public Harness()
         {
             var repository = new InMemoryCustomMetricRepository();
+            var metricsData = new InMemoryMetricsRepository(Facts);
             Metrics = new CustomMetricService(repository, new NoOpUnitOfWork());
-            Evaluator = new CustomMetricEvaluator(repository, new MetricsService(new FixedMetricsRepository(), new InMemoryPreferencesRepository()));
+            Evaluator = new CustomMetricEvaluator(repository, metricsData, new MetricsService(metricsData, new InMemoryPreferencesRepository()));
         }
 
         public CustomMetricService Metrics { get; }
@@ -172,19 +173,14 @@ public class CustomMetricTests
         public CustomMetricEvaluator Evaluator { get; }
     }
 
-    // The real repository filters in SQL; the calculator applies the same filters, so handing it everything exercises the same rules.
-    private sealed class FixedMetricsRepository : IMetricsRepository
-    {
-        public Task<IReadOnlyList<FactTotal>> GetTotalsAsync(Guid userId, MetricsQuery query, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<FactTotal>>(
-            [
-                Fact("2026-10-12", Stroke.Fly, 80, 200),
-                Fact("2026-10-13", Stroke.Fly, 50, 300),
-                Fact("2026-10-13", Stroke.Free, 90, 100),
-                Fact("2026-10-05", Stroke.Fly, 90, 100),
-            ]);
+    private static FactTotal Fact(string date, Stroke stroke, int intensity, long distance) =>
+        new(DateOnly.Parse(date), Guid.NewGuid(), stroke, SwimMode.Swim, intensity, DistanceUnit.Metres, distance);
 
-        private static FactTotal Fact(string date, Stroke stroke, int intensity, long distance) =>
-            new(DateOnly.Parse(date), Guid.NewGuid(), stroke, SwimMode.Swim, intensity, DistanceUnit.Metres, distance);
-    }
+    private static readonly FactTotal[] Facts =
+    [
+        Fact("2026-10-12", Stroke.Fly, 80, 200),
+        Fact("2026-10-13", Stroke.Fly, 50, 300),
+        Fact("2026-10-13", Stroke.Free, 90, 100),
+        Fact("2026-10-05", Stroke.Fly, 90, 100),
+    ];
 }
