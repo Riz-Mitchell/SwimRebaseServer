@@ -3,20 +3,6 @@ using Sessions.Domain.Models;
 
 namespace Sessions.Application.Metrics;
 
-public enum MetricDimension { Stroke, Mode, Intensity, Day, Week, Month, Session }
-
-public enum MetricMeasure
-{
-    /// <summary>Total distance.</summary>
-    Distance,
-
-    /// <summary>How many sessions.</summary>
-    Sessions,
-
-    /// <summary>Distance-weighted average intensity, in percent, of the distance that has one.</summary>
-    AvgIntensity,
-}
-
 /// <summary>
 /// One question about what was swum: filter the facts, group them (0-2 dimensions), measure each group. Everything from "fly this month" to
 /// "distance at 80%+ effort per week" is a query of this shape.

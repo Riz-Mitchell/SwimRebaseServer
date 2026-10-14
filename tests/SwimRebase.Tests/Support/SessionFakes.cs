@@ -76,3 +76,18 @@ internal sealed class InMemoryPreferencesRepository : ISessionPreferencesReposit
 
     public void Add(SessionPreferences preferences) => Rows.Add(preferences);
 }
+
+internal sealed class InMemoryCustomMetricRepository : ICustomMetricRepository
+{
+    private readonly List<CustomMetric> rows = [];
+
+    public Task<IReadOnlyList<CustomMetric>> ListAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<CustomMetric>>(rows.Where(m => m.OwnerId == userId).OrderBy(m => m.Position).ToList());
+
+    public Task<CustomMetric?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(rows.FirstOrDefault(m => m.OwnerId == userId && m.Id == id));
+
+    public void Add(CustomMetric metric) => rows.Add(metric);
+
+    public void Remove(CustomMetric metric) => rows.Remove(metric);
+}
