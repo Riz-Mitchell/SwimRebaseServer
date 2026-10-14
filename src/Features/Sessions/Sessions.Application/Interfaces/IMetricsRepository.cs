@@ -9,4 +9,7 @@ public interface IMetricsRepository
     /// intensity. Grouping, roll-ups and measures are left to <see cref="MetricsCalculator"/>.
     /// </summary>
     Task<IReadOnlyList<FactTotal>> GetTotalsAsync(Guid userId, MetricsQuery query, CancellationToken cancellationToken);
+
+    /// <summary>The date of the user's earliest saved session; null when they have none.</summary>
+    Task<DateOnly?> FirstPerformedOnAsync(Guid userId, CancellationToken cancellationToken);
 }

@@ -42,4 +42,7 @@ public sealed class MetricsRepository(SessionsDbContext db) : IMetricsRepository
 
         return [.. factTotals, .. timedSwimTotals];
     }
+
+    public async Task<DateOnly?> FirstPerformedOnAsync(Guid userId, CancellationToken cancellationToken) =>
+        await db.Sessions.AsNoTracking().Where(s => s.OwnerId == userId).MinAsync(s => (DateOnly?)s.PerformedOn, cancellationToken);
 }

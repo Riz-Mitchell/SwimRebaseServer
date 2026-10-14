@@ -1,4 +1,5 @@
 using Sessions.Application.Interfaces;
+using Sessions.Application.Metrics;
 using Sessions.Application.Services;
 using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
@@ -90,4 +91,14 @@ internal sealed class InMemoryCustomMetricRepository : ICustomMetricRepository
     public void Add(CustomMetric metric) => rows.Add(metric);
 
     public void Remove(CustomMetric metric) => rows.Remove(metric);
+}
+
+/// <summary>Hands the calculator every fact it was given; the real repository filters in SQL and the calculator applies the same filters.</summary>
+internal sealed class InMemoryMetricsRepository(IReadOnlyList<FactTotal> facts, DateOnly? firstPerformedOn = null) : IMetricsRepository
+{
+    public Task<IReadOnlyList<FactTotal>> GetTotalsAsync(Guid userId, MetricsQuery query, CancellationToken cancellationToken) =>
+        Task.FromResult(facts);
+
+    public Task<DateOnly?> FirstPerformedOnAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult(firstPerformedOn);
 }

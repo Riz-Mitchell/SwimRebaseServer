@@ -20,6 +20,21 @@ public sealed record CustomMetricValue(
     IReadOnlyList<DistanceUnit> Units,
     decimal AssumedDistance);
 
+/// <summary>The dates a window covered, inclusive. A week or month that has not finished ends after today.</summary>
+public sealed record DateRangeView(DateOnly From, DateOnly To);
+
+/// <summary>One metric over a chosen period: a <see cref="CustomMetricValue"/> plus the dates it covered.</summary>
+public sealed record CustomMetricDetail(
+    Guid Id,
+    string Name,
+    MetricMeasure Measure,
+    MetricWindow Window,
+    DateRangeView Range,
+    double? Value,
+    IReadOnlyList<MetricRow>? Series,
+    IReadOnlyList<DistanceUnit> Units,
+    decimal AssumedDistance);
+
 public sealed class InvalidCustomMetricException(string message) : Exception(message);
 
 public static class CustomMetricQuery
