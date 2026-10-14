@@ -15,6 +15,8 @@ public sealed class SessionsDbContext(DbContextOptions<SessionsDbContext> option
 
     public DbSet<UserEffortTerm> UserEffortTerms => Set<UserEffortTerm>();
 
+    public DbSet<CustomMetric> CustomMetrics => Set<CustomMetric>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SessionsDbContext).Assembly);

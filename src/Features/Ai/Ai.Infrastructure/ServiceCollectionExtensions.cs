@@ -59,6 +59,7 @@ public static class ServiceCollectionExtensions
         services.AddAiTool<EditDraftTool>();
         services.AddAiTool<SaveSessionTool>();
         services.AddAiTool<GetTrainingMetricsTool>();
+        services.AddAiTool<AddCustomMetricTool>();
         services.AddScoped<ISubAgent, SwimBoardInterviewAgent>();
         services.AddScoped<IConversationDriver, SwimBoardConversionDriver>();
         services.AddScoped<IAiChatClient, AnthropicChatClient>();

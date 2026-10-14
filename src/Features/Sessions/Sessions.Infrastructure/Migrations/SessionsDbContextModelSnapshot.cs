@@ -22,6 +22,70 @@ namespace Sessions.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Sessions.Domain.Models.CustomMetric", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("GroupBy")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("group_by");
+
+                    b.Property<int?>("MaxPercent")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_percent");
+
+                    b.Property<string>("Measure")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("measure");
+
+                    b.Property<int?>("MinPercent")
+                        .HasColumnType("integer")
+                        .HasColumnName("min_percent");
+
+                    b.PrimitiveCollection<string[]>("Modes")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("modes");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.PrimitiveCollection<string[]>("Strokes")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("strokes");
+
+                    b.Property<string>("Window")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("window");
+
+                    b.HasKey("Id")
+                        .HasName("pk_custom_metrics");
+
+                    b.HasIndex("OwnerId", "Position")
+                        .HasDatabaseName("ix_custom_metrics_owner_id_position");
+
+                    b.ToTable("custom_metrics", (string)null);
+                });
+
             modelBuilder.Entity("Sessions.Domain.Models.Session", b =>
                 {
                     b.Property<Guid>("Id")

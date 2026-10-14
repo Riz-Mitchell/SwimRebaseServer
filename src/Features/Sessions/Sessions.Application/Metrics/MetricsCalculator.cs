@@ -1,5 +1,6 @@
 using System.Globalization;
 using Sessions.Domain.Calculations;
+using Sessions.Domain.Models;
 
 namespace Sessions.Application.Metrics;
 

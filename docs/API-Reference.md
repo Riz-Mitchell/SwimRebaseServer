@@ -498,6 +498,19 @@ Intensity is always stored as a percent of maximum effort. An **effort scale** i
 
 How effort text becomes a percent is a fixed vocabulary shared with the conversion model: words (`easy` 20, `build` 50, `hard`/`fast` 80, `threshold` 83, `race pace` 88, `sub max` 90, `max`/`sprint` 100 ...), zone names (`A0` 40, `A1` 60, `A2` 70, `A3` 76, `TH` 83, `VO2` 88) and percentages (`80%` is 80). Text that is ambiguous ("easy/hard") or not in the vocabulary has no intensity.
 
+### Custom metrics (home page)
+Saved questions about training, answered by the same engine as `GET /api/sessions/metrics`. A swimmer keeps up to 12. Intensity bounds are percents of maximum effort, so a metric keeps its meaning if the swimmer changes their effort scale: for "TH and above" send the zone's lower edge (80 in the built-in `zones` scale) as `minPercent`. Distance with no stated effort counts at the swimmer's default effort, so an unstated set is left out of a high threshold. An IM part counts towards fly, back, breast and free.
+
+**Definition:** `{ "name": "Fly at TH+ this week", "strokes": ["fly"], "modes": [], "minPercent": 80, "maxPercent": null, "measure": "distance" | "sessions" | "avgIntensity", "window": "last7Days" | "last30Days" | "thisWeek" | "thisMonth" | "allTime", "groupBy": "day" | "week" | "month" | null }`. `name` is required (1-60 characters); empty `strokes` or `modes` mean all.
+
+- `GET /api/metrics/custom?today=yyyy-MM-dd` - every metric with its current value, in the order added. `today` is the swimmer's own date, so "this week" (Monday start) follows their time zone. **Response:** `[ { "id", "name", "measure", "window", "value", "series": [ { "keys": ["2026-10-12"], "value": 200 } ] | null, "units": ["Yards"], "assumedDistance": 0 } ]`. `series` is present only when the definition has a `groupBy`; periods with nothing swum are absent, so zero-fill on the client. `value` is `0` for a total over nothing and `null` for an average over nothing. Distances in metres and yards are never converted; more than one entry in `units` means they are mixed.
+- `GET /api/metrics/custom/definitions` - `[ { "id", "position", "definition": { ... } } ]`, for editing.
+- `POST /api/metrics/custom` - body: a definition. **Response:** `{ "id", "position", "definition" }`.
+- `PUT /api/metrics/custom/{id}` - body: a definition. `404` for a metric that is not the caller's.
+- `DELETE /api/metrics/custom/{id}` - `204`, or `404`.
+
+`400` with `{ error }` for a missing name, the 12-metric limit, a `groupBy` other than day, week or month, an intensity bound outside 1-100, or a lowest intensity above the highest. The chat can also add one through the gated `add_custom_metric` tool.
+
 ### `GET /api/sessions/effort-scales`
 **Response:** `{ "scales": [ { "id": "tens", "name": "1-10", "bands": [ { "key": "1", "label": "1", "min": 1, "max": 14 }, ... ] }, { "id": "zones", ... } ], "custom": { "id": "custom", "name": "Custom", "bands": [...] } | null, "selected": "tens", "defaultEffort": 50 }`. `selected` is the swimmer's saved scale.
 
