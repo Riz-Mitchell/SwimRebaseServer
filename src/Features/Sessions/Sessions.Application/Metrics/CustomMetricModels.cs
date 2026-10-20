@@ -1,3 +1,4 @@
+using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
 
 namespace Sessions.Application.Metrics;
@@ -24,6 +25,8 @@ public sealed record CustomMetricValue(
 public sealed record DateRangeView(DateOnly From, DateOnly To);
 
 /// <summary>One metric over a chosen period: a <see cref="CustomMetricValue"/> plus the dates it covered.</summary>
+/// <param name="Scale">The effort scale a banded series' second key belongs to; null when the series is not banded.</param>
+/// <param name="DefaultEffort">The percent distance with no stated effort was counted at in a banded series; null when the series is not banded.</param>
 public sealed record CustomMetricDetail(
     Guid Id,
     string Name,
@@ -33,19 +36,23 @@ public sealed record CustomMetricDetail(
     double? Value,
     IReadOnlyList<MetricRow>? Series,
     IReadOnlyList<DistanceUnit> Units,
-    decimal AssumedDistance);
+    decimal AssumedDistance,
+    EffortScale? Scale = null,
+    int? DefaultEffort = null);
 
 public sealed class InvalidCustomMetricException(string message) : Exception(message);
 
 public static class CustomMetricQuery
 {
-    public static MetricsQuery For(CustomMetricDefinition definition, DateOnly? from, DateOnly? to, MetricDimension? groupBy = null) => new(
+    public static MetricsQuery For(
+        CustomMetricDefinition definition, DateOnly? from, DateOnly? to, MetricDimension? groupBy = null, MetricDimension? thenBy = null, string? scaleId = null) => new(
         from,
         to,
         definition.Strokes,
         definition.Modes,
         definition.MinPercent,
         definition.MaxPercent,
-        groupBy is { } dimension ? new[] { dimension } : Array.Empty<MetricDimension>(),
-        definition.Measure);
+        new[] { groupBy, thenBy }.OfType<MetricDimension>().ToList(),
+        definition.Measure,
+        scaleId);
 }

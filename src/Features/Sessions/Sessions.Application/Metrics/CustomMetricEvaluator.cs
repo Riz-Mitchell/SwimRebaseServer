@@ -13,11 +13,11 @@ public sealed class CustomMetricEvaluator(ICustomMetricRepository metrics, IMetr
         {
             var definition = metric.ToDefinition();
             var (from, to) = MetricWindows.Resolve(definition.Window, today);
-            var (total, series) = await AskAsync(userId, definition, from, to, cancellationToken);
+            var (total, grouped) = await AskAsync(userId, definition, from, to, cancellationToken: cancellationToken);
 
             values.Add(new CustomMetricValue(
                 metric.Id, definition.Name, definition.Measure, definition.Window,
-                ValueOf(total, definition.Measure), series, total.Units, total.AssumedDistance));
+                ValueOf(total, definition.Measure), grouped?.Rows, total.Units, total.AssumedDistance));
         }
 
         return values;
@@ -28,6 +28,7 @@ public sealed class CustomMetricEvaluator(ICustomMetricRepository metrics, IMetr
     /// </summary>
     /// <returns>Null when the swimmer has no such metric.</returns>
     /// <exception cref="InvalidCustomMetricException">The series would have too many bars.</exception>
+    /// <exception cref="InvalidMetricsQueryException">The requested effort scale is unknown.</exception>
     public async Task<CustomMetricDetail?> EvaluateOneAsync(Guid userId, Guid id, CustomMetricDetailRequest request, CancellationToken cancellationToken)
     {
         if (await metrics.FindAsync(userId, id, cancellationToken) is not { } metric)
@@ -47,20 +48,23 @@ public sealed class CustomMetricEvaluator(ICustomMetricRepository metrics, IMetr
         var start = from ?? await FirstSwamAsync(userId, end, cancellationToken);
         CustomMetricDetailRequest.EnsureChartable(definition.GroupBy, start, end);
 
-        var (total, series) = await AskAsync(userId, definition, from, end, cancellationToken);
+        // Bands only mean something for a distance series; otherwise the request for them is ignored.
+        var banded = request.ThenBy is not null && definition.GroupBy is not null && definition.Measure == MetricMeasure.Distance;
+        var (total, grouped) = await AskAsync(userId, definition, from, end, banded ? request : null, cancellationToken);
         return new CustomMetricDetail(
             metric.Id, definition.Name, definition.Measure, definition.Window, new DateRangeView(start, end),
-            ValueOf(total, definition.Measure), series, total.Units, total.AssumedDistance);
+            ValueOf(total, definition.Measure), grouped?.Rows, total.Units, total.AssumedDistance,
+            banded ? grouped?.Scale : null, banded ? grouped?.DefaultEffort : null);
     }
 
-    private async Task<(MetricsResult Total, IReadOnlyList<MetricRow>? Series)> AskAsync(
-        Guid userId, CustomMetricDefinition definition, DateOnly? from, DateOnly? to, CancellationToken cancellationToken)
+    private async Task<(MetricsResult Total, MetricsResult? Grouped)> AskAsync(
+        Guid userId, CustomMetricDefinition definition, DateOnly? from, DateOnly? to, CustomMetricDetailRequest? bands = null, CancellationToken cancellationToken = default)
     {
         var total = await answers.QueryAsync(userId, CustomMetricQuery.For(definition, from, to), cancellationToken);
-        var series = definition.GroupBy is { } dimension
-            ? (await answers.QueryAsync(userId, CustomMetricQuery.For(definition, from, to, dimension), cancellationToken)).Rows
+        var grouped = definition.GroupBy is { } dimension
+            ? await answers.QueryAsync(userId, CustomMetricQuery.For(definition, from, to, dimension, bands?.ThenBy, bands?.ScaleId), cancellationToken)
             : null;
-        return (total, series);
+        return (total, grouped);
     }
 
     /// <summary>The first session's date, or <paramref name="end"/> when there is none or it is after <paramref name="end"/>.</summary>
