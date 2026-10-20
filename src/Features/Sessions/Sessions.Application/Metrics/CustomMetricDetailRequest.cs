@@ -3,8 +3,8 @@ using Sessions.Domain.Models;
 
 namespace Sessions.Application.Metrics;
 
-/// <summary>What a caller may change about one look at a saved metric: the anchor date, and optionally the window and series grouping for this look only.</summary>
-public sealed record CustomMetricDetailRequest(DateOnly Today, MetricWindow? Window, MetricDimension? GroupBy)
+/// <summary>What a caller may change about one look at a saved metric: the anchor date, and optionally the window and series grouping for this look only. <c>ThenBy</c> splits each bar by effort band, bucketed by <c>ScaleId</c> (else the swimmer's saved scale).</summary>
+public sealed record CustomMetricDetailRequest(DateOnly Today, MetricWindow? Window, MetricDimension? GroupBy, MetricDimension? ThenBy = null, string? ScaleId = null)
 {
     /// <summary>The most buckets one series may have.</summary>
     public const int MaxBuckets = 366;
@@ -12,8 +12,9 @@ public sealed record CustomMetricDetailRequest(DateOnly Today, MetricWindow? Win
     private static readonly DateOnly Earliest = new(2000, 1, 1);
 
     /// <exception cref="InvalidCustomMetricException">Any value is missing where required, unreadable, or out of range.</exception>
-    public static CustomMetricDetailRequest Parse(string? today, string? window, string? groupBy, DateOnly serverToday) =>
-        new(ParseToday(today, serverToday), ParseOptional<MetricWindow>(window, "window"), ParseGroupBy(groupBy));
+    public static CustomMetricDetailRequest Parse(
+        string? today, string? window, string? groupBy, DateOnly serverToday, string? thenBy = null, string? scale = null) =>
+        new(ParseToday(today, serverToday), ParseOptional<MetricWindow>(window, "window"), ParseGroupBy(groupBy), ParseThenBy(thenBy), scale);
 
     /// <summary>
     /// The swimmer's own date. A day past the server's UTC date is allowed because a swimmer east of UTC is legitimately there;
@@ -57,6 +58,12 @@ public sealed record CustomMetricDetailRequest(DateOnly Today, MetricWindow? Win
         return dimension is null or MetricDimension.Day or MetricDimension.Week or MetricDimension.Month
             ? dimension
             : throw new InvalidCustomMetricException("groupBy must be day, week or month");
+    }
+
+    private static MetricDimension? ParseThenBy(string? text)
+    {
+        var dimension = ParseOptional<MetricDimension>(text, "thenBy");
+        return dimension is null or MetricDimension.Intensity ? dimension : throw new InvalidCustomMetricException("thenBy must be intensity");
     }
 
     private static T? ParseOptional<T>(string? text, string name) where T : struct, Enum
