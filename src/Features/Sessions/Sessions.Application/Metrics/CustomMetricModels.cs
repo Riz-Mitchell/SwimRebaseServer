@@ -25,8 +25,18 @@ public sealed record CustomMetricValue(
 public sealed record DateRangeView(DateOnly From, DateOnly To);
 
 /// <summary>One metric over a chosen period: a <see cref="CustomMetricValue"/> plus the dates it covered.</summary>
+/// <summary>One look at a metric over a single period.</summary>
+public sealed record CustomMetricPeriod(
+    DateRangeView Range,
+    double? Value,
+    IReadOnlyList<MetricRow>? Series,
+    IReadOnlyList<DistanceUnit> Units,
+    decimal AssumedDistance);
+
 /// <param name="Scale">The effort scale a banded series' second key belongs to; null when the series is not banded.</param>
 /// <param name="DefaultEffort">The percent distance with no stated effort was counted at in a banded series; null when the series is not banded.</param>
+/// <param name="FirstSessionDate">The date of the swimmer's earliest session, whatever the period; null when they have none.</param>
+/// <param name="Previous">The period before this one, with the same bands; null unless asked for, and for all time.</param>
 public sealed record CustomMetricDetail(
     Guid Id,
     string Name,
@@ -38,7 +48,9 @@ public sealed record CustomMetricDetail(
     IReadOnlyList<DistanceUnit> Units,
     decimal AssumedDistance,
     EffortScale? Scale = null,
-    int? DefaultEffort = null);
+    int? DefaultEffort = null,
+    DateOnly? FirstSessionDate = null,
+    CustomMetricPeriod? Previous = null);
 
 public sealed class InvalidCustomMetricException(string message) : Exception(message);
 

@@ -41,20 +41,41 @@ public sealed class CustomMetricEvaluator(ICustomMetricRepository metrics, IMetr
             Window = request.Window ?? metric.Window,
             GroupBy = request.GroupBy ?? metric.GroupBy,
         };
-        var (from, to) = MetricWindows.Period(definition.Window, request.Today);
-        var end = to ?? request.Today;
-
-        // All time reads up to the anchor, so stepping back in time shows what was true then.
-        var start = from ?? await FirstSwamAsync(userId, end, cancellationToken);
-        CustomMetricDetailRequest.EnsureChartable(definition.GroupBy, start, end);
 
         // Bands only mean something for a distance series; otherwise the request for them is ignored.
         var banded = request.ThenBy is not null && definition.GroupBy is not null && definition.Measure == MetricMeasure.Distance;
-        var (total, grouped) = await AskAsync(userId, definition, from, end, banded ? request : null, cancellationToken);
+        var bands = banded ? request : null;
+        var first = await facts.FirstPerformedOnAsync(userId, cancellationToken);
+
+        var current = await PeriodAsync(userId, definition, request.Today, bands, first, cancellationToken);
+        CustomMetricPeriod? previous = null;
+        if (request.IncludePrevious && MetricWindows.PreviousAnchor(definition.Window, request.Today) is { } before)
+        {
+            previous = (await PeriodAsync(userId, definition, before, bands, first, cancellationToken)).View;
+        }
+
         return new CustomMetricDetail(
-            metric.Id, definition.Name, definition.Measure, definition.Window, new DateRangeView(start, end),
-            ValueOf(total, definition.Measure), grouped?.Rows, total.Units, total.AssumedDistance,
-            banded ? grouped?.Scale : null, banded ? grouped?.DefaultEffort : null);
+            metric.Id, definition.Name, definition.Measure, definition.Window, current.View.Range,
+            current.View.Value, current.View.Series, current.View.Units, current.View.AssumedDistance,
+            banded ? current.Grouped?.Scale : null, banded ? current.Grouped?.DefaultEffort : null, first, previous);
+    }
+
+    private sealed record PeriodResult(CustomMetricPeriod View, MetricsResult? Grouped);
+
+    private async Task<PeriodResult> PeriodAsync(
+        Guid userId, CustomMetricDefinition definition, DateOnly anchor, CustomMetricDetailRequest? bands, DateOnly? firstSession, CancellationToken cancellationToken)
+    {
+        var (from, to) = MetricWindows.Period(definition.Window, anchor);
+        var end = to ?? anchor;
+
+        // All time reads up to the anchor, so stepping back in time shows what was true then.
+        var start = from ?? (firstSession is { } first && first <= end ? first : end);
+        CustomMetricDetailRequest.EnsureChartable(definition.GroupBy, start, end);
+
+        var (total, grouped) = await AskAsync(userId, definition, from, end, bands, cancellationToken);
+        return new PeriodResult(
+            new CustomMetricPeriod(new DateRangeView(start, end), ValueOf(total, definition.Measure), grouped?.Rows, total.Units, total.AssumedDistance),
+            grouped);
     }
 
     private async Task<(MetricsResult Total, MetricsResult? Grouped)> AskAsync(
@@ -66,10 +87,6 @@ public sealed class CustomMetricEvaluator(ICustomMetricRepository metrics, IMetr
             : null;
         return (total, grouped);
     }
-
-    /// <summary>The first session's date, or <paramref name="end"/> when there is none or it is after <paramref name="end"/>.</summary>
-    private async Task<DateOnly> FirstSwamAsync(Guid userId, DateOnly end, CancellationToken cancellationToken) =>
-        await facts.FirstPerformedOnAsync(userId, cancellationToken) is { } first && first <= end ? first : end;
 
     // An ungrouped query over nothing has no row at all.
     private static double? ValueOf(MetricsResult total, MetricMeasure measure) =>

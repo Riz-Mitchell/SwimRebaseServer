@@ -19,9 +19,9 @@ public static class MetricsCalculator
         var facts = candidates.Select(c => c.Fact).ToList();
         var assumed = candidates.Where(c => c.Assumed).Sum(c => c.Fact.Distance);
 
-        var grouped = facts
-            .GroupBy(f => query.GroupBy.Select(d => Key(d, f, query.EffectiveScale)).ToArray(), KeyComparer.Instance)
-            .Select(g => new MetricRow(g.Key, Measure(query.Measure, g)));
+        var grouped = candidates
+            .GroupBy(c => query.GroupBy.Select(d => Key(d, c.Fact, query.EffectiveScale)).ToArray(), KeyComparer.Instance)
+            .Select(g => new MetricRow(g.Key, Measure(query.Measure, g.Select(c => c.Fact)), AssumedIn(query.Measure, g.Where(c => c.Assumed).Sum(c => c.Fact.Distance))));
 
         // Time and intensity read in order; everything else (stroke, mode, session) reads biggest first.
         var inOrder = query.GroupBy.Any(d => d is MetricDimension.Day or MetricDimension.Week or MetricDimension.Month or MetricDimension.Intensity);
@@ -71,6 +71,8 @@ public static class MetricsCalculator
         MetricMeasure.Sessions => group.Select(f => f.SessionId).Distinct().Count(),
         _ => WeightedIntensity(group),
     };
+
+    private static decimal? AssumedIn(MetricMeasure measure, decimal assumed) => measure == MetricMeasure.Distance && assumed > 0 ? assumed : null;
 
     private static double? WeightedIntensity(IEnumerable<FactTotal> group)
     {

@@ -40,15 +40,16 @@ public sealed class CustomMetricsController(
     /// One metric over the whole period around <paramref name="today"/>, for stepping back and forward in time. <paramref name="window"/> and
     /// <paramref name="groupBy"/> override the saved ones for this request only; nothing is written. <paramref name="thenBy"/> (<c>intensity</c>) splits each
     /// bar into effort bands of <paramref name="scale"/>; it is ignored for a metric with no series or a measure other than distance.
+    /// <paramref name="include"/> (<c>previous</c>) adds the period before.
     /// </summary>
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Detail(
         Guid id, [FromQuery] string? today, [FromQuery] string? window, [FromQuery] string? groupBy,
-        [FromQuery] string? thenBy, [FromQuery] string? scale, CancellationToken cancellationToken)
+        [FromQuery] string? thenBy, [FromQuery] string? scale, [FromQuery] string? include, CancellationToken cancellationToken)
     {
         try
         {
-            var request = CustomMetricDetailRequest.Parse(today, window, groupBy, ServerToday(), thenBy, scale);
+            var request = CustomMetricDetailRequest.Parse(today, window, groupBy, ServerToday(), thenBy, scale, include);
             return await evaluator.EvaluateOneAsync(currentUser.UserId, id, request, cancellationToken) is { } detail ? Ok(detail) : NotFound();
         }
         catch (Exception ex) when (ex is InvalidCustomMetricException or InvalidMetricsQueryException)

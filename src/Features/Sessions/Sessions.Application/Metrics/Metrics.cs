@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
 
@@ -36,7 +37,11 @@ public sealed record FactTotal(DateOnly PerformedOn, Guid SessionId, Stroke Stro
 
 /// <param name="Keys">One value per group-by dimension, in order. Empty for an ungrouped query.</param>
 /// <param name="Value">Null when the measure does not apply (an average over distance with no intensity).</param>
-public sealed record MetricRow(IReadOnlyList<string> Keys, double? Value);
+/// <param name="Assumed">How much of a distance row's value had no stated effort and was counted at the default effort; absent when none was.</param>
+public sealed record MetricRow(
+    IReadOnlyList<string> Keys,
+    double? Value,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] decimal? Assumed = null);
 
 /// <param name="Scale">The effort scale intensity was bucketed by.</param>
 /// <param name="DefaultEffort">The percent that distance with no stated effort was counted at; null when that was not applied.</param>
