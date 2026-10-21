@@ -1,6 +1,6 @@
 # SwimRebase REST API Reference
 
-_Last updated: 03/10/2026_
+_Last updated: 21/10/2026_
 
 Base URL: `https://swimrebase-pro.azurewebsites.net` (production) / `https://swimrebase-dev.azurewebsites.net` (staging)
 
@@ -687,6 +687,72 @@ Starts a deletion; nothing is deleted yet. The user must have signed in (phone O
 - `204 No Content` - deleted. The app must now discard its session and call `Purchases.logOut()`; the old access token is refused (`401`) from here on.
 - `400 Bad Request` - the token is invalid, expired or was issued to someone else. Start again from the first call.
 - A `5xx` means it stopped part way. Nothing is lost by retrying with the same token (until it expires) - every step is safe to repeat.
+
+---
+
+## Planned: fewer app requests
+
+**Not implemented yet.** These are proposed, backward-compatible additions (new optional parameters and fields only; no existing shape changes). Status was checked against the code on 21/10/2026. Order is the recommended build order.
+
+| # | Change | Status today | Effort |
+|---|---|---|---|
+| 1 | Effort bands for every day in one `GET /api/sessions/metrics` call | Partial: `groupBy=day&groupBy=intensity` already works; per-row assumed distance is missing | S |
+| 2 | `firstSessionDate` on `GET /api/metrics/custom/{id}` | Not supported (the data exists: `IMetricsRepository.FirstPerformedOnAsync`) | S |
+| 4 | `include=previous` on `GET /api/metrics/custom/{id}` | Not supported | M |
+| 3 | `ETag` / `304` on `GET /api/billing/entitlement` | Not supported (no ETag handling anywhere) | S |
+| 6 | Day and stroke breakdowns together | Supported as-is (`groupBy=day&groupBy=stroke`); a session-list roll-up is not recommended | none |
+| 5 | `GET /api/bootstrap` | Not supported | L |
+
+### 1. Effort bands per day in one call
+`GET /api/sessions/metrics?from&to&groupBy=day&groupBy=intensity[&scale=zones]` is already valid (`SessionsController.GetMetrics`, up to 2 `groupBy` values; `MetricsCalculator.Compute`). It returns `rows[].keys = [day, bandKey]` ordered by day then band, with the whole `scale`, `defaultEffort` and a single total `assumedDistance`. The app can use that today, summing a day's bands for the bar height.
+
+Additions:
+- `thenBy=intensity` as sugar for the second `groupBy`, so the call matches `/api/metrics/custom/{id}`. `groupBy=day&thenBy=intensity` and `groupBy=day&groupBy=intensity` give the same result. `thenBy` is only valid with exactly one `groupBy`; otherwise `400`.
+- `assumed` on each row: of that row's `value`, how much distance had no stated effort and was counted at `defaultEffort`. It is present only when above 0 and only for `measure=distance`, so existing responses and the AI tool output are unchanged. It is exact per `[day, band]` and sums to `assumedDistance`; per-day assumed distance is the sum over a day's rows. This replaces the idea of an `"assumed"` band key, which would collide with the real band keys.
+
+```json
+{ "measure": "Distance", "groupBy": ["Day", "Intensity"], "totalDistance": 5200, "units": ["Yards"],
+  "scale": { "id": "zones", "name": "Zones", "bands": [ { "key": "A0", "label": "A0", "min": 1, "max": 55 } ] },
+  "defaultEffort": 50, "assumedDistance": 300,
+  "rows": [
+    { "keys": ["2026-10-19", "A0"], "value": 1200, "assumed": 300 },
+    { "keys": ["2026-10-19", "TH"], "value": 600 },
+    { "keys": ["2026-10-21", "A1"], "value": 800 }
+  ] }
+```
+Code: `SessionsController.GetMetrics` (add `thenBy`), `MetricsCalculator.Compute` (compute `assumed` per group), `MetricRow` (optional `Assumed`, omitted when null). Edge cases: `applyDefault=false` gives no `assumed`; mixed units are not converted, so `units` can have two entries and a row's `value` mixes them; the response grows with days x bands (about 270 rows for a 30-day month on `zones`, roughly 15 KB). Tests: extend `MetricsTests`, `CustomMetricBandsTests`; add `thenBy` validation cases.
+
+### 2. First session date
+Add `firstSessionDate` (`yyyy-MM-dd` or `null`) to the response of `GET /api/metrics/custom/{id}`. Every detail call already runs the first-session lookup for `allTime` (`CustomMetricEvaluator.FirstSwamAsync`), so the cost is one `MIN(PerformedOn)` query on the owner's sessions. The app learns it from its first period request and the extra `window=allTime&groupBy=month` call goes away.
+
+```json
+{ "id": "guid", "name": "Fly at TH+", "window": "thisWeek", "range": { "from": "2026-10-19", "to": "2026-10-25" }, "firstSessionDate": "2025-03-04", "value": 400, "series": [], "units": ["Yards"], "assumedDistance": 0 }
+```
+Why not the other two options: `GET /api/metrics/custom` returns a bare array, so a top-level field would break old builds (it would have to repeat on every item); `/api/profile/onboarding` belongs to the Profile feature, which has no dependency on Sessions data. Edge cases: no sessions gives `null`; the date is not capped by `today`. Tests: `CustomMetricDetailTests`.
+
+### 4. Previous period in the same call
+`GET /api/metrics/custom/{id}?today=...&window=thisWeek&groupBy=day&thenBy=intensity&include=previous`. The anchor moves back one period: 7 days for `thisWeek` and `last7Days`, 30 days for `last30Days`, one calendar month for `thisMonth`. `allTime` has no previous period, so `previous` is `null`. Anything other than `include=previous` is `400`. Without `include`, the response is unchanged.
+
+```json
+{ "id": "guid", "range": { "from": "2026-10-19", "to": "2026-10-25" }, "value": 5200, "series": [], "scale": {}, "defaultEffort": 50,
+  "previous": { "range": { "from": "2026-10-12", "to": "2026-10-18" }, "value": 4800, "series": [], "units": ["Yards"], "assumedDistance": 0 } }
+```
+`previous` carries no `scale` or `defaultEffort`; it shares the top-level ones. Code: extract the per-period logic in `CustomMetricEvaluator.EvaluateOneAsync` and call it twice; add `Previous` to `CustomMetricDetail`; `CustomMetricDetailRequest` gets `IncludePrevious`. The `EnsureChartable` limit applies to each period. Tests: `CustomMetricDetailTests`.
+
+### 3. Conditional requests on entitlement
+`GET /api/billing/entitlement` returns a strong `ETag` and honours `If-None-Match` with `304 Not Modified` and no body. Check done: the response has no per-request value. `resetsAt` is the next Monday 00:00 UTC (`EntitlementService.Snapshot`), so it is stable within a week; `plan` flips at trial or subscription expiry, which a hash of the computed body picks up on its own. So the ETag is a hash of the serialised response, computed after the normal lookup; the server still does the work, only the body is saved. Also send `Cache-Control: private, no-cache`.
+
+**This does not reduce the request count**, only the bytes. To cut requests, the app should skip the foreground fetch when the last one is recent (a client-side TTL of 30-60 s is enough), and refetch immediately after a purchase or trial event. Code: a small reusable result filter in `src/Presentation/REST` applied to this action. Tests: `EntitlementTests` plus a controller-level test for `304`.
+
+### 6. Day and stroke breakdowns together
+`groupBy=day&groupBy=stroke` already works as-is. Three dimensions (day, stroke, intensity) do not: `MetricsQuery.MaxDimensions` is 2, and raising it would put roughly 1,600 rows in a month response. So the home screen needs 2 metrics calls (`day`+`intensity` from item 1, and `stroke`), down from `1 + N + 1`.
+
+Per-day totals on the sessions list are not recommended: the list is capped at 20 sessions with `include=content`, so a busy fortnight is truncated; `totalDistance` ignores timed swims opted into metrics (`MetricsRepository`); and units are per session, with nothing converted. The day-grouped metrics response remains the source of truth for totals.
+
+### 5. Launch bootstrap
+`GET /api/bootstrap?today=yyyy-MM-dd` is feasible as a thin aggregator in `src/Presentation/REST` (it references every feature). Each section is `{ "data": ..., "error": null }` or `{ "data": null, "error": "..." }`, so one failure does not fail the response. Sections: `onboarding`, `customMetrics`, `conversations` (first page), `entitlement`, `effortScale`.
+
+**Recommendation: build it last, and only if profiling shows the launch round trips matter after items 1-4.** It saves about 4 requests but couples five features' response shapes and release cadence to one endpoint; sections in the same DbContext (Sessions) must run sequentially. Before building it, confirm that the host serves HTTP/2 (no response compression is configured today either, which is worth enabling for month views).
 
 ---
 
