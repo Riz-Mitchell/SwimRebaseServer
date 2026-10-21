@@ -94,6 +94,7 @@ public sealed class SessionsController(
         [FromQuery] int? maxIntensity,
         [FromQuery] string? scale,
         [FromQuery] MetricDimension[]? groupBy,
+        [FromQuery] MetricDimension? thenBy,
         [FromQuery] MetricMeasure measure = MetricMeasure.Distance,
         [FromQuery] bool applyDefault = true,
         CancellationToken cancellationToken = default)
@@ -103,7 +104,7 @@ public sealed class SessionsController(
             var query = new MetricsQuery(
                 from, to, strokes, modes,
                 EffortScale.MinPercent(minPercent, minIntensity), EffortScale.MaxPercent(maxPercent, maxIntensity),
-                groupBy ?? [], measure, scale, SessionId: sessionId, ApplyDefaultEffort: applyDefault);
+                Dimensions(groupBy, thenBy), measure, scale, SessionId: sessionId, ApplyDefaultEffort: applyDefault);
             return Ok(await metrics.QueryAsync(currentUser.UserId, query, cancellationToken));
         }
         catch (InvalidMetricsQueryException ex)
@@ -111,6 +112,14 @@ public sealed class SessionsController(
             return BadRequest(new { error = ex.Message });
         }
     }
+
+    /// <summary><c>thenBy</c> is the second <c>groupBy</c>, for a request that groups by exactly one dimension first (<c>groupBy=day&amp;thenBy=intensity</c>).</summary>
+    private static List<MetricDimension> Dimensions(MetricDimension[]? groupBy, MetricDimension? thenBy) => thenBy switch
+    {
+        null => [.. groupBy ?? []],
+        { } second when groupBy is { Length: 1 } => [groupBy[0], second],
+        _ => throw new InvalidMetricsQueryException("thenBy needs exactly one groupBy."),
+    };
 
     /// <summary>The built-in effort scales, the swimmer's own (null until saved) and which one metrics use by default.</summary>
     [HttpGet("effort-scales")]

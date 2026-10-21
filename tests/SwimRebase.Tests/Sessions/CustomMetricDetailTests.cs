@@ -27,8 +27,8 @@ public class CustomMetricDetailTests
     private static FactTotal Fact(string date, Stroke stroke, int intensity, long distance) =>
         new(DateOnly.Parse(date), Guid.NewGuid(), stroke, SwimMode.Swim, intensity, DistanceUnit.Metres, distance);
 
-    private static CustomMetricDetailRequest Ask(string today, string? window = null, string? groupBy = null) =>
-        CustomMetricDetailRequest.Parse(today, window, groupBy, ServerToday);
+    private static CustomMetricDetailRequest Ask(string today, string? window = null, string? groupBy = null, string? include = null) =>
+        CustomMetricDetailRequest.Parse(today, window, groupBy, ServerToday, include: include);
 
     private static async Task<(CustomMetricService Metrics, CustomMetricEvaluator Evaluator, Guid Id)> Saved(
         CustomMetricDefinition definition, DateOnly? firstSession = null)
@@ -55,6 +55,67 @@ public class CustomMetricDetailTests
         var stored = Assert.Single(await metrics.ListAsync(Swimmer, default)).Definition;
         Assert.Equal(MetricWindow.ThisWeek, stored.Window);
         Assert.Null(stored.GroupBy);
+    }
+
+    [Fact]
+    public async Task The_first_session_date_comes_with_every_period()
+    {
+        var (_, evaluator, id) = await Saved(FlyAtThreshold, new DateOnly(2026, 9, 1));
+
+        var detail = (await evaluator.EvaluateOneAsync(Swimmer, id, Ask("2026-10-14"), default))!;
+
+        Assert.Equal(new DateOnly(2026, 9, 1), detail.FirstSessionDate);
+    }
+
+    [Fact]
+    public async Task A_swimmer_with_no_sessions_has_no_first_session_date()
+    {
+        var (_, evaluator, id) = await Saved(FlyAtThreshold);
+
+        Assert.Null((await evaluator.EvaluateOneAsync(Swimmer, id, Ask("2026-10-14"), default))!.FirstSessionDate);
+    }
+
+    [Fact]
+    public async Task The_previous_period_is_the_week_before_and_only_when_asked_for()
+    {
+        var (_, evaluator, id) = await Saved(FlyAtThreshold);
+
+        var without = (await evaluator.EvaluateOneAsync(Swimmer, id, Ask("2026-10-14", groupBy: "day"), default))!;
+        var with = (await evaluator.EvaluateOneAsync(Swimmer, id, Ask("2026-10-14", groupBy: "day", include: "previous"), default))!;
+
+        Assert.Null(without.Previous);
+        var previous = with.Previous!;
+        Assert.Equal(new DateRangeView(new(2026, 10, 5), new(2026, 10, 11)), previous.Range);
+        Assert.Equal(250, previous.Value);
+        Assert.Equal(new[] { "2026-10-05", "2026-10-08" }, previous.Series!.Select(r => r.Keys[0]).ToArray());
+        Assert.Equal(200, with.Value);
+    }
+
+    [Fact]
+    public async Task The_previous_month_is_the_calendar_month_before()
+    {
+        var (_, evaluator, id) = await Saved(FlyAtThreshold);
+
+        var detail = (await evaluator.EvaluateOneAsync(Swimmer, id, Ask("2026-10-14", "thisMonth", include: "previous"), default))!;
+
+        Assert.Equal(new DateRangeView(new(2026, 9, 1), new(2026, 9, 30)), detail.Previous!.Range);
+        Assert.Equal(400, detail.Previous.Value);
+    }
+
+    [Fact]
+    public async Task All_time_has_no_previous_period()
+    {
+        var (_, evaluator, id) = await Saved(FlyAtThreshold);
+
+        var detail = (await evaluator.EvaluateOneAsync(Swimmer, id, Ask("2026-10-14", "allTime", include: "previous"), default))!;
+
+        Assert.Null(detail.Previous);
+    }
+
+    [Fact]
+    public void An_unknown_include_is_refused()
+    {
+        Assert.Throws<InvalidCustomMetricException>(() => Ask("2026-10-14", include: "next"));
     }
 
     [Fact]

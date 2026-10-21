@@ -27,6 +27,15 @@ public static class MetricWindows
         _ => (null, null),
     };
 
+    /// <summary>The anchor that makes <see cref="Period"/> land on the period just before the one around <paramref name="anchor"/>; null for all time, which has none.</summary>
+    public static DateOnly? PreviousAnchor(MetricWindow window, DateOnly anchor) => window switch
+    {
+        MetricWindow.Last7Days or MetricWindow.ThisWeek => anchor.AddDays(-7),
+        MetricWindow.Last30Days => anchor.AddDays(-30),
+        MetricWindow.ThisMonth => anchor.AddMonths(-1),
+        _ => null,
+    };
+
     public static DateOnly StartOfWeek(DateOnly date) => date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
 
     private static (DateOnly? From, DateOnly? To) Week(DateOnly anchor)

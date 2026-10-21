@@ -42,6 +42,25 @@ public class MetricsTests
     private static Dictionary<string, double?> Table(MetricsResult result) => result.Rows.ToDictionary(r => string.Join('|', r.Keys), r => r.Value);
 
     [Fact]
+    public void A_row_reports_how_much_of_it_was_counted_at_the_default_effort()
+    {
+        var result = MetricsCalculator.Compute(Query(groupBy: [MetricDimension.Day, MetricDimension.Intensity], defaultEffort: 50), Facts());
+
+        var assumed = Assert.Single(result.Rows, r => r.Assumed is not null);
+        Assert.Equal("2026-09-16", assumed.Keys[0]);
+        Assert.Equal(100, assumed.Assumed);
+        Assert.Equal(result.AssumedDistance, result.Rows.Sum(r => r.Assumed ?? 0));
+    }
+
+    [Fact]
+    public void Only_a_distance_row_carries_an_assumed_amount()
+    {
+        var result = MetricsCalculator.Compute(Query(MetricMeasure.Sessions, [MetricDimension.Day], defaultEffort: 50), Facts());
+
+        Assert.All(result.Rows, r => Assert.Null(r.Assumed));
+    }
+
+    [Fact]
     public void An_ungrouped_query_is_one_row_with_the_total()
     {
         var result = MetricsCalculator.Compute(Query(), Facts());

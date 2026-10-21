@@ -3,8 +3,8 @@ using Sessions.Domain.Models;
 
 namespace Sessions.Application.Metrics;
 
-/// <summary>What a caller may change about one look at a saved metric: the anchor date, and optionally the window and series grouping for this look only. <c>ThenBy</c> splits each bar by effort band, bucketed by <c>ScaleId</c> (else the swimmer's saved scale).</summary>
-public sealed record CustomMetricDetailRequest(DateOnly Today, MetricWindow? Window, MetricDimension? GroupBy, MetricDimension? ThenBy = null, string? ScaleId = null)
+/// <summary>What a caller may change about one look at a saved metric: the anchor date, and optionally the window and series grouping for this look only. <c>ThenBy</c> splits each bar by effort band, bucketed by <c>ScaleId</c> (else the swimmer's saved scale). <c>IncludePrevious</c> adds the period before.</summary>
+public sealed record CustomMetricDetailRequest(DateOnly Today, MetricWindow? Window, MetricDimension? GroupBy, MetricDimension? ThenBy = null, string? ScaleId = null, bool IncludePrevious = false)
 {
     /// <summary>The most buckets one series may have.</summary>
     public const int MaxBuckets = 366;
@@ -13,8 +13,8 @@ public sealed record CustomMetricDetailRequest(DateOnly Today, MetricWindow? Win
 
     /// <exception cref="InvalidCustomMetricException">Any value is missing where required, unreadable, or out of range.</exception>
     public static CustomMetricDetailRequest Parse(
-        string? today, string? window, string? groupBy, DateOnly serverToday, string? thenBy = null, string? scale = null) =>
-        new(ParseToday(today, serverToday), ParseOptional<MetricWindow>(window, "window"), ParseGroupBy(groupBy), ParseThenBy(thenBy), scale);
+        string? today, string? window, string? groupBy, DateOnly serverToday, string? thenBy = null, string? scale = null, string? include = null) =>
+        new(ParseToday(today, serverToday), ParseOptional<MetricWindow>(window, "window"), ParseGroupBy(groupBy), ParseThenBy(thenBy), scale, ParseInclude(include));
 
     /// <summary>
     /// The swimmer's own date. A day past the server's UTC date is allowed because a swimmer east of UTC is legitimately there;
@@ -58,6 +58,18 @@ public sealed record CustomMetricDetailRequest(DateOnly Today, MetricWindow? Win
         return dimension is null or MetricDimension.Day or MetricDimension.Week or MetricDimension.Month
             ? dimension
             : throw new InvalidCustomMetricException("groupBy must be day, week or month");
+    }
+
+    private static bool ParseInclude(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return text.Trim().Equals("previous", StringComparison.OrdinalIgnoreCase)
+            ? true
+            : throw new InvalidCustomMetricException($"unknown include '{text}'");
     }
 
     private static MetricDimension? ParseThenBy(string? text)

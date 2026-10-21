@@ -7,6 +7,7 @@ using Billing.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using REST.Filters;
 
 namespace REST.Controllers;
 
@@ -21,6 +22,7 @@ public sealed class BillingController(
     /// <summary>The user's plan (trial, pro or free), their subscription if any and this week's conversion allowance.</summary>
     [HttpGet("entitlement")]
     [Authorize]
+    [ETag]
     public async Task<IActionResult> GetEntitlement(CancellationToken cancellationToken) =>
         Ok(EntitlementResponse.From(await entitlements.GetAsync(currentUser.UserId, cancellationToken)));
 
