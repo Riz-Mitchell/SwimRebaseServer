@@ -47,14 +47,18 @@ public sealed class ChatOrchestrator(
 
         var (conversation, created) = await GetOrCreateConversationAsync(userId, conversationId, userMessage, cancellationToken);
         var firstTitle = conversation.Title;
+        _logger.LogInformation("[{ClassName}] User {UserId} sent a message to {Outcome} conversation {ConversationId} ({ImageCount} image(s))",
+            nameof(ChatOrchestrator), userId, created ? "new" : "existing", conversation.Id, imageIds?.Count ?? 0);
         if (conversation.IsArchived)
         {
+            _logger.LogWarning("[{ClassName}] Rejected message to archived conversation {ConversationId}", nameof(ChatOrchestrator), conversation.Id);
             yield return new AiChatError("This conversation is archived - unarchive it before sending new messages.");
             yield break;
         }
 
         if (conversation.Kind != ConversationKinds.Chat)
         {
+            _logger.LogWarning("[{ClassName}] Rejected direct message to {Kind} conversation {ConversationId}", nameof(ChatOrchestrator), conversation.Kind, conversation.Id);
             yield return new AiChatError("This conversation belongs to a sub-agent and cannot be messaged directly.");
             yield break;
         }
@@ -67,6 +71,7 @@ public sealed class ChatOrchestrator(
         // instead so the client gets an actionable error and nothing bad gets committed.
         if (await toolExecutions.HasOutstandingRequestAsync(userId, conversation.Id, cancellationToken))
         {
+            _logger.LogWarning("[{ClassName}] Rejected message to conversation {ConversationId}: a tool request is still outstanding", nameof(ChatOrchestrator), conversation.Id);
             yield return new AiChatError("This conversation has a tool request awaiting approval, an answer, or a sub-agent to finish - resolve it before sending a new message.");
             yield break;
         }
@@ -80,6 +85,7 @@ public sealed class ChatOrchestrator(
                 var image = await uploadedImages.FindAsync(userId, imageId, cancellationToken);
                 if (image is null || image.Status != UploadedImageStatus.Confirmed)
                 {
+                    _logger.LogWarning("[{ClassName}] User {UserId} attached image {ImageId}, which is not a confirmed upload", nameof(ChatOrchestrator), userId, imageId);
                     yield return new AiChatError($"Image '{imageId}' is not a confirmed upload for this account.");
                     yield break;
                 }
@@ -94,6 +100,7 @@ public sealed class ChatOrchestrator(
         conversation.LastMessageAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await eventTracker.TrackAsync(userId, EventTypes.AiMessageSent, null, cancellationToken);
+        _logger.LogInformation("[{ClassName}] Stored message {SequenceNumber} in conversation {ConversationId}; starting the turn", nameof(ChatOrchestrator), sequenceNumber, conversation.Id);
 
         await compaction.CompactIfNeededAsync(conversation.Id, userId, cancellationToken);
 
@@ -131,7 +138,7 @@ public sealed class ChatOrchestrator(
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "AI chat title could not be started");
+            _logger.LogWarning(ex, "[{ClassName}] Chat title could not be started", nameof(ChatOrchestrator));
             return Task.FromResult(TitleResult.None);
         }
     }
@@ -159,12 +166,17 @@ public sealed class ChatOrchestrator(
                 await unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
+            if (announce)
+            {
+                _logger.LogInformation("[{ClassName}] Titled conversation {ConversationId} '{Title}'", nameof(ChatOrchestrator), conversation.Id, result.Title);
+            }
+
             return announce ? new AiChatTitleUpdated(conversation.Id, result.Title!) : null;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Never let naming a chat break the chat.
-            _logger.LogWarning(ex, "AI chat {ConversationId} could not be given a generated title", conversation.Id);
+            _logger.LogWarning(ex, "[{ClassName}] Conversation {ConversationId} could not be given a generated title", nameof(ChatOrchestrator), conversation.Id);
             return null;
         }
     }
@@ -179,19 +191,25 @@ public sealed class ChatOrchestrator(
         var request = await toolExecutions.FindAsync(userId, toolExecutionRequestId, cancellationToken);
         if (request is null || request.Status != ToolExecutionStatus.PendingApproval)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to {Decision} tool request {ToolRequestId}, which is not pending approval (status {Status})",
+                nameof(ChatOrchestrator), userId, approve ? "approve" : "deny", toolExecutionRequestId, request?.Status);
             yield return new AiChatError("This request is no longer pending approval.");
             yield break;
         }
 
+        _logger.LogInformation("[{ClassName}] User {UserId} {Decision} tool request {ToolRequestId} ({ToolName})",
+            nameof(ChatOrchestrator), userId, approve ? "approved" : "denied", toolExecutionRequestId, request.ToolName);
         var interaction = toolRegistry.Find(request.ToolName)?.Interaction;
         if (interaction == ToolInteractionKind.Question)
         {
+            _logger.LogWarning("[{ClassName}] Tool request {ToolRequestId} is a question and cannot be approved or denied", nameof(ChatOrchestrator), toolExecutionRequestId);
             yield return new AiChatError("This request is a question - resolve it via the answer endpoint, not approve/deny.");
             yield break;
         }
 
         if (interaction == ToolInteractionKind.SubAgent)
         {
+            _logger.LogWarning("[{ClassName}] Tool request {ToolRequestId} is a running sub-agent and cannot be approved or denied", nameof(ChatOrchestrator), toolExecutionRequestId);
             yield return new AiChatError("This request is a running sub-agent - answer its questions, or cancel it via the cancel endpoint.");
             yield break;
         }
@@ -204,7 +222,7 @@ public sealed class ChatOrchestrator(
 
         if (resolution.ReadyConversationId is not { } readyConversationId)
         {
-            // Sibling gated calls from the same turn are still pending.
+            _logger.LogInformation("[{ClassName}] Tool request {ToolRequestId} resolved; sibling requests are still pending so the turn stays paused", nameof(ChatOrchestrator), toolExecutionRequestId);
             yield return new AiChatPermissionResolved(request.ConversationId, request.Id, approve);
             yield break;
         }
@@ -224,16 +242,21 @@ public sealed class ChatOrchestrator(
         var request = await toolExecutions.FindAsync(userId, toolExecutionRequestId, cancellationToken);
         if (request is null || request.Status != ToolExecutionStatus.PendingApproval)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to answer tool request {ToolRequestId}, which is not pending (status {Status})",
+                nameof(ChatOrchestrator), userId, toolExecutionRequestId, request?.Status);
             yield return new AiChatError("This request is no longer pending approval.");
             yield break;
         }
 
         if (toolRegistry.Find(request.ToolName)?.Interaction != ToolInteractionKind.Question)
         {
+            _logger.LogWarning("[{ClassName}] Tool request {ToolRequestId} ({ToolName}) is not a question and cannot be answered", nameof(ChatOrchestrator), toolExecutionRequestId, request.ToolName);
             yield return new AiChatError("This request is not a question - resolve it via approve/deny, not the answer endpoint.");
             yield break;
         }
 
+        _logger.LogInformation("[{ClassName}] User {UserId} answered tool request {ToolRequestId} ({ToolName}) with {AnswerCount} answer(s)",
+            nameof(ChatOrchestrator), userId, toolExecutionRequestId, request.ToolName, answers.Count);
         var resolution = new ToolApprovalResolution();
         await foreach (var chatEvent in approvalResolver.AnswerAsync(userId, request, answers, resolution, cancellationToken))
         {
@@ -242,7 +265,7 @@ public sealed class ChatOrchestrator(
 
         if (resolution.ReadyConversationId is not { } readyConversationId)
         {
-            // Sibling gated calls from the same turn are still pending.
+            _logger.LogInformation("[{ClassName}] Question {ToolRequestId} answered; sibling requests are still pending so the turn stays paused", nameof(ChatOrchestrator), toolExecutionRequestId);
             yield break;
         }
 
@@ -262,9 +285,13 @@ public sealed class ChatOrchestrator(
         if (request is null || request.Status != ToolExecutionStatus.InProgress
             || toolRegistry.Find(request.ToolName)?.Interaction != ToolInteractionKind.SubAgent)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to cancel tool request {ToolRequestId}, which is not a running sub-agent (status {Status})",
+                nameof(ChatOrchestrator), userId, toolExecutionRequestId, request?.Status);
             yield return new AiChatError("This request is not a running sub-agent.");
             yield break;
         }
+
+        _logger.LogInformation("[{ClassName}] User {UserId} cancelled sub-agent tool request {ToolRequestId} ({ToolName})", nameof(ChatOrchestrator), userId, toolExecutionRequestId, request.ToolName);
 
         var resolution = new ToolApprovalResolution();
         await foreach (var chatEvent in approvalResolver.CancelSubAgentAsync(userId, request, resolution, cancellationToken))
@@ -288,8 +315,14 @@ public sealed class ChatOrchestrator(
     {
         if (conversationId is { } id)
         {
-            return (await conversations.FindAsync(userId, id, cancellationToken)
-                ?? throw new ConversationAccessDeniedException(id), false);
+            var existing = await conversations.FindAsync(userId, id, cancellationToken);
+            if (existing is null)
+            {
+                _logger.LogWarning("[{ClassName}] User {UserId} tried to use conversation {ConversationId}, which does not exist for them", nameof(ChatOrchestrator), userId, id);
+                throw new ConversationAccessDeniedException(id);
+            }
+
+            return (existing, false);
         }
 
         var conversation = new Conversation
@@ -303,6 +336,7 @@ public sealed class ChatOrchestrator(
 
         conversations.Add(conversation);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Created conversation {ConversationId} for user {UserId}", nameof(ChatOrchestrator), conversation.Id, userId);
         return (conversation, true);
     }
 }

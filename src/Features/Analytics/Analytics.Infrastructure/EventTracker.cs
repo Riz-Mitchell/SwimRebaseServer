@@ -29,7 +29,7 @@ public sealed class EventTracker(AnalyticsDbContext db, ILogger<EventTracker> lo
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to record analytics event {EventType} for user {UserId}", eventType, userId);
+            logger.LogError(ex, "[{ClassName}] Failed to record analytics event {EventType} for user {UserId}", nameof(EventTracker), eventType, userId);
         }
     }
 }

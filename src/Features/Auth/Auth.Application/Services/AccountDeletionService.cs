@@ -1,6 +1,8 @@
 using Auth.Application.Exceptions;
 using Auth.Application.Interfaces;
 using Auth.Application.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shared.Application;
 
 namespace Auth.Application.Services;
@@ -14,8 +16,11 @@ public sealed class AccountDeletionService(
     ISupabaseAdminClient supabase,
     IDeletionConfirmation confirmation,
     IDeletedUserList deletedUsers,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<AccountDeletionService>? logger = null)
 {
+    private readonly ILogger<AccountDeletionService> _logger = logger ?? NullLogger<AccountDeletionService>.Instance;
+
     public static readonly TimeSpan RecentLoginWindow = TimeSpan.FromMinutes(5);
 
     public static readonly TimeSpan ConfirmationLifetime = TimeSpan.FromMinutes(10);
@@ -25,10 +30,14 @@ public sealed class AccountDeletionService(
         var now = clock.GetUtcNow();
         if (lastSignInAt is not { } signedInAt || now - signedInAt > RecentLoginWindow)
         {
+            _logger.LogWarning("[{ClassName}] Deletion requested by user {UserId} without a recent sign-in (last sign-in {LastSignInAt})",
+                nameof(AccountDeletionService), userId, lastSignInAt);
             throw new RecentLoginRequiredException();
         }
 
         var expiresAt = now + ConfirmationLifetime;
+        _logger.LogInformation("[{ClassName}] Issued deletion confirmation for user {UserId}, expires {ExpiresAt}",
+            nameof(AccountDeletionService), userId, expiresAt);
         return new AccountDeletionRequest(confirmation.Issue(userId, expiresAt), expiresAt);
     }
 
@@ -36,15 +45,30 @@ public sealed class AccountDeletionService(
     {
         if (!confirmation.IsValid(userId, confirmationToken))
         {
+            _logger.LogWarning("[{ClassName}] Invalid or expired deletion confirmation for user {UserId}", nameof(AccountDeletionService), userId);
             throw new InvalidDeletionConfirmationException();
         }
 
-        foreach (var eraser in erasers)
+        _logger.LogInformation("[{ClassName}] Deleting account for user {UserId}", nameof(AccountDeletionService), userId);
+        try
         {
-            await eraser.EraseAsync(userId, cancellationToken);
+            foreach (var eraser in erasers)
+            {
+                await eraser.EraseAsync(userId, cancellationToken);
+                _logger.LogInformation("[{ClassName}] Erased data for user {UserId} via {Eraser}",
+                    nameof(AccountDeletionService), userId, eraser.GetType().Name);
+            }
+
+            await supabase.DeleteUserAsync(userId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[{ClassName}] Account deletion failed part way for user {UserId}; they can sign in and retry",
+                nameof(AccountDeletionService), userId);
+            throw;
         }
 
-        await supabase.DeleteUserAsync(userId, cancellationToken);
         deletedUsers.Add(userId);
+        _logger.LogInformation("[{ClassName}] Account deleted for user {UserId}", nameof(AccountDeletionService), userId);
     }
 }

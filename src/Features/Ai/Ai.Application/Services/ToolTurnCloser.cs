@@ -73,8 +73,8 @@ public sealed class ToolTurnCloser(
                 resolution.ReadyConversationId = null;
                 finished = true;
                 _logger.LogInformation(
-                    "AI tool turn conv={ConversationId} request={RequestId} tool={Tool} settled as {Status}; {Pending} sibling(s) still outstanding ms={ElapsedMs}",
-                    request.ConversationId, request.Id, request.ToolName, request.Status,
+                    "[{ClassName}] Tool turn conv={ConversationId} request={RequestId} tool={Tool} settled as {Status}; {Pending} sibling(s) still outstanding ms={ElapsedMs}",
+                    nameof(ToolTurnCloser), request.ConversationId, request.Id, request.ToolName, request.Status,
                     siblings.Count(s => s.Status is ToolExecutionStatus.PendingApproval or ToolExecutionStatus.InProgress),
                     (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 yield break;
@@ -94,8 +94,8 @@ public sealed class ToolTurnCloser(
             resolution.ReadyConversationId = request.ConversationId;
             finished = true;
             _logger.LogInformation(
-                "AI tool turn conv={ConversationId} request={RequestId} tool={Tool} settled as {Status}; turn closed with {Siblings} tool result(s) ms={ElapsedMs}",
-                request.ConversationId, request.Id, request.ToolName, request.Status, siblings.Count,
+                "[{ClassName}] Tool turn conv={ConversationId} request={RequestId} tool={Tool} settled as {Status}; turn closed with {Siblings} tool result(s) ms={ElapsedMs}",
+                nameof(ToolTurnCloser), request.ConversationId, request.Id, request.ToolName, request.Status, siblings.Count,
                 (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
         }
         finally
@@ -103,9 +103,9 @@ public sealed class ToolTurnCloser(
             if (!finished)
             {
                 _logger.LogWarning(
-                    "AI tool turn conv={ConversationId} request={RequestId} tool={Tool} did not finish: stopped in phase '{Phase}' " +
+                    "[{ClassName}] Tool turn conv={ConversationId} request={RequestId} tool={Tool} did not finish: stopped in phase '{Phase}' " +
                     "(status={Status}, cancelled={Cancelled}) ms={ElapsedMs}",
-                    request.ConversationId, request.Id, request.ToolName, request.Status, phase,
+                    nameof(ToolTurnCloser), request.ConversationId, request.Id, request.ToolName, request.Status, phase,
                     cancellationToken.IsCancellationRequested, (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
             }
         }
@@ -148,10 +148,16 @@ public sealed class ToolTurnCloser(
             var executeStartedAt = Stopwatch.GetTimestamp();
             var summary = await toolExecutor.ExecuteAsync(
                 userId, sibling.ConversationId, sibling.AnthropicToolUseId, sibling.ToolName, sibling.InputJson, cancellationToken);
-            _logger.LogInformation(
-                "AI tool {Tool} {Outcome} after approval conv={ConversationId} request={RequestId} resultChars={ResultChars} ms={ElapsedMs}",
-                sibling.ToolName, summary.Success ? "ok" : "FAILED", sibling.ConversationId, sibling.Id, summary.ResultJson.Length,
-                (long)Stopwatch.GetElapsedTime(executeStartedAt).TotalMilliseconds);
+            const string template = "[{ClassName}] Tool {Tool} {Outcome} after approval conv={ConversationId} request={RequestId} resultChars={ResultChars} ms={ElapsedMs}";
+            var executeElapsedMs = (long)Stopwatch.GetElapsedTime(executeStartedAt).TotalMilliseconds;
+            if (summary.Success)
+            {
+                _logger.LogInformation(template, nameof(ToolTurnCloser), sibling.ToolName, "ok", sibling.ConversationId, sibling.Id, summary.ResultJson.Length, executeElapsedMs);
+            }
+            else
+            {
+                _logger.LogWarning(template, nameof(ToolTurnCloser), sibling.ToolName, "FAILED", sibling.ConversationId, sibling.Id, summary.ResultJson.Length, executeElapsedMs);
+            }
             sibling.Status = summary.Success ? ToolExecutionStatus.Executed : ToolExecutionStatus.Failed;
             sibling.ResultJson = summary.ResultJson;
             summaries.Add(summary.Success && siblingTool is { RequiresApproval: true }

@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Sessions.Application.Interfaces;
 using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
@@ -50,8 +52,11 @@ public sealed class TimedSwimNotFoundException(Guid id) : Exception($"No timed s
 public sealed class TimedSwimService(
     ITimedSwimRepository timedSwims,
     IntensityResolver intensity,
-    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
+    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    ILogger<TimedSwimService>? logger = null)
 {
+    private readonly ILogger<TimedSwimService> _logger = logger ?? NullLogger<TimedSwimService>.Instance;
+
     /// <exception cref="InvalidTimedSwimException">The swim is not valid.</exception>
     public async Task<TimedSwimView> LogAsync(Guid userId, LogTimedSwimRequest request, CancellationToken cancellationToken)
     {
@@ -60,6 +65,7 @@ public sealed class TimedSwimService(
         var problems = TimedSwimValidator.Validate(request.Dist, request.Seconds, resistance, splits);
         if (problems.Count > 0)
         {
+            _logger.LogWarning("[{ClassName}] Rejected timed swim from user {UserId}: {Problems}", nameof(TimedSwimService), userId, string.Join("; ", problems));
             throw new InvalidTimedSwimException(problems);
         }
 
@@ -88,13 +94,28 @@ public sealed class TimedSwimService(
 
         timedSwims.Add(timedSwim);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Logged timed swim {TimedSwimId} ({Dist} {Stroke} in {Seconds}s) for user {UserId}, session {SessionId}",
+            nameof(TimedSwimService), timedSwim.Id, timedSwim.Dist, timedSwim.Stroke, timedSwim.Seconds, userId, timedSwim.SessionId);
         return TimedSwimView.Of(timedSwim);
     }
 
     /// <exception cref="TimedSwimNotFoundException">There is no such swim for this user.</exception>
-    public async Task<TimedSwimView> GetAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
-        TimedSwimView.Of(await timedSwims.FindAsync(userId, id, cancellationToken) ?? throw new TimedSwimNotFoundException(id));
+    public async Task<TimedSwimView> GetAsync(Guid userId, Guid id, CancellationToken cancellationToken)
+    {
+        var found = await timedSwims.FindAsync(userId, id, cancellationToken);
+        if (found is null)
+        {
+            _logger.LogWarning("[{ClassName}] User {UserId} asked for timed swim {TimedSwimId}, which does not exist for them", nameof(TimedSwimService), userId, id);
+            throw new TimedSwimNotFoundException(id);
+        }
 
-    public async Task<IReadOnlyList<TimedSwimView>> ListAsync(Guid userId, TimedSwimFilter filter, CancellationToken cancellationToken) =>
-        (await timedSwims.ListAsync(userId, filter, cancellationToken)).Select(TimedSwimView.Of).ToList();
+        return TimedSwimView.Of(found);
+    }
+
+    public async Task<IReadOnlyList<TimedSwimView>> ListAsync(Guid userId, TimedSwimFilter filter, CancellationToken cancellationToken)
+    {
+        var found = await timedSwims.ListAsync(userId, filter, cancellationToken);
+        _logger.LogDebug("[{ClassName}] Listed {Count} timed swim(s) for user {UserId}", nameof(TimedSwimService), found.Count, userId);
+        return found.Select(TimedSwimView.Of).ToList();
+    }
 }

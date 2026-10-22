@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Profile.Application.Interfaces;
 using Profile.Domain.Models;
 using Shared.Application;
@@ -12,14 +14,19 @@ namespace Profile.Application.Services;
 public sealed class OnboardingService(
     IUserProfileRepository profiles,
     [FromKeyedServices(ProfileKeys.UnitOfWork)] IUnitOfWork unitOfWork,
-    IEventTracker eventTracker)
+    IEventTracker eventTracker,
+    ILogger<OnboardingService>? logger = null)
 {
+    private readonly ILogger<OnboardingService> _logger = logger ?? NullLogger<OnboardingService>.Instance;
+
     private static readonly OnboardingStep[] SkippableSteps = [OnboardingStep.ProTrial];
 
     public async Task<UserProfile> GetAsync(Guid userId, CancellationToken cancellationToken)
     {
         await profiles.EnsureExistsAsync(userId, DateTimeOffset.UtcNow, cancellationToken);
-        return (await profiles.FindAsync(userId, cancellationToken))!;
+        var profile = (await profiles.FindAsync(userId, cancellationToken))!;
+        _logger.LogDebug("[{ClassName}] Loaded profile for user {UserId} at step {Step}", nameof(OnboardingService), userId, profile.CurrentStep);
+        return profile;
     }
 
     /// <summary>Each question's answers replace what was saved for it; a question not in <paramref name="answers"/> keeps its answers.</summary>
@@ -29,7 +36,15 @@ public sealed class OnboardingService(
         var chosen = new Dictionary<string, List<string>>();
         foreach (var (key, values) in answers)
         {
-            chosen[key] = Validate(key, values);
+            try
+            {
+                chosen[key] = Validate(key, values);
+            }
+            catch (InvalidOnboardingRequestException ex)
+            {
+                _logger.LogWarning("[{ClassName}] Rejected answer to '{QuestionKey}' from user {UserId}: {Reason}", nameof(OnboardingService), key, userId, ex.Message);
+                throw;
+            }
         }
 
         var profile = await GetAsync(userId, cancellationToken);
@@ -59,6 +74,8 @@ public sealed class OnboardingService(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Saved answers to {QuestionCount} question(s) for user {UserId}{Advanced}",
+            nameof(OnboardingService), chosen.Count, userId, advanced ? ", completing the questionnaire" : string.Empty);
         if (advanced)
         {
             await TrackAdvanceAsync(profile, OnboardingStep.Questionnaire, cancellationToken);
@@ -101,12 +118,14 @@ public sealed class OnboardingService(
         var profile = await GetAsync(userId, cancellationToken);
         if (profile.CurrentStep < OnboardingStep.FirstSession)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} chose a first-session path while still at step {Step}", nameof(OnboardingService), userId, profile.CurrentStep);
             throw new OnboardingStepConflictException("Finish the questionnaire first.");
         }
 
         profile.FirstSessionPath = path;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] User {UserId} chose first-session path {Path}", nameof(OnboardingService), userId, path);
         return profile;
     }
 
@@ -116,26 +135,32 @@ public sealed class OnboardingService(
         var profile = await GetAsync(userId, cancellationToken);
         if (step == OnboardingStep.Completed)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to complete the 'Completed' step", nameof(OnboardingService), userId);
             throw new InvalidOnboardingRequestException("'Completed' is not a step that can be completed.");
         }
 
         if (step < profile.CurrentStep)
         {
+            _logger.LogInformation("[{ClassName}] User {UserId} re-completed {Step} but is already at {CurrentStep}; nothing to do",
+                nameof(OnboardingService), userId, step, profile.CurrentStep);
             return profile;
         }
 
         if (step > profile.CurrentStep)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to complete {Step} while at {CurrentStep}", nameof(OnboardingService), userId, step, profile.CurrentStep);
             throw new OnboardingStepConflictException($"Cannot complete '{step}' while the current step is '{profile.CurrentStep}'.");
         }
 
         if (step == OnboardingStep.Questionnaire && !HasAnsweredAll(profile))
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to complete the questionnaire with unanswered questions", nameof(OnboardingService), userId);
             throw new InvalidOnboardingRequestException("Answer every questionnaire question first.");
         }
 
         if (step == OnboardingStep.FirstSession && profile.FirstSessionPath is null)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to complete the first session without choosing a path", nameof(OnboardingService), userId);
             throw new InvalidOnboardingRequestException("Choose how to analyse the first session first.");
         }
 
@@ -146,17 +171,21 @@ public sealed class OnboardingService(
     {
         if (!SkippableSteps.Contains(step))
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to skip {Step}, which cannot be skipped", nameof(OnboardingService), userId, step);
             throw new InvalidOnboardingRequestException($"'{step}' cannot be skipped.");
         }
 
         var profile = await GetAsync(userId, cancellationToken);
         if (step < profile.CurrentStep)
         {
+            _logger.LogInformation("[{ClassName}] User {UserId} re-skipped {Step} but is already at {CurrentStep}; nothing to do",
+                nameof(OnboardingService), userId, step, profile.CurrentStep);
             return profile;
         }
 
         if (step > profile.CurrentStep)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to skip {Step} while at {CurrentStep}", nameof(OnboardingService), userId, step, profile.CurrentStep);
             throw new OnboardingStepConflictException($"Cannot skip '{step}' while the current step is '{profile.CurrentStep}'.");
         }
 
@@ -168,6 +197,7 @@ public sealed class OnboardingService(
     {
         if (reminderLeadMinutes is < 5 or > 1440)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} sent an out-of-range reminder lead time of {LeadMinutes} minutes", nameof(OnboardingService), userId, reminderLeadMinutes);
             throw new InvalidOnboardingRequestException("Reminder lead time must be between 5 and 1440 minutes.");
         }
 
@@ -176,6 +206,8 @@ public sealed class OnboardingService(
         profile.ReminderLeadMinutes = reminderLeadMinutes;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] User {UserId} set reminders enabled={RemindersEnabled}, lead {LeadMinutes} minutes",
+            nameof(OnboardingService), userId, remindersEnabled, reminderLeadMinutes);
         return profile;
     }
 
@@ -187,6 +219,7 @@ public sealed class OnboardingService(
         var finished = profile.CurrentStep;
         Advance(profile, DateTimeOffset.UtcNow);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] User {UserId} moved from {Finished} to {CurrentStep}", nameof(OnboardingService), profile.Id, finished, profile.CurrentStep);
         await TrackAdvanceAsync(profile, finished, cancellationToken);
         return profile;
     }
@@ -207,6 +240,7 @@ public sealed class OnboardingService(
         await eventTracker.TrackAsync(profile.Id, EventTypes.OnboardingStepCompleted, $"{{\"step\":\"{finished}\"}}", cancellationToken);
         if (profile.CurrentStep == OnboardingStep.Completed)
         {
+            _logger.LogInformation("[{ClassName}] User {UserId} completed onboarding; pro trial ends {TrialEndsAt}", nameof(OnboardingService), profile.Id, profile.ProTrialEndsAt);
             await eventTracker.TrackAsync(profile.Id, EventTypes.OnboardingCompleted, null, cancellationToken);
         }
     }

@@ -4,6 +4,7 @@ using Ai.Application.Interfaces;
 using Ai.Application.Models;
 using Ai.Application.Services;
 using Anthropic.Models.Messages;
+using Microsoft.Extensions.Logging;
 
 namespace Ai.Infrastructure.Chat;
 
@@ -13,7 +14,7 @@ namespace Ai.Infrastructure.Chat;
 /// as it goes, then emitting a single <see cref="TurnCompletedEvent"/> at the end. One instance
 /// per turn - all accumulation state is instance-local.
 /// </summary>
-internal sealed class AnthropicStreamProcessor(string modelName, IReadOnlyList<AiToolSpec> tools)
+internal sealed class AnthropicStreamProcessor(string modelName, IReadOnlyList<AiToolSpec> tools, ILogger logger)
 {
     private readonly StringBuilder _textBuffer = new();
     private readonly List<ChatContentBlock> _assistantBlocks = [];
@@ -50,6 +51,7 @@ internal sealed class AnthropicStreamProcessor(string modelName, IReadOnlyList<A
 
             if (failure is not null)
             {
+                logger.LogError(failure, "[{ClassName}] The {Model} stream failed", nameof(AnthropicStreamProcessor), modelName);
                 yield return new ErrorEvent(failure.Message);
                 yield break;
             }
@@ -111,6 +113,10 @@ internal sealed class AnthropicStreamProcessor(string modelName, IReadOnlyList<A
             if (tools.FirstOrDefault(t => t.Name == meta.Name) is { } spec)
             {
                 inputJson = ToolInputRepair.Repair(inputJson, spec.JsonSchema);
+            }
+            else
+            {
+                logger.LogWarning("[{ClassName}] The model called '{ToolName}', which is not among this turn's tools", nameof(AnthropicStreamProcessor), meta.Name);
             }
 
             _assistantBlocks.Add(new ToolUseContentBlock(meta.Id, meta.Name, inputJson));

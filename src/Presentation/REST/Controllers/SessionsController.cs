@@ -1,6 +1,7 @@
 using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Sessions.Application.Metrics;
 using Sessions.Application.Services;
 using Sessions.Domain.Calculations;
@@ -19,7 +20,8 @@ public sealed class SessionsController(
     SessionService sessions,
     MetricsService metrics,
     SessionPreferencesService preferences,
-    ICurrentUserAccessor currentUser) : ControllerBase
+    ICurrentUserAccessor currentUser,
+    ILogger<SessionsController> logger) : ControllerBase
 {
     /// <summary>Newest first. <c>?include=content</c> adds each session's tree, so a page of full sessions is one call (at most <see cref="SessionService.MaxContentLimit"/>).</summary>
     [HttpGet]
@@ -69,10 +71,12 @@ public sealed class SessionsController(
         }
         catch (InvalidSessionEditException ex)
         {
+            logger.LogWarning("[{ClassName}] Invalid edit to session {SessionId} from user {UserId}: {Reason}", nameof(SessionsController), id, currentUser.UserId, ex.Message);
             return BadRequest(new { error = ex.Message });
         }
         catch (InvalidSessionException ex)
         {
+            logger.LogWarning("[{ClassName}] Edit would leave session {SessionId} invalid for user {UserId}: {Problems}", nameof(SessionsController), id, currentUser.UserId, string.Join("; ", ex.Problems));
             return BadRequest(new { error = ex.Message, problems = ex.Problems });
         }
     }
@@ -109,6 +113,7 @@ public sealed class SessionsController(
         }
         catch (InvalidMetricsQueryException ex)
         {
+            logger.LogWarning("[{ClassName}] Invalid metrics query from user {UserId}: {Reason}", nameof(SessionsController), currentUser.UserId, ex.Message);
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -144,6 +149,7 @@ public sealed class SessionsController(
     {
         if (string.IsNullOrWhiteSpace(request.Scale))
         {
+            logger.LogWarning("[{ClassName}] User {UserId} sent an effort scale choice without a scale", nameof(SessionsController), currentUser.UserId);
             return BadRequest(new { error = "scale is required." });
         }
 
@@ -157,6 +163,7 @@ public sealed class SessionsController(
         }
         catch (InvalidSessionPreferencesException ex)
         {
+            logger.LogWarning("[{ClassName}] Invalid effort scale choice from user {UserId}: {Reason}", nameof(SessionsController), currentUser.UserId, ex.Message);
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -179,6 +186,7 @@ public sealed class SessionsController(
         }
         catch (InvalidSessionPreferencesException ex)
         {
+            logger.LogWarning("[{ClassName}] Invalid preferences from user {UserId}: {Reason}", nameof(SessionsController), currentUser.UserId, ex.Message);
             return BadRequest(new { error = ex.Message });
         }
     }

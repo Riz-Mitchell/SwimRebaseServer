@@ -26,7 +26,7 @@ public sealed class IntensityBackfill(SessionsDbContext db, IntensityResolver re
         {
             if (!await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_lock({AdvisoryLockKey}) AS \"Value\"").SingleAsync(cancellationToken))
             {
-                logger.LogInformation("Intensity backfill is already running on another instance; skipping.");
+                logger.LogInformation("[{ClassName}] Intensity backfill is already running on another instance; skipping.", nameof(IntensityBackfill));
                 return;
             }
 
@@ -36,7 +36,7 @@ public sealed class IntensityBackfill(SessionsDbContext db, IntensityResolver re
                 var timedSwims = await BackfillTimedSwimsAsync(cancellationToken);
                 if (sessions + timedSwims > 0)
                 {
-                    logger.LogInformation("Intensity backfill updated {Sessions} sessions and {TimedSwims} timed swims.", sessions, timedSwims);
+                    logger.LogInformation("[{ClassName}] Intensity backfill updated {Sessions} sessions and {TimedSwims} timed swims.", nameof(IntensityBackfill), sessions, timedSwims);
                 }
             }
             finally

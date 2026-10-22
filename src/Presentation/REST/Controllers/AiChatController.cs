@@ -8,6 +8,7 @@ using Ai.Domain.Models;
 using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Shared.Application.Storage;
 
 namespace REST.Controllers;
@@ -29,7 +30,8 @@ public sealed class AiChatController(
     ITokenUsageRepository tokenUsage,
     ImageUploadService imageUpload,
     IBlobStorageService blobStorage,
-    ConversationManagementService conversationManagement) : ControllerBase
+    ConversationManagementService conversationManagement,
+    ILogger<AiChatController> logger) : ControllerBase
 {
     // Two templates because an optional route parameter that isn't the final segment (this one is
     // followed by "/messages") doesn't collapse correctly when omitted - ASP.NET Core won't match
@@ -39,6 +41,7 @@ public sealed class AiChatController(
     public Task SendMessage(Guid? conversationId, [FromBody] SendMessageRequest request, CancellationToken cancellationToken) =>
         StreamEventsAsync(
             orchestrator.SendUserMessageAsync(currentUser.UserId, conversationId, request.Message, request.ImageIds, cancellationToken),
+            nameof(SendMessage),
             cancellationToken);
 
     [HttpPost("tool-requests/{toolExecutionRequestId:guid}/resolve")]
@@ -46,6 +49,7 @@ public sealed class AiChatController(
         Guid toolExecutionRequestId, [FromBody] ResolveToolRequestBody body, CancellationToken cancellationToken) =>
         StreamEventsAsync(
             orchestrator.ResolveToolApprovalAsync(currentUser.UserId, toolExecutionRequestId, body.Approve, body.DenialReason, cancellationToken),
+            nameof(ResolveToolRequest),
             cancellationToken);
 
     [HttpPost("tool-requests/{toolExecutionRequestId:guid}/answer")]
@@ -53,6 +57,7 @@ public sealed class AiChatController(
         Guid toolExecutionRequestId, [FromBody] AnswerToolRequestBody body, CancellationToken cancellationToken) =>
         StreamEventsAsync(
             orchestrator.AnswerQuestionAsync(currentUser.UserId, toolExecutionRequestId, body.ToAnswers(), cancellationToken),
+            nameof(AnswerToolRequest),
             cancellationToken);
 
     /// <summary>Abandons a running sub-agent (its tool call is InProgress), unblocking the chat. Whatever it was waiting on is denied.</summary>
@@ -60,6 +65,7 @@ public sealed class AiChatController(
     public Task CancelToolRequest(Guid toolExecutionRequestId, CancellationToken cancellationToken) =>
         StreamEventsAsync(
             orchestrator.CancelSubAgentAsync(currentUser.UserId, toolExecutionRequestId, cancellationToken),
+            nameof(CancelToolRequest),
             cancellationToken);
 
     [HttpGet("conversations")]
@@ -70,6 +76,7 @@ public sealed class AiChatController(
         CancellationToken cancellationToken = default)
     {
         var result = await conversations.ListForUserAsync(currentUser.UserId, sortBy, descending, includeArchived, cancellationToken);
+        logger.LogDebug("[{ClassName}] Listed {Count} conversation(s) for user {UserId} (archived included: {IncludeArchived})", nameof(AiChatController), result.Count, currentUser.UserId, includeArchived);
         return Ok(result.Select(c => new { c.Id, c.Title, c.CreatedAt, c.LastMessageAt, c.IsArchived }));
     }
 
@@ -109,13 +116,18 @@ public sealed class AiChatController(
         CancellationToken cancellationToken = default)
     {
         var conversation = await conversations.FindAsync(currentUser.UserId, conversationId, cancellationToken);
-        if (conversation is null) return NotFound();
+        if (conversation is null)
+        {
+            logger.LogWarning("[{ClassName}] User {UserId} asked for messages of conversation {ConversationId}, which does not exist for them", nameof(AiChatController), currentUser.UserId, conversationId);
+            return NotFound();
+        }
 
         limit = Math.Clamp(limit, 1, 100);
 
         var page = await conversations.GetMessagesPageAsync(conversationId, before, limit, cancellationToken);
         var hasMore = page.Count > limit;
         var items = hasMore ? page.Take(limit).ToList() : page;
+        logger.LogDebug("[{ClassName}] Returned {Count} message(s) of conversation {ConversationId} (more available: {HasMore})", nameof(AiChatController), items.Count, conversationId, hasMore);
 
         return Ok(new
         {
@@ -140,7 +152,11 @@ public sealed class AiChatController(
     public async Task<IActionResult> GetPendingToolRequests(Guid conversationId, CancellationToken cancellationToken)
     {
         var conversation = await conversations.FindAsync(currentUser.UserId, conversationId, cancellationToken);
-        if (conversation is null) return NotFound();
+        if (conversation is null)
+        {
+            logger.LogWarning("[{ClassName}] User {UserId} asked for pending tool requests of conversation {ConversationId}, which does not exist for them", nameof(AiChatController), currentUser.UserId, conversationId);
+            return NotFound();
+        }
 
         var pending = await toolExecutions.GetPendingForConversationAsync(currentUser.UserId, conversationId, cancellationToken);
         var result = new List<object>();
@@ -162,6 +178,7 @@ public sealed class AiChatController(
             });
         }
 
+        logger.LogDebug("[{ClassName}] Returned {Count} pending tool request(s) for conversation {ConversationId}", nameof(AiChatController), result.Count, conversationId);
         return Ok(result);
     }
 
@@ -170,6 +187,7 @@ public sealed class AiChatController(
     {
         if (!ImageUploadOptions.AllowedContentTypes.Contains(request.ContentType))
         {
+            logger.LogWarning("[{ClassName}] User {UserId} asked for an upload URL for unsupported content type '{ContentType}'", nameof(AiChatController), currentUser.UserId, request.ContentType);
             return BadRequest($"Unsupported content type '{request.ContentType}'. Allowed: {string.Join(", ", ImageUploadOptions.AllowedContentTypes)}.");
         }
 
@@ -210,6 +228,7 @@ public sealed class AiChatController(
         [FromQuery] DateTimeOffset? from, [FromQuery] DateTimeOffset? to, CancellationToken cancellationToken)
     {
         var summary = await tokenUsage.GetSummaryForUserAsync(currentUser.UserId, from, to, cancellationToken);
+        logger.LogDebug("[{ClassName}] Returned token usage for user {UserId} between {From} and {To}", nameof(AiChatController), currentUser.UserId, from, to);
         return Ok(summary);
     }
 
@@ -218,17 +237,34 @@ public sealed class AiChatController(
         Converters = { new JsonStringEnumConverter() },
     };
 
-    private async Task StreamEventsAsync(IAsyncEnumerable<AiChatEvent> events, CancellationToken cancellationToken)
+    private async Task StreamEventsAsync(IAsyncEnumerable<AiChatEvent> events, string operation, CancellationToken cancellationToken)
     {
         Response.Headers.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
 
-        await foreach (var chatEvent in events.WithCancellation(cancellationToken))
+        var count = 0;
+        try
         {
-            var json = JsonSerializer.Serialize<AiChatEvent>(chatEvent, SseJsonOptions);
-            await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
-            await Response.Body.FlushAsync(cancellationToken);
+            await foreach (var chatEvent in events.WithCancellation(cancellationToken))
+            {
+                var json = JsonSerializer.Serialize<AiChatEvent>(chatEvent, SseJsonOptions);
+                await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+                count++;
+            }
         }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning("[{ClassName}] {Operation} stream was cancelled by the client after {EventCount} event(s)", nameof(AiChatController), operation, count);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[{ClassName}] {Operation} stream failed after {EventCount} event(s)", nameof(AiChatController), operation, count);
+            throw;
+        }
+
+        logger.LogInformation("[{ClassName}] {Operation} stream finished after {EventCount} event(s)", nameof(AiChatController), operation, count);
     }
 }
 

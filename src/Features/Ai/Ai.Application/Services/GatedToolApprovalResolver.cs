@@ -29,6 +29,8 @@ public sealed class GatedToolApprovalResolver(
         ToolApprovalResolution resolution, CancellationToken cancellationToken) =>
         closer.ResolveAsync(userId, request, r =>
         {
+            _logger.LogInformation("[{ClassName}] Tool request {ToolRequestId} ({ToolName}) {Decision}{Reason}",
+                nameof(GatedToolApprovalResolver), r.Id, r.ToolName, approve ? "approved" : "denied", denialReason is null ? string.Empty : $": {denialReason}");
             r.Status = approve ? ToolExecutionStatus.Approved : ToolExecutionStatus.Denied;
             r.DenialReason = denialReason;
         }, resolution, cancellationToken);
@@ -41,13 +43,19 @@ public sealed class GatedToolApprovalResolver(
         Guid userId, ToolExecutionRequest request, IReadOnlyList<string> answers,
         ToolApprovalResolution resolution, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var tool = toolRegistry.Find(request.ToolName) as IQuestionTool
-            ?? throw new InvalidOperationException($"Tool '{request.ToolName}' is not a question tool.");
+        var tool = toolRegistry.Find(request.ToolName) as IQuestionTool;
+        if (tool is null)
+        {
+            _logger.LogError("[{ClassName}] Tool request {ToolRequestId} names '{ToolName}', which is not a question tool", nameof(GatedToolApprovalResolver), request.Id, request.ToolName);
+            throw new InvalidOperationException($"Tool '{request.ToolName}' is not a question tool.");
+        }
 
         var conversation = await conversations.FindAsync(userId, request.ConversationId, cancellationToken);
         var maxTurns = conversation is null ? null : profiles.Get(conversation.Kind).MaxQuestionTurns;
         var turn = await toolExecutions.CountForConversationAsync(request.ConversationId, request.ToolName, cancellationToken);
         var resultJson = tool.FormatAnswer(request.InputJson, answers, new QuestionAnswerContext(turn, maxTurns));
+        _logger.LogInformation("[{ClassName}] Recorded answer to {ToolName} request {ToolRequestId} (turn {Turn}, max {MaxTurns})",
+            nameof(GatedToolApprovalResolver), request.ToolName, request.Id, turn, maxTurns);
 
         await foreach (var chatEvent in closer.ResolveAsync(userId, request, r =>
         {
@@ -68,8 +76,8 @@ public sealed class GatedToolApprovalResolver(
         if (parent is null || parent.Status != ToolExecutionStatus.InProgress)
         {
             _logger.LogWarning(
-                "AI sub-agent conv={ChildConversationId} finished but its parent request {ParentRequestId} is {Status}, not InProgress; the parent chat is not resumed",
-                childConversationId, parentRequestId, parent?.Status.ToString() ?? "missing");
+                "[{ClassName}] Sub-agent conversation {ChildConversationId} finished but its parent request {ParentRequestId} is {Status}, not InProgress; the parent chat is not resumed",
+                nameof(GatedToolApprovalResolver), childConversationId, parentRequestId, parent?.Status.ToString() ?? "missing");
             resolution.ReadyConversationId = null;
             yield break;
         }
@@ -80,8 +88,8 @@ public sealed class GatedToolApprovalResolver(
             ? await agent.SummarizeAsync(new SubAgentCompletion(userId, childConversationId, parent), cancellationToken)
             : "The session ended without producing a result.";
         _logger.LogInformation(
-            "AI sub-agent {Tool} conv={ChildConversationId} parent={ParentRequestId} succeeded={Succeeded} summaryChars={SummaryChars} ms={ElapsedMs}",
-            parent.ToolName, childConversationId, parentRequestId, succeeded, resultJson.Length,
+            "[{ClassName}] Sub-agent {Tool} conversation {ChildConversationId} parent {ParentRequestId} succeeded={Succeeded} summaryChars={SummaryChars} ms={ElapsedMs}",
+            nameof(GatedToolApprovalResolver), parent.ToolName, childConversationId, parentRequestId, succeeded, resultJson.Length,
             (long)Stopwatch.GetElapsedTime(summarizeStartedAt).TotalMilliseconds);
 
         yield return new AiChatSubAgentCompleted(
@@ -104,6 +112,8 @@ public sealed class GatedToolApprovalResolver(
         const string reason = "The user cancelled this before it finished.";
 
         var child = await conversations.FindChildAsync(userId, parent.Id, cancellationToken);
+        _logger.LogInformation("[{ClassName}] Cancelling sub-agent request {ParentRequestId} ({ToolName}), child conversation {ChildConversationId}",
+            nameof(GatedToolApprovalResolver), parent.Id, parent.ToolName, child?.Id);
         if (child is not null)
         {
             await toolExecutions.DenyOutstandingForConversationAsync(child.Id, reason, cancellationToken);

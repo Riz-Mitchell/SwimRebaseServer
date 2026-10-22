@@ -2,6 +2,7 @@ using Ai.Application.Interfaces;
 using Ai.Application.Options;
 using Ai.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Shared.Application;
 using Shared.Application.Storage;
 
@@ -16,7 +17,8 @@ public sealed class ImageUploadService(
     IUploadedImageRepository images,
     IAiUserProvisioningService aiUserProvisioning,
     IBlobStorageService blobStorage,
-    [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork)
+    [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    ILogger<ImageUploadService> logger)
 {
     public async Task<CreateUploadUrlResult> CreateUploadUrlAsync(
         Guid userId, string fileName, string contentType, CancellationToken cancellationToken)
@@ -39,6 +41,7 @@ public sealed class ImageUploadService(
             CreatedAt = DateTimeOffset.UtcNow,
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("[{ClassName}] Issued upload URL for image {ImageId} ({ContentType}) to user {UserId}", nameof(ImageUploadService), id, contentType, userId);
 
         return new CreateUploadUrlResult(id, upload.Url, upload.ExpiresAt);
     }
@@ -48,22 +51,27 @@ public sealed class ImageUploadService(
         var image = await images.FindAsync(userId, imageId, cancellationToken);
         if (image is null)
         {
+            logger.LogWarning("[{ClassName}] User {UserId} tried to confirm image {ImageId}, which does not exist for them", nameof(ImageUploadService), userId, imageId);
             return new ConfirmUploadResult(ConfirmUploadOutcome.NotFound, null);
         }
 
         if (image.Status == UploadedImageStatus.Confirmed)
         {
+            logger.LogInformation("[{ClassName}] Image {ImageId} was already confirmed", nameof(ImageUploadService), imageId);
             return new ConfirmUploadResult(ConfirmUploadOutcome.Confirmed, image.SizeBytes);
         }
 
         var metadata = await blobStorage.TryGetMetadataAsync(image.ObjectKey, cancellationToken);
         if (metadata is null)
         {
+            logger.LogWarning("[{ClassName}] Image {ImageId} confirmed by user {UserId} before anything was uploaded", nameof(ImageUploadService), imageId, userId);
             return new ConfirmUploadResult(ConfirmUploadOutcome.UploadNotFound, null);
         }
 
         if (metadata.SizeBytes > ImageUploadOptions.MaxSizeBytes)
         {
+            logger.LogWarning("[{ClassName}] Image {ImageId} from user {UserId} is {SizeBytes} bytes, over the {MaxBytes}-byte limit; deleting it",
+                nameof(ImageUploadService), imageId, userId, metadata.SizeBytes, ImageUploadOptions.MaxSizeBytes);
             await blobStorage.DeleteAsync(image.ObjectKey, cancellationToken);
             return new ConfirmUploadResult(ConfirmUploadOutcome.TooLarge, metadata.SizeBytes);
         }
@@ -72,6 +80,7 @@ public sealed class ImageUploadService(
         image.SizeBytes = metadata.SizeBytes;
         image.ConfirmedAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("[{ClassName}] Confirmed image {ImageId} for user {UserId} ({SizeBytes} bytes)", nameof(ImageUploadService), imageId, userId, metadata.SizeBytes);
 
         return new ConfirmUploadResult(ConfirmUploadOutcome.Confirmed, metadata.SizeBytes);
     }
@@ -81,17 +90,20 @@ public sealed class ImageUploadService(
         var image = await images.FindAsync(userId, imageId, cancellationToken);
         if (image is null)
         {
+            logger.LogWarning("[{ClassName}] User {UserId} tried to delete image {ImageId}, which does not exist for them", nameof(ImageUploadService), userId, imageId);
             return DeleteImageOutcome.NotFound;
         }
 
         if (image.UsedAt is not null)
         {
+            logger.LogWarning("[{ClassName}] User {UserId} tried to delete image {ImageId}, which is already attached to a message", nameof(ImageUploadService), userId, imageId);
             return DeleteImageOutcome.AlreadyUsed;
         }
 
         await blobStorage.DeleteAsync(image.ObjectKey, cancellationToken);
         images.Remove(image);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("[{ClassName}] Deleted image {ImageId} for user {UserId}", nameof(ImageUploadService), imageId, userId);
 
         return DeleteImageOutcome.Deleted;
     }

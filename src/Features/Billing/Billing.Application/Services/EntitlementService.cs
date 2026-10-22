@@ -2,6 +2,8 @@ using Billing.Application.Interfaces;
 using Billing.Application.Models;
 using Billing.Application.Options;
 using Billing.Domain.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Billing.Application.Services;
@@ -12,12 +14,17 @@ public sealed class EntitlementService(
     IConversionUsageRepository usage,
     ITrialReader trials,
     IOptions<BillingOptions> options,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<EntitlementService>? logger = null)
 {
+    private readonly ILogger<EntitlementService> _logger = logger ?? NullLogger<EntitlementService>.Instance;
+
     public async Task<Entitlement> GetAsync(Guid userId, CancellationToken cancellationToken)
     {
         var (plan, trialEndsAt, subscription) = await ResolveAsync(userId, cancellationToken);
         var used = await usage.CountSinceAsync(userId, WeekStart(clock.GetUtcNow()), cancellationToken);
+        _logger.LogDebug("[{ClassName}] Entitlement for user {UserId}: plan {Plan}, {Used} conversions used this week",
+            nameof(EntitlementService), userId, plan, used);
         return new Entitlement(plan, trialEndsAt, plan == Plan.Pro && subscription is not null ? ToView(subscription) : null, Snapshot(plan, used));
     }
 
@@ -30,6 +37,16 @@ public sealed class EntitlementService(
         if (subscription is not null && subscription.ExpiresAt > now && (!subscription.IsSandbox || options.Value.AcceptSandbox))
         {
             return (Plan.Pro, trialEndsAt, subscription);
+        }
+
+        if (subscription is not null && subscription.ExpiresAt > now)
+        {
+            _logger.LogWarning("[{ClassName}] Ignoring sandbox subscription for user {UserId} because sandbox purchases are not accepted",
+                nameof(EntitlementService), userId);
+        }
+        else if (subscription is not null)
+        {
+            _logger.LogInformation("[{ClassName}] Subscription for user {UserId} expired at {ExpiresAt}", nameof(EntitlementService), userId, subscription.ExpiresAt);
         }
 
         return (trialEndsAt > now ? Plan.Trial : Plan.Free, trialEndsAt, subscription);

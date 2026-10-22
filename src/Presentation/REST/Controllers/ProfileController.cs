@@ -2,6 +2,7 @@ using System.Text.Json;
 using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Profile.Application.Services;
 using Profile.Domain.Models;
 
@@ -10,7 +11,7 @@ namespace REST.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/profile")]
-public sealed class ProfileController(OnboardingService onboarding, ICurrentUserAccessor currentUser) : ControllerBase
+public sealed class ProfileController(OnboardingService onboarding, ICurrentUserAccessor currentUser, ILogger<ProfileController> logger) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetProfile(CancellationToken cancellationToken)
@@ -73,10 +74,12 @@ public sealed class ProfileController(OnboardingService onboarding, ICurrentUser
         }
         catch (InvalidOnboardingRequestException ex)
         {
+            logger.LogWarning("[{ClassName}] Bad onboarding request from user {UserId}: {Reason}", nameof(ProfileController), currentUser.UserId, ex.Message);
             return BadRequest(new { error = ex.Message });
         }
         catch (OnboardingStepConflictException ex)
         {
+            logger.LogWarning("[{ClassName}] Onboarding step conflict for user {UserId}: {Reason}", nameof(ProfileController), currentUser.UserId, ex.Message);
             return Conflict(new { error = ex.Message });
         }
     }

@@ -1,11 +1,16 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Sessions.Application.Interfaces;
 using Sessions.Domain.Models;
 
 namespace Sessions.Application.Metrics;
 
 /// <summary>Answers a swimmer's saved metrics through the same <see cref="MetricsService"/> every other question goes through.</summary>
-public sealed class CustomMetricEvaluator(ICustomMetricRepository metrics, IMetricsRepository facts, MetricsService answers)
+public sealed class CustomMetricEvaluator(
+    ICustomMetricRepository metrics, IMetricsRepository facts, MetricsService answers, ILogger<CustomMetricEvaluator>? logger = null)
 {
+    private readonly ILogger<CustomMetricEvaluator> _logger = logger ?? NullLogger<CustomMetricEvaluator>.Instance;
+
     public async Task<IReadOnlyList<CustomMetricValue>> EvaluateAsync(Guid userId, DateOnly today, CancellationToken cancellationToken)
     {
         var values = new List<CustomMetricValue>();
@@ -20,6 +25,7 @@ public sealed class CustomMetricEvaluator(ICustomMetricRepository metrics, IMetr
                 ValueOf(total, definition.Measure), grouped?.Rows, total.Units, total.AssumedDistance));
         }
 
+        _logger.LogDebug("[{ClassName}] Evaluated {Count} custom metric(s) for user {UserId} as of {Today}", nameof(CustomMetricEvaluator), values.Count, userId, today);
         return values;
     }
 
@@ -33,6 +39,7 @@ public sealed class CustomMetricEvaluator(ICustomMetricRepository metrics, IMetr
     {
         if (await metrics.FindAsync(userId, id, cancellationToken) is not { } metric)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} asked for custom metric {MetricId}, which does not exist for them", nameof(CustomMetricEvaluator), userId, id);
             return null;
         }
 
@@ -54,6 +61,8 @@ public sealed class CustomMetricEvaluator(ICustomMetricRepository metrics, IMetr
             previous = (await PeriodAsync(userId, definition, before, bands, first, cancellationToken)).View;
         }
 
+        _logger.LogDebug("[{ClassName}] Evaluated custom metric {MetricId} for user {UserId}, window {Window}, previous period {IncludePrevious}",
+            nameof(CustomMetricEvaluator), id, userId, definition.Window, previous is not null);
         return new CustomMetricDetail(
             metric.Id, definition.Name, definition.Measure, definition.Window, current.View.Range,
             current.View.Value, current.View.Series, current.View.Units, current.View.AssumedDistance,

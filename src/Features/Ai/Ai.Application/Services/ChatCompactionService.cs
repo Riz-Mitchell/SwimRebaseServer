@@ -4,6 +4,8 @@ using Ai.Application.Models;
 using Ai.Application.Options;
 using Ai.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Shared.Application;
 
@@ -22,8 +24,11 @@ public sealed class ChatCompactionService(
     [FromKeyedServices(AiKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     IAiChatClient chatClient,
     IAgentProfileProvider profiles,
-    IOptions<ChatCompactionOptions> options) : IChatCompactionService
+    IOptions<ChatCompactionOptions> options,
+    ILogger<ChatCompactionService>? logger = null) : IChatCompactionService
 {
+    private readonly ILogger<ChatCompactionService> _logger = logger ?? NullLogger<ChatCompactionService>.Instance;
+
     private const string SummarizationSystemPrompt =
         "You maintain a running briefing for yourself covering an ongoing chat between a swimmer and " +
         "an AI assistant. Fold the new messages into the existing summary (if any). Preserve concrete " +
@@ -49,6 +54,7 @@ public sealed class ChatCompactionService(
         var toCompactCount = CleanCutIndex(ordered, ordered.Count - settings.MessagesToRetainAfterCompaction);
         if (toCompactCount <= 0)
         {
+            _logger.LogWarning("[{ClassName}] Conversation {ConversationId} has {LiveCount} live messages but no clean point to compact at", nameof(ChatCompactionService), conversationId, liveMessages.Count);
             return;
         }
 
@@ -70,6 +76,8 @@ public sealed class ChatCompactionService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await conversations.MarkMessagesCompactedAsync(toCompact.Select(m => m.Id).ToList(), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Compacted {Count} message(s) of conversation {ConversationId} into a summary through sequence {Sequence}",
+            nameof(ChatCompactionService), toCompact.Count, conversationId, summary.CoveredThroughSequenceNumber);
     }
 
     private async Task<string> SummarizeAsync(
