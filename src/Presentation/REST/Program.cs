@@ -4,6 +4,7 @@ using Auth.Infrastructure;
 using Auth.Infrastructure.Middleware;
 using Billing.Infrastructure;
 using Azure.Identity;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using Profile.Infrastructure;
 using SessionConversion.Infrastructure;
@@ -38,6 +39,14 @@ if (!string.IsNullOrWhiteSpace(keyVaultUri))
 }
 
 // Add services to the container.
+
+// Connection string comes from Key Vault in Azure; left empty locally so telemetry is simply off.
+var appInsightsConnectionString = builder.Configuration.GetConnectionString("AppInsights");
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
+        options.ConnectionString = appInsightsConnectionString);
+}
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
