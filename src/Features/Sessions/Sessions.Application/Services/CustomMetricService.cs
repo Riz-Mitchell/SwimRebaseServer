@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Sessions.Application.Interfaces;
 using Sessions.Application.Metrics;
 using Sessions.Domain.Models;
@@ -8,23 +10,31 @@ namespace Sessions.Application.Services;
 
 public sealed class CustomMetricService(
     ICustomMetricRepository metrics,
-    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
+    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    ILogger<CustomMetricService>? logger = null)
 {
+    private readonly ILogger<CustomMetricService> _logger = logger ?? NullLogger<CustomMetricService>.Instance;
+
     public const int MaxMetrics = 12;
 
     public const int MaxNameLength = 60;
 
-    public async Task<IReadOnlyList<CustomMetricView>> ListAsync(Guid userId, CancellationToken cancellationToken) =>
-        (await metrics.ListAsync(userId, cancellationToken)).Select(CustomMetricView.From).ToList();
+    public async Task<IReadOnlyList<CustomMetricView>> ListAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var found = await metrics.ListAsync(userId, cancellationToken);
+        _logger.LogDebug("[{ClassName}] Listed {Count} custom metric(s) for user {UserId}", nameof(CustomMetricService), found.Count, userId);
+        return found.Select(CustomMetricView.From).ToList();
+    }
 
     /// <exception cref="InvalidCustomMetricException">The definition is not usable, or the swimmer is at the limit.</exception>
     /// <exception cref="InvalidMetricsQueryException">The filters cannot be answered as asked.</exception>
     public async Task<CustomMetricView> CreateAsync(Guid userId, CustomMetricDefinition definition, CancellationToken cancellationToken)
     {
-        Validate(definition);
+        Validate(userId, definition);
         var existing = await metrics.ListAsync(userId, cancellationToken);
         if (existing.Count >= MaxMetrics)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} is at the limit of {MaxMetrics} custom metrics", nameof(CustomMetricService), userId, MaxMetrics);
             throw new InvalidCustomMetricException($"you can keep up to {MaxMetrics} metrics; remove one first");
         }
 
@@ -37,20 +47,23 @@ public sealed class CustomMetricService(
         metric.Apply(definition);
         metrics.Add(metric);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Created custom metric {MetricId} '{Name}' for user {UserId}", nameof(CustomMetricService), metric.Id, definition.Name, userId);
         return CustomMetricView.From(metric);
     }
 
     /// <returns>Null when the swimmer has no such metric.</returns>
     public async Task<CustomMetricView?> UpdateAsync(Guid userId, Guid id, CustomMetricDefinition definition, CancellationToken cancellationToken)
     {
-        Validate(definition);
+        Validate(userId, definition);
         if (await metrics.FindAsync(userId, id, cancellationToken) is not { } metric)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to update custom metric {MetricId}, which does not exist for them", nameof(CustomMetricService), userId, id);
             return null;
         }
 
         metric.Apply(definition);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Updated custom metric {MetricId} for user {UserId}", nameof(CustomMetricService), id, userId);
         return CustomMetricView.From(metric);
     }
 
@@ -58,15 +71,30 @@ public sealed class CustomMetricService(
     {
         if (await metrics.FindAsync(userId, id, cancellationToken) is not { } metric)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to delete custom metric {MetricId}, which does not exist for them", nameof(CustomMetricService), userId, id);
             return false;
         }
 
         metrics.Remove(metric);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Deleted custom metric {MetricId} for user {UserId}", nameof(CustomMetricService), id, userId);
         return true;
     }
 
-    private static void Validate(CustomMetricDefinition definition)
+    private void Validate(Guid userId, CustomMetricDefinition definition)
+    {
+        try
+        {
+            ValidateDefinition(definition);
+        }
+        catch (Exception ex) when (ex is InvalidCustomMetricException or InvalidMetricsQueryException)
+        {
+            _logger.LogWarning("[{ClassName}] Rejected custom metric definition from user {UserId}: {Reason}", nameof(CustomMetricService), userId, ex.Message);
+            throw;
+        }
+    }
+
+    private static void ValidateDefinition(CustomMetricDefinition definition)
     {
         if (string.IsNullOrWhiteSpace(definition.Name) || definition.Name.Trim().Length > MaxNameLength)
         {

@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using Profile.Infrastructure;
 using SessionConversion.Infrastructure;
 using Sessions.Infrastructure;
-using Training.Infrastructure;
 
 namespace SwimRebase.Tests.Account;
 
@@ -18,7 +17,7 @@ public class UserDataEraserCoverageTests
 {
     private static readonly string[] KnownUserOwnedEntities =
     [
-        "Conversation", "EventLog", "Focus", "ProfileAnswer", "Session", "SessionDraft", "SessionFact", "SessionPreferences",
+        "Conversation", "EventLog", "ProfileAnswer", "Session", "SessionDraft", "SessionFact", "SessionPreferences",
         "Subscription", "ConversionUsage", "TimedSwim", "TokenUsageRecord", "ToolExecutionRequest", "UploadedImage", "UserEffortTerm",
     ];
 
@@ -32,7 +31,6 @@ public class UserDataEraserCoverageTests
             .Concat(Owned<ProfileDbContext>(o => new ProfileDbContext(o)))
             .Concat(Owned<SessionConversionDbContext>(o => new SessionConversionDbContext(o)))
             .Concat(Owned<SessionsDbContext>(o => new SessionsDbContext(o)))
-            .Concat(Owned<TrainingDbContext>(o => new TrainingDbContext(o)))
             .Order()
             .ToList();
 

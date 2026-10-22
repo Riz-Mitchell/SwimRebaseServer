@@ -1,6 +1,6 @@
 # SwimRebase REST API Reference
 
-_Last updated: 21/10/2026_
+_Last updated: 22/10/2026_
 
 Base URL: `https://swimrebase-pro.azurewebsites.net` (production) / `https://swimrebase-dev.azurewebsites.net` (staging)
 
@@ -83,7 +83,7 @@ Delete an uploaded image - removes both the blob from storage and the record of 
 ---
 
 ### `POST /api/ai/tool-requests/{toolExecutionRequestId}/resolve`
-Approve or deny a gated tool call (a write/destructive action the AI wants to perform, e.g. creating a focus). Returns `400`-equivalent (`error` SSE event) if the request is actually an `ask_user_question` — answer those via the `/answer` endpoint below instead.
+Approve or deny a gated tool call (a write/destructive action the AI wants to perform, e.g. saving a session). Returns `400`-equivalent (`error` SSE event) if the request is actually an `ask_user_question` — answer those via the `/answer` endpoint below instead.
 
 **Path params:** `toolExecutionRequestId` (guid)
 
@@ -278,7 +278,6 @@ Consume with `curl -N` (disables buffering) or an `EventSource`/SSE client.
 | `kind` | `id` is | Open with |
 |---|---|---|
 | `session` | session id | `GET /api/sessions/{id}` |
-| `focus` | focus id | `GET /api/focuses/{id}` |
 
 `action` is `created`, `updated` or `deleted`. A `deleted` resource no longer exists, so render it as a non-tappable card. `label` is a short title for the card (absent for `deleted`).
 
@@ -305,131 +304,6 @@ The response carries a strong `ETag` (a hash of the body) and `Cache-Control: pr
 
 ### `POST /api/billing/revenuecat`
 RevenueCat's webhook, not called by the app. It needs no bearer token; it is authenticated by the value configured as `RevenueCat:WebhookSecret`, sent as the `Authorization` header (a `Bearer ` prefix is accepted). Wrong or missing secret returns `401`; anything else returns `200`, including events that are ignored, so RevenueCat does not retry them. Events are applied once by id and never over a newer one. The user is identified by `app_user_id`, which must be the user's id (set it with `Purchases.logIn`); anonymous RevenueCat ids are ignored.
-
----
-
-## Focuses — `/api/focuses`
-
-### `GET /api/focuses`
-List the current user's active focuses.
-
-**Response:** array of `FocusResponse` (see shape below).
-
----
-
-### `GET /api/focuses/{focusId}`
-One of the current user's focuses, of any status. `404` if it doesn't exist or isn't theirs.
-
-**Response:** `FocusResponse`.
-
----
-
-### `POST /api/focuses`
-Create a focus.
-
-**Body:**
-```json
-{
-  "tagLine": "string",
-  "prompt": "string",
-  "totalDays": 30,
-  "priority": null,
-  "positivePoints": [
-    { "order": 1, "tagLine": "string", "description": "string" }
-  ],
-  "negativePoints": [
-    { "order": 1, "tagLine": "string", "description": "string" }
-  ]
-}
-```
-`priority` is optional (nullable int).
-
-**Response:** `FocusResponse`.
-
----
-
-### `POST /api/focuses/{focusId}/check-ins?date={date}`
-Log a check-in for a focus. `date` (yyyy-MM-dd) optional, defaults to today.
-
-**Path params:** `focusId` (guid)
-
-**Response:** `204 No Content` on success, `404 Not Found` if the focus doesn't exist / isn't active.
-
----
-
-### `PUT /api/focuses/{focusId}/priority`
-Move a focus to a new priority position.
-
-**Path params:** `focusId` (guid)
-
-**Body:**
-```json
-{ "priority": 2 }
-```
-
-**Response:** `204 No Content` / `404 Not Found`.
-
----
-
-### `PUT /api/focuses/{focusId}`
-Replace a focus's tagLine, prompt, totalDays, and comparison points. Full replacement, not a merge — include every point you want kept. Does not change priority (use the `priority` endpoint for that). Active-only — editing a completed or abandoned focus returns `404`.
-
-**Path params:** `focusId` (guid)
-
-**Body:**
-```json
-{
-  "tagLine": "string",
-  "prompt": "string",
-  "totalDays": 30,
-  "positivePoints": [
-    { "tagLine": "string", "description": "string" }
-  ],
-  "negativePoints": [
-    { "tagLine": "string", "description": "string" }
-  ]
-}
-```
-
-**Response:** `200 FocusResponse` / `404 Not Found`.
-
----
-
-### `DELETE /api/focuses/{focusId}`
-Permanently delete a focus — active, completed, or abandoned. This is a hard delete: the focus and its check-in history are removed for good, not archived. If the focus was active, the remaining active focuses are automatically re-ranked to close the priority gap.
-
-**Path params:** `focusId` (guid)
-
-**Response:** `204 No Content` / `404 Not Found`.
-
----
-
-### `POST /api/focuses/{focusId}/abandon`
-Abandon a focus.
-
-**Path params:** `focusId` (guid)
-
-**Response:** `204 No Content` / `404 Not Found`.
-
----
-
-### `FocusResponse` shape
-```json
-{
-  "id": "guid",
-  "tagLine": "string",
-  "prompt": "string",
-  "totalDays": 30,
-  "daysCompleted": 5,
-  "priority": 1,
-  "status": "Active | Completed | Abandoned",
-  "origin": "Manual | Ai",
-  "startedAt": "yyyy-MM-dd",
-  "endedAt": "yyyy-MM-dd|null",
-  "positivePoints": [{ "order": 1, "tagLine": "string", "description": "string" }],
-  "negativePoints": [{ "order": 1, "tagLine": "string", "description": "string" }]
-}
-```
 
 ---
 
@@ -678,7 +552,7 @@ Only valid for `ProTrial` (`400` otherwise). **Response:** onboarding status.
 
 ## Account — `/api/account`
 
-Deleting an account is two calls, so a stray request can never delete anything. Deletion is permanent: it removes the user's sessions, focuses, chats and uploaded images, profile, subscription record, analytics events and their sign-in. It does **not** cancel an App Store or Google Play subscription - tell the user to cancel it in their store settings.
+Deleting an account is two calls, so a stray request can never delete anything. Deletion is permanent: it removes the user's sessions, chats and uploaded images, profile, subscription record, analytics events and their sign-in. It does **not** cancel an App Store or Google Play subscription - tell the user to cancel it in their store settings.
 
 ### `POST /api/account/deletion`
 Starts a deletion; nothing is deleted yet. The user must have signed in (phone OTP) within the last 5 minutes.
@@ -701,5 +575,5 @@ A single `GET /api/bootstrap` (onboarding, custom metrics, conversations, entitl
 
 ## Notes
 
-- `DayOfWeek`, `SessionType`, `EffortZone`, `FocusStatus`, `FocusOrigin` are enums — check the actual enum definitions in `src/Features/*/Domain/Models/` for their exact member names before relying on the examples above.
+- `DayOfWeek`, `SessionType`, `EffortZone` are enums — check the actual enum definitions in `src/Features/*/Domain/Models/` for their exact member names before relying on the examples above.
 - A 500 response generally means an app-layer exception (e.g. not-found/access-denied cases) is leaking uncaught rather than being mapped to a proper status code — this is a known gap, not necessarily a client-side mistake.

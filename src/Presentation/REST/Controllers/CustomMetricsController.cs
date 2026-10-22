@@ -1,6 +1,7 @@
 using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Sessions.Application.Metrics;
 using Sessions.Application.Services;
 using Sessions.Domain.Models;
@@ -15,7 +16,8 @@ public sealed class CustomMetricsController(
     CustomMetricService metrics,
     CustomMetricEvaluator evaluator,
     ICurrentUserAccessor currentUser,
-    TimeProvider clock) : ControllerBase
+    TimeProvider clock,
+    ILogger<CustomMetricsController> logger) : ControllerBase
 {
     /// <summary>The definitions, for editing.</summary>
     [HttpGet("definitions")]
@@ -32,6 +34,7 @@ public sealed class CustomMetricsController(
         }
         catch (InvalidCustomMetricException ex)
         {
+            logger.LogWarning("[{ClassName}] Could not evaluate custom metrics for user {UserId}: {Reason}", nameof(CustomMetricsController), currentUser.UserId, ex.Message);
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -54,6 +57,7 @@ public sealed class CustomMetricsController(
         }
         catch (Exception ex) when (ex is InvalidCustomMetricException or InvalidMetricsQueryException)
         {
+            logger.LogWarning("[{ClassName}] Bad request for custom metric {MetricId} from user {UserId}: {Reason}", nameof(CustomMetricsController), id, currentUser.UserId, ex.Message);
             return BadRequest(new { error = ex.Message });
         }
     }

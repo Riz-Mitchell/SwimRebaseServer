@@ -31,6 +31,7 @@ public sealed class SubAgentFollowUp(
         var agent = parent is null ? null : subAgents.FirstOrDefault(a => a.ToolName == parent.ToolName);
         if (parent is null || agent is null)
         {
+            _logger.LogWarning("[{ClassName}] No parent request or sub-agent found for request {ParentRequestId}; skipping the follow-up", nameof(SubAgentFollowUp), parentRequestId);
             return null;
         }
 
@@ -39,8 +40,8 @@ public sealed class SubAgentFollowUp(
         if (call is null || tool is null || !call.RequiresApproval)
         {
             _logger.LogInformation(
-                "AI sub-agent follow-up for parent request {ParentRequestId}: none offered (call={Call}, toolRegistered={Registered})",
-                parentRequestId, call?.ToolName ?? "none", tool is not null);
+                "[{ClassName}] Sub-agent follow-up for parent request {ParentRequestId}: none offered (call={Call}, toolRegistered={Registered})",
+                nameof(SubAgentFollowUp), parentRequestId, call?.ToolName ?? "none", tool is not null);
             return null;
         }
 
@@ -59,8 +60,8 @@ public sealed class SubAgentFollowUp(
 
         var preview = tool is IToolPreview previewer ? await previewer.PreviewAsync(userId, call.InputJson, cancellationToken) : null;
         _logger.LogInformation(
-            "AI sub-agent follow-up raised conv={ConversationId} request={RequestId} tool={Tool} previewChars={PreviewChars}",
-            conversationId, request.Id, call.ToolName, preview?.Length ?? 0);
+            "[{ClassName}] Sub-agent follow-up raised conv={ConversationId} request={RequestId} tool={Tool} previewChars={PreviewChars}",
+            nameof(SubAgentFollowUp), conversationId, request.Id, call.ToolName, preview?.Length ?? 0);
         return
         [
             new AiChatTextDelta(text),

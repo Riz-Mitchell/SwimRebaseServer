@@ -30,6 +30,13 @@ public sealed class ConversationRunner(
         var outcome = new TurnLoopOutcome();
         var conversation = await conversations.FindAsync(userId, conversationId, cancellationToken);
         var driver = conversation is null ? null : drivers.FirstOrDefault(d => d.Kind == conversation.Kind);
+        _logger.LogInformation("[{ClassName}] Running conversation {ConversationId} for user {UserId} via {Runner}",
+            nameof(ConversationRunner), conversationId, userId, driver is null ? "the turn loop" : driver.GetType().Name);
+        if (conversation is null)
+        {
+            _logger.LogWarning("[{ClassName}] Conversation {ConversationId} was not found for user {UserId}; falling back to the turn loop", nameof(ConversationRunner), conversationId, userId);
+        }
+
         var events = driver is null
             ? turnLoop.RunAsync(userId, conversationId, outcome, cancellationToken)
             : driver.RunAsync(userId, conversationId, outcome, cancellationToken);
@@ -40,6 +47,7 @@ public sealed class ConversationRunner(
 
         if (outcome.ChildConversationId is { } childId)
         {
+            _logger.LogInformation("[{ClassName}] Conversation {ConversationId} started sub-agent conversation {ChildConversationId}; continuing into it", nameof(ConversationRunner), conversationId, childId);
             await foreach (var chatEvent in RunAsync(userId, childId, cancellationToken))
             {
                 yield return chatEvent;
@@ -53,10 +61,11 @@ public sealed class ConversationRunner(
             && (outcome.TerminalToolCompleted || outcome.EndedWithoutToolCall))
         {
             _logger.LogInformation(
-                "AI sub-agent conv={ConversationId} ended (terminalTool={Terminal}, endedWithoutToolCall={NoToolCall}); settling parent request {ParentRequestId}",
-                conversationId, outcome.TerminalToolCompleted, outcome.EndedWithoutToolCall, parentRequestId);
+                "[{ClassName}] Sub-agent conversation {ConversationId} ended (terminalTool={Terminal}, endedWithoutToolCall={NoToolCall}); settling parent request {ParentRequestId}",
+                nameof(ConversationRunner), conversationId, outcome.TerminalToolCompleted, outcome.EndedWithoutToolCall, parentRequestId);
             if (quota is not null && outcome.EndedWithoutToolCall && !outcome.TerminalToolCompleted)
             {
+                _logger.LogWarning("[{ClassName}] Sub-agent conversation {ConversationId} ended without a result; refunding its conversion", nameof(ConversationRunner), conversationId);
                 await quota.RefundAsync(conversationId, cancellationToken);
             }
 
@@ -73,8 +82,8 @@ public sealed class ConversationRunner(
                     && await followUp.RaiseAsync(userId, conversationId, parentRequestId, cancellationToken) is { } followUpEvents)
                 {
                     _logger.LogInformation(
-                        "AI parent conv={ParentConversationId} is waiting on the user: a follow-up request was raised instead of resuming the model",
-                        parentConversationId);
+                        "[{ClassName}] Parent conversation {ParentConversationId} is waiting on the user: a follow-up request was raised instead of resuming the model",
+                        nameof(ConversationRunner), parentConversationId);
                     foreach (var chatEvent in followUpEvents)
                     {
                         yield return chatEvent;
@@ -83,7 +92,7 @@ public sealed class ConversationRunner(
                     yield break;
                 }
 
-                _logger.LogInformation("AI parent conv={ParentConversationId} resumes the model after its sub-agent", parentConversationId);
+                _logger.LogInformation("[{ClassName}] Parent conversation {ParentConversationId} resumes the model after its sub-agent", nameof(ConversationRunner), parentConversationId);
                 await foreach (var chatEvent in RunAsync(userId, parentConversationId, cancellationToken))
                 {
                     yield return chatEvent;

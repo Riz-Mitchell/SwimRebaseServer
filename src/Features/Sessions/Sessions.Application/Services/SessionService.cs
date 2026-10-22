@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Sessions.Application.Interfaces;
 using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
@@ -34,8 +36,11 @@ public sealed class SessionService(
     ISessionRepository sessions,
     SessionIngest ingest,
     IPersonalIntensityProvider personal,
-    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
+    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    ILogger<SessionService>? logger = null)
 {
+    private readonly ILogger<SessionService> _logger = logger ?? NullLogger<SessionService>.Instance;
+
     /// <summary>The most sessions one list call returns when it carries their content.</summary>
     public const int MaxContentLimit = 20;
 
@@ -55,6 +60,7 @@ public sealed class SessionService(
     {
         if (sourceDraftId is { } draftId && await sessions.FindBySourceDraftAsync(userId, draftId, cancellationToken) is { } existing)
         {
+            _logger.LogInformation("[{ClassName}] Draft {DraftId} was already saved as session {SessionId} for user {UserId}", nameof(SessionService), draftId, existing.Id, userId);
             return SessionView.Of(existing);
         }
 
@@ -80,6 +86,8 @@ public sealed class SessionService(
 
         sessions.Add(session, SessionFactBuilder.Build(session, prepared));
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Saved session {SessionId} '{Title}' ({TotalDistance} {Unit}) for user {UserId} from {Source}",
+            nameof(SessionService), session.Id, session.Title, session.TotalDistance, session.Unit, userId, source);
         return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, prepared);
     }
 
@@ -88,7 +96,12 @@ public sealed class SessionService(
     /// <exception cref="InvalidSessionException">The edited session would be invalid.</exception>
     public async Task<SessionView> EditAsync(Guid userId, Guid id, IReadOnlyList<SessionEdit> edits, CancellationToken cancellationToken)
     {
-        var session = await sessions.FindAsync(userId, id, cancellationToken) ?? throw new SessionNotFoundException(id);
+        var session = await sessions.FindAsync(userId, id, cancellationToken);
+        if (session is null)
+        {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to edit session {SessionId}, which does not exist for them", nameof(SessionService), userId, id);
+            throw new SessionNotFoundException(id);
+        }
 
         var edited = NodeIds.Assign(ingest.Prepare(
             SessionEditor.Apply(SessionJson.Deserialize<SwimSession>(session.ContentJson), edits), await personal.MapperAsync(userId, cancellationToken)));
@@ -98,19 +111,35 @@ public sealed class SessionService(
         session.UpdatedAt = DateTimeOffset.UtcNow;
         await sessions.ReplaceFactsAsync(session.Id, SessionFactBuilder.Build(session, edited), cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Applied {EditCount} edit(s) to session {SessionId} for user {UserId}; total now {TotalDistance}",
+            nameof(SessionService), edits.Count, id, userId, session.TotalDistance);
         return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, edited);
     }
 
-    public async Task<SessionView> GetAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
-        SessionView.Of(await sessions.FindAsync(userId, id, cancellationToken) ?? throw new SessionNotFoundException(id));
+    public async Task<SessionView> GetAsync(Guid userId, Guid id, CancellationToken cancellationToken)
+    {
+        var session = await sessions.FindAsync(userId, id, cancellationToken);
+        if (session is null)
+        {
+            _logger.LogWarning("[{ClassName}] User {UserId} asked for session {SessionId}, which does not exist for them", nameof(SessionService), userId, id);
+            throw new SessionNotFoundException(id);
+        }
 
-    public async Task<IReadOnlyList<Session>> ListAsync(Guid userId, DateOnly? from, DateOnly? to, int limit, int offset, CancellationToken cancellationToken) =>
-        await sessions.ListAsync(userId, from, to, Math.Clamp(limit, 1, 100), Math.Max(offset, 0), cancellationToken);
+        return SessionView.Of(session);
+    }
+
+    public async Task<IReadOnlyList<Session>> ListAsync(Guid userId, DateOnly? from, DateOnly? to, int limit, int offset, CancellationToken cancellationToken)
+    {
+        var found = await sessions.ListAsync(userId, from, to, Math.Clamp(limit, 1, 100), Math.Max(offset, 0), cancellationToken);
+        _logger.LogDebug("[{ClassName}] Listed {Count} session(s) for user {UserId}", nameof(SessionService), found.Count, userId);
+        return found;
+    }
 
     public async Task<IReadOnlyList<SessionWithContent>> ListWithContentAsync(
         Guid userId, DateOnly? from, DateOnly? to, int limit, int offset, CancellationToken cancellationToken)
     {
         var found = await sessions.ListAsync(userId, from, to, Math.Clamp(limit, 1, MaxContentLimit), Math.Max(offset, 0), cancellationToken);
+        _logger.LogDebug("[{ClassName}] Listed {Count} session(s) with content for user {UserId}", nameof(SessionService), found.Count, userId);
         return found.Select(s => new SessionWithContent(s, SessionJson.Deserialize<SwimSession>(s.ContentJson))).ToList();
     }
 

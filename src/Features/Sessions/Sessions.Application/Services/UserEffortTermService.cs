@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Sessions.Application.Interfaces;
 using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
@@ -28,8 +30,11 @@ public interface IEffortTermLearning
 public sealed class UserEffortTermService(
     IUserEffortTermRepository terms,
     IntensityResolver intensity,
-    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork) : IPersonalIntensityProvider, IEffortTermLearning
+    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    ILogger<UserEffortTermService>? logger = null) : IPersonalIntensityProvider, IEffortTermLearning
 {
+    private readonly ILogger<UserEffortTermService> _logger = logger ?? NullLogger<UserEffortTermService>.Instance;
+
     /// <summary>Longer wording is a sentence or note rather than an effort name.</summary>
     public const int MaxPhraseLength = 40;
 
@@ -49,6 +54,11 @@ public sealed class UserEffortTermService(
             }
         }
 
+        if (unknown.Count > 0)
+        {
+            _logger.LogInformation("[{ClassName}] {Count} effort wording(s) unknown for user {UserId}: {Terms}", nameof(UserEffortTermService), unknown.Count, userId, string.Join(", ", unknown));
+        }
+
         return unknown;
     }
 
@@ -60,6 +70,7 @@ public sealed class UserEffortTermService(
             var key = PersonalIntensityMapper.Normalize(phrase);
             if (key.Length == 0 || key.Length > MaxPhraseLength || intensity.Resolve(meaning) is not { } resolved)
             {
+                _logger.LogWarning("[{ClassName}] Skipped effort wording '{Phrase}' for user {UserId}: unusable phrase or meaning '{Meaning}'", nameof(UserEffortTermService), phrase, userId, meaning);
                 continue;
             }
 
@@ -78,6 +89,7 @@ public sealed class UserEffortTermService(
         if (changed)
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("[{ClassName}] Saved effort wording for user {UserId}", nameof(UserEffortTermService), userId);
         }
     }
 }

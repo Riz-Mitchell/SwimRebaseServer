@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Sessions.Application.Interfaces;
 using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
@@ -16,8 +18,11 @@ public sealed record SessionPreferencesUpdate(int? DefaultEffort, string? Effort
 
 public sealed class SessionPreferencesService(
     ISessionPreferencesRepository preferences,
-    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork)
+    [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork,
+    ILogger<SessionPreferencesService>? logger = null)
 {
+    private readonly ILogger<SessionPreferencesService> _logger = logger ?? NullLogger<SessionPreferencesService>.Instance;
+
     public async Task<int> GetDefaultEffortAsync(Guid userId, CancellationToken cancellationToken) =>
         (await preferences.FindAsync(userId, cancellationToken))?.DefaultEffort ?? SessionPreferences.BuiltInDefaultEffort;
 
@@ -33,11 +38,13 @@ public sealed class SessionPreferencesService(
     {
         if (update.DefaultEffort is < Intensity.Min or > Intensity.Max)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} sent default effort {DefaultEffort} outside {Min}-{Max}", nameof(SessionPreferencesService), userId, update.DefaultEffort, Intensity.Min, Intensity.Max);
             throw new InvalidSessionPreferencesException($"defaultEffort must be between {Intensity.Min} and {Intensity.Max}.");
         }
 
         if (update.CustomEffortScale is { Count: > 0 } proposed && EffortScale.Validate(proposed) is { Count: > 0 } problems)
         {
+            _logger.LogWarning("[{ClassName}] User {UserId} sent an invalid custom effort scale: {Problems}", nameof(SessionPreferencesService), userId, string.Join("; ", problems));
             throw new InvalidSessionPreferencesException($"customEffortScale is not valid: {string.Join("; ", problems)}.");
         }
 
@@ -55,6 +62,7 @@ public sealed class SessionPreferencesService(
         {
             if (customJson is null && requested is not null)
             {
+                _logger.LogWarning("[{ClassName}] User {UserId} selected the custom effort scale without defining one", nameof(SessionPreferencesService), userId);
                 throw new InvalidSessionPreferencesException("effortScale \"custom\" needs a customEffortScale.");
             }
 
@@ -63,8 +71,14 @@ public sealed class SessionPreferencesService(
         }
         else
         {
-            scaleId = EffortVocabulary.Default.FindScale(scaleId)?.Id
-                ?? throw new InvalidSessionPreferencesException($"unknown effortScale \"{scaleId}\"; use {string.Join(", ", EffortVocabulary.Default.Scales.Select(s => s.Id))} or custom.");
+            var known = EffortVocabulary.Default.FindScale(scaleId)?.Id;
+            if (known is null)
+            {
+                _logger.LogWarning("[{ClassName}] User {UserId} selected unknown effort scale '{ScaleId}'", nameof(SessionPreferencesService), userId, scaleId);
+                throw new InvalidSessionPreferencesException($"unknown effortScale \"{scaleId}\"; use {string.Join(", ", EffortVocabulary.Default.Scales.Select(s => s.Id))} or custom.");
+            }
+
+            scaleId = known;
         }
 
         if (existing is null)
@@ -78,6 +92,8 @@ public sealed class SessionPreferencesService(
         existing.CustomEffortScaleJson = customJson;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Updated preferences for user {UserId}: default effort {DefaultEffort}, scale {ScaleId}",
+            nameof(SessionPreferencesService), userId, existing.DefaultEffort, scaleId);
         return ToView(existing);
     }
 

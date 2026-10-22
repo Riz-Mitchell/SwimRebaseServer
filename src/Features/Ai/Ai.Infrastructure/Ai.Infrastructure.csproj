@@ -21,7 +21,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Ai.Domain\Ai.Domain.csproj" />
     <ProjectReference Include="..\Ai.Application\Ai.Application.csproj" />
-    <ProjectReference Include="..\..\Training\Training.Application\Training.Application.csproj" />
     <ProjectReference Include="..\..\SessionConversion\SessionConversion.Application\SessionConversion.Application.csproj" />
     <ProjectReference Include="..\..\Sessions\Sessions.Application\Sessions.Application.csproj" />
     <ProjectReference Include="..\..\..\Shared\Shared.Infrastructure\Shared.Infrastructure.csproj" />

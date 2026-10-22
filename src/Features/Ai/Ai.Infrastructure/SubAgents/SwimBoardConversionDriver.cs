@@ -53,6 +53,7 @@ public sealed class SwimBoardConversionDriver(
 
         if (await drafts.FindLatestForConversationAsync(userId, conversationId, cancellationToken) is not null)
         {
+            logger.LogInformation("[{ClassName}] Swim board conversation {ConversationId} already has a draft; nothing more to do", nameof(SwimBoardConversionDriver), conversationId);
             outcome.TerminalToolCompleted = true;
             yield break;
         }
@@ -61,13 +62,14 @@ public sealed class SwimBoardConversionDriver(
         var opening = await ReadOpeningMessageAsync(conversationId, cancellationToken);
         if (opening is null)
         {
-            logger.LogWarning("AI swim board conversation {ConversationId} has no opening message", conversationId);
+            logger.LogWarning("[{ClassName}] Swim board conversation {ConversationId} has no opening message", nameof(SwimBoardConversionDriver), conversationId);
             outcome.EndedWithoutToolCall = true;
             yield break;
         }
 
         if (questionnaires.Count == 0)
         {
+            logger.LogInformation("[{ClassName}] Swim board conversation {ConversationId}: writing the questionnaire", nameof(SwimBoardConversionDriver), conversationId);
             await foreach (var chatEvent in AskAsync(userId, conversationId, opening, outcome, cancellationToken))
             {
                 yield return chatEvent;
@@ -79,8 +81,11 @@ public sealed class SwimBoardConversionDriver(
         var answered = questionnaires[^1];
         if (answered.Status != ToolExecutionStatus.Approved)
         {
+            logger.LogInformation("[{ClassName}] Swim board conversation {ConversationId}: questionnaire is {Status}, waiting for the swimmer", nameof(SwimBoardConversionDriver), conversationId, answered.Status);
             yield break;
         }
+
+        logger.LogInformation("[{ClassName}] Swim board conversation {ConversationId}: converting the board using the swimmer's answers", nameof(SwimBoardConversionDriver), conversationId);
 
         await foreach (var chatEvent in ConvertAsync(userId, conversationId, opening, answered, outcome, cancellationToken))
         {
@@ -112,12 +117,13 @@ public sealed class SwimBoardConversionDriver(
             }
             catch (JsonException ex)
             {
-                logger.LogWarning(ex, "AI swim board conversation {ConversationId} questionnaire was not readable: {Text}", conversationId, Truncate(reply.Text));
+                logger.LogWarning(ex, "[{ClassName}] Swim board conversation {ConversationId} questionnaire was not readable: {Text}", nameof(SwimBoardConversionDriver), conversationId, Truncate(reply.Text));
             }
         }
 
         if (questionnaire is null)
         {
+            logger.LogError("[{ClassName}] Swim board conversation {ConversationId} could not produce a questionnaire", nameof(SwimBoardConversionDriver), conversationId);
             outcome.EndedWithoutToolCall = true;
             yield break;
         }
@@ -135,8 +141,14 @@ public sealed class SwimBoardConversionDriver(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await conversations.TouchLastMessageAtAsync(conversationId, DateTimeOffset.UtcNow, cancellationToken);
 
-        var tool = toolRegistry.Find(InterviewTools.Ask) as IQuestionTool
-            ?? throw new InvalidOperationException($"Tool '{InterviewTools.Ask}' is not registered as a question tool.");
+        var tool = toolRegistry.Find(InterviewTools.Ask) as IQuestionTool;
+        if (tool is null)
+        {
+            logger.LogError("[{ClassName}] Tool '{ToolName}' is not registered as a question tool", nameof(SwimBoardConversionDriver), InterviewTools.Ask);
+            throw new InvalidOperationException($"Tool '{InterviewTools.Ask}' is not registered as a question tool.");
+        }
+
+        logger.LogInformation("[{ClassName}] Swim board conversation {ConversationId} asked its questionnaire (request {ToolRequestId})", nameof(SwimBoardConversionDriver), conversationId, toolRequest.Id);
         yield return tool.CreateQuestionEvent(conversationId, toolRequest.Id, questionnaire);
     }
 
@@ -189,16 +201,16 @@ public sealed class SwimBoardConversionDriver(
                 var draftStartedAt = Stopwatch.GetTimestamp();
                 draft = await drafts.CreateAsync(userId, conversationId, sessionJson, cancellationToken);
                 logger.LogInformation(
-                    "AI swim board conversation {ConversationId} draft {DraftId} v{Version} stored with {Sets} sets from {Chars} chars ms={ElapsedMs}",
-                    conversationId, draft.Id, draft.Version, draft.Session.Sets.Count, sessionJson.Length,
+                    "[{ClassName}] Swim board conversation {ConversationId} draft {DraftId} v{Version} stored with {Sets} sets from {Chars} chars ms={ElapsedMs}",
+                    nameof(SwimBoardConversionDriver), conversationId, draft.Id, draft.Version, draft.Session.Sets.Count, sessionJson.Length,
                     (long)Stopwatch.GetElapsedTime(draftStartedAt).TotalMilliseconds);
             }
             catch (InvalidSessionException ex)
             {
                 problems = ex.Problems;
                 logger.LogWarning(
-                    "AI swim board conversation {ConversationId} draft attempt {Attempt} was rejected: {Problems} input={Input}",
-                    conversationId, attempt, string.Join("; ", ex.Problems), Truncate(sessionJson));
+                    "[{ClassName}] Swim board conversation {ConversationId} draft attempt {Attempt} was rejected: {Problems} input={Input}",
+                    nameof(SwimBoardConversionDriver), conversationId, attempt, string.Join("; ", ex.Problems), Truncate(sessionJson));
                 messages =
                 [
                     .. messages,
@@ -210,7 +222,7 @@ public sealed class SwimBoardConversionDriver(
 
         if (draft is null || sessionJson is null)
         {
-            logger.LogWarning("AI swim board conversation {ConversationId} produced no draft ({Problems})", conversationId, string.Join("; ", problems));
+            logger.LogError("[{ClassName}] Swim board conversation {ConversationId} produced no draft ({Problems})", nameof(SwimBoardConversionDriver), conversationId, string.Join("; ", problems));
             outcome.EndedWithoutToolCall = true;
             yield break;
         }
@@ -221,7 +233,7 @@ public sealed class SwimBoardConversionDriver(
         conversations.AddMessage(ConversationMessageFactory.CreateAssistantMessage(
             conversationId, sequence, sessionJson, ChatContentJson.Serialize([new TextContentBlock(sessionJson)])));
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("AI swim board conversation {ConversationId} conversion reply persisted as message {Sequence}", conversationId, sequence);
+        logger.LogInformation("[{ClassName}] Swim board conversation {ConversationId} conversion reply persisted as message {Sequence}", nameof(SwimBoardConversionDriver), conversationId, sequence);
 
         outcome.TerminalToolCompleted = true;
     }
@@ -250,14 +262,14 @@ public sealed class SwimBoardConversionDriver(
                     completed = tc;
                     break;
                 case ErrorEvent error:
-                    logger.LogWarning("AI swim board conversation {ConversationId} {Step} call failed: {Error}", conversationId, step, error.Message);
+                    logger.LogError("[{ClassName}] Swim board conversation {ConversationId} {Step} call failed: {Error}", nameof(SwimBoardConversionDriver), conversationId, step, error.Message);
                     return new ModelCall(null, null);
             }
         }
 
         if (completed is null)
         {
-            logger.LogWarning("AI swim board conversation {ConversationId} {Step} call returned no completion", conversationId, step);
+            logger.LogError("[{ClassName}] Swim board conversation {ConversationId} {Step} call returned no completion", nameof(SwimBoardConversionDriver), conversationId, step);
             return new ModelCall(null, null);
         }
 
@@ -266,17 +278,17 @@ public sealed class SwimBoardConversionDriver(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "AI turn {Kind} conv={ConversationId} step={Step} model={Model} effort={Effort} stop={StopReason} in={InputTokens} out={OutputTokens} " +
+            "[{ClassName}] Turn {Kind} conv={ConversationId} step={Step} model={Model} effort={Effort} stop={StopReason} in={InputTokens} out={OutputTokens} " +
             "cacheWrite={CacheWriteTokens} cacheRead={CacheReadTokens} msgs={Messages} schemaChars={SchemaChars} systemChars={SystemChars} ms={ElapsedMs}",
-            Kind, conversationId, step, usage.Model, request.Effort ?? "default", completed.StopReason, usage.InputTokens, usage.OutputTokens,
+            nameof(SwimBoardConversionDriver), Kind, conversationId, step, usage.Model, request.Effort ?? "default", completed.StopReason, usage.InputTokens, usage.OutputTokens,
             usage.CacheCreationInputTokens, usage.CacheReadInputTokens, request.Messages.Count, request.OutputSchema?.Length ?? 0,
             request.SystemPrompt?.Length ?? 0, (long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
         if (completed.StopReason != "end_turn")
         {
             logger.LogWarning(
-                "AI swim board conversation {ConversationId} {Step} ended with stop reason {StopReason} ({OutputTokens} output tokens)",
-                conversationId, step, completed.StopReason, usage.OutputTokens);
+                "[{ClassName}] Swim board conversation {ConversationId} {Step} ended with stop reason {StopReason} ({OutputTokens} output tokens)",
+                nameof(SwimBoardConversionDriver), conversationId, step, completed.StopReason, usage.OutputTokens);
         }
 
         var chatUsage = new AiChatUsage(
@@ -300,8 +312,8 @@ public sealed class SwimBoardConversionDriver(
             if (setCount < swum)
             {
                 logger.LogWarning(
-                    "AI swim board conversation {ConversationId} draft has {Sets} sets for {Swum} ledger lines the swimmer swam",
-                    conversationId, setCount, swum);
+                    "[{ClassName}] Swim board conversation {ConversationId} draft has {Sets} sets for {Swum} ledger lines the swimmer swam",
+                    nameof(SwimBoardConversionDriver), conversationId, setCount, swum);
             }
         }
         catch (JsonException)

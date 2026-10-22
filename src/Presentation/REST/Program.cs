@@ -4,13 +4,13 @@ using Auth.Infrastructure;
 using Auth.Infrastructure.Middleware;
 using Billing.Infrastructure;
 using Azure.Identity;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using Profile.Infrastructure;
 using SessionConversion.Infrastructure;
 using Sessions.Infrastructure;
 using Shared.Infrastructure;
 using System.Text.Json.Serialization;
-using Training.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +39,14 @@ if (!string.IsNullOrWhiteSpace(keyVaultUri))
 
 // Add services to the container.
 
+// Connection string comes from Key Vault in Azure; left empty locally so telemetry is simply off.
+var appInsightsConnectionString = builder.Configuration.GetConnectionString("AppInsights");
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
+        options.ConnectionString = appInsightsConnectionString);
+}
+
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -51,7 +59,6 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddProfileInfrastructure(builder.Configuration);
 builder.Services.AddBillingInfrastructure(builder.Configuration);
 builder.Services.AddAiInfrastructure(builder.Configuration);
-builder.Services.AddTrainingInfrastructure(builder.Configuration);
 builder.Services.AddSessionsInfrastructure(builder.Configuration);
 builder.Services.AddSessionConversionInfrastructure(builder.Configuration);
 
@@ -69,7 +76,6 @@ using (var migrationScope = app.Services.CreateScope())
         ("Auth", () => migrationScope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync()),
         ("Billing", () => migrationScope.ServiceProvider.GetRequiredService<BillingDbContext>().Database.MigrateAsync()),
         ("Profile", () => migrationScope.ServiceProvider.GetRequiredService<ProfileDbContext>().Database.MigrateAsync()),
-        ("Training", () => migrationScope.ServiceProvider.GetRequiredService<TrainingDbContext>().Database.MigrateAsync()),
         ("Sessions", () => migrationScope.ServiceProvider.GetRequiredService<SessionsDbContext>().Database.MigrateAsync()),
         ("SessionConversion", () => migrationScope.ServiceProvider.GetRequiredService<SessionConversionDbContext>().Database.MigrateAsync()),
     })

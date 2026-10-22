@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
 
@@ -58,8 +60,10 @@ public sealed class IntensityResolver(IEnumerable<IIntensityMapper> mappers)
 }
 
 /// <summary>The one door a session goes through before it is stored anywhere (draft or saved): read, map intensity, validate.</summary>
-public sealed class SessionIngest(IntensityResolver intensity)
+public sealed class SessionIngest(IntensityResolver intensity, ILogger<SessionIngest>? logger = null)
 {
+    private readonly ILogger<SessionIngest> _logger = logger ?? NullLogger<SessionIngest>.Instance;
+
     /// <exception cref="InvalidSessionException">The JSON could not be read as a session.</exception>
     public SwimSession Parse(string sessionJson)
     {
@@ -69,6 +73,7 @@ public sealed class SessionIngest(IntensityResolver intensity)
         }
         catch (JsonException ex)
         {
+            _logger.LogWarning("[{ClassName}] Could not read session JSON: {Reason}", nameof(SessionIngest), ex.Message);
             throw new InvalidSessionException([$"could not read the session: {ex.Message}"]);
         }
     }
@@ -80,6 +85,7 @@ public sealed class SessionIngest(IntensityResolver intensity)
         var problems = SessionValidator.Validate(prepared);
         if (problems.Count > 0)
         {
+            _logger.LogWarning("[{ClassName}] Session failed validation with {ProblemCount} problem(s): {Problems}", nameof(SessionIngest), problems.Count, string.Join("; ", problems));
             throw new InvalidSessionException(problems);
         }
 

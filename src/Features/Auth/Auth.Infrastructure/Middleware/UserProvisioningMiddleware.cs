@@ -1,5 +1,6 @@
 using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Auth.Infrastructure.Middleware;
 
@@ -12,7 +13,7 @@ namespace Auth.Infrastructure.Middleware;
 /// </summary>
 public sealed class UserProvisioningMiddleware(RequestDelegate next)
 {
-    public async Task InvokeAsync(HttpContext context, IUserProvisioningService provisioning, IDeletedUserList deletedUsers)
+    public async Task InvokeAsync(HttpContext context, IUserProvisioningService provisioning, IDeletedUserList deletedUsers, ILogger<UserProvisioningMiddleware> logger)
     {
         if (context.User.Identity?.IsAuthenticated == true)
         {
@@ -21,12 +22,19 @@ public sealed class UserProvisioningMiddleware(RequestDelegate next)
             {
                 if (deletedUsers.Contains(userId))
                 {
+                    logger.LogWarning("[{ClassName}] Rejected {Method} {Path}: account {UserId} was deleted",
+                        nameof(UserProvisioningMiddleware), context.Request.Method, context.Request.Path, userId);
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     return;
                 }
 
                 var email = context.User.FindFirst("email")?.Value;
                 await provisioning.EnsureUserExistsAsync(userId, email, context.RequestAborted);
+            }
+            else
+            {
+                logger.LogWarning("[{ClassName}] Authenticated request {Method} {Path} has no valid 'sub' claim; skipping provisioning",
+                    nameof(UserProvisioningMiddleware), context.Request.Method, context.Request.Path);
             }
         }
 

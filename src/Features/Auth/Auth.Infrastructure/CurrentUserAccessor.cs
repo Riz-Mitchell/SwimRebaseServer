@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Auth.Infrastructure;
 
@@ -10,7 +11,7 @@ namespace Auth.Infrastructure;
 /// <see cref="ServiceCollectionExtensions.AddAuthInfrastructure"/>) - this class only ever reads a
 /// principal ASP.NET has already validated; it never parses or trusts a token itself.
 /// </summary>
-public sealed class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor) : ICurrentUserAccessor
+public sealed class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor, ILogger<CurrentUserAccessor> logger) : ICurrentUserAccessor
 {
     public Guid UserId
     {
@@ -22,11 +23,13 @@ public sealed class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor
             var subject = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (subject is null)
             {
+                logger.LogWarning("[{ClassName}] Authenticated principal has no 'sub' claim", nameof(CurrentUserAccessor));
                 throw new UnauthorizedAccessException("The request has no authenticated user (missing 'sub' claim).");
             }
 
             if (!Guid.TryParse(subject, out var userId))
             {
+                logger.LogWarning("[{ClassName}] The 'sub' claim is not a valid user id", nameof(CurrentUserAccessor));
                 throw new UnauthorizedAccessException($"The 'sub' claim '{subject}' is not a valid user id.");
             }
 

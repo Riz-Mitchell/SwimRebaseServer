@@ -3,6 +3,7 @@ using Ai.Application.Models;
 using Ai.Application.Options;
 using Anthropic;
 using Anthropic.Models.Messages;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shared.Application.Storage;
 
@@ -14,14 +15,16 @@ namespace Ai.Infrastructure.Chat;
 /// Never loops across tool calls itself - see <c>ChatTurnLoop</c> for that.
 /// </summary>
 public sealed class AnthropicChatClient(
-    AnthropicClient client, IOptions<AiModelOptions> modelOptions, IBlobStorageService blobStorage) : IAiChatClient
+    AnthropicClient client, IOptions<AiModelOptions> modelOptions, IBlobStorageService blobStorage, ILogger<AnthropicChatClient> logger) : IAiChatClient
 {
     public IAsyncEnumerable<ChatStreamEvent> StreamTurnAsync(ChatTurnRequest request, CancellationToken cancellationToken)
     {
         var options = modelOptions.Value;
         var modelName = request.Model ?? options.ChatModel;
+        logger.LogInformation("[{ClassName}] Streaming a turn from {Model}: {MessageCount} message(s), {ToolCount} tool(s)",
+            nameof(AnthropicChatClient), modelName, request.Messages.Count, request.Tools.Count);
         var events = client.Messages.CreateStreaming(BuildParameters(request, options, blobStorage));
-        return new AnthropicStreamProcessor(modelName, request.Tools).ProcessAsync(events, cancellationToken);
+        return new AnthropicStreamProcessor(modelName, request.Tools, logger).ProcessAsync(events, cancellationToken);
     }
 
     public static MessageCreateParams BuildParameters(ChatTurnRequest request, AiModelOptions options, IBlobStorageService blobStorage)

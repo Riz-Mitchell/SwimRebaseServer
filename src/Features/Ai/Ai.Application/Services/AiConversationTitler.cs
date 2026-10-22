@@ -58,7 +58,7 @@ public sealed partial class AiConversationTitler(
                         usage = completed.Usage;
                         break;
                     case ErrorEvent error:
-                        _logger.LogWarning("AI chat title call failed: {Message}", error.Message);
+                        _logger.LogWarning("[{ClassName}] Title call failed: {Message}", nameof(AiConversationTitler), error.Message);
                         return TitleResult.None;
                 }
             }
@@ -68,7 +68,7 @@ public sealed partial class AiConversationTitler(
         catch (Exception ex)
         {
             // A title is a nicety: whatever went wrong (a timeout included), the chat carries on with the title it already has.
-            _logger.LogWarning(ex, "AI chat title call did not complete");
+            _logger.LogWarning(ex, "[{ClassName}] Title call did not complete", nameof(AiConversationTitler));
             return TitleResult.None;
         }
     }

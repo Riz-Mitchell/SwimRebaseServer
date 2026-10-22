@@ -6,6 +6,7 @@ using Billing.Application.Options;
 using Billing.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using REST.Filters;
 
@@ -17,7 +18,8 @@ public sealed class BillingController(
     EntitlementService entitlements,
     RevenueCatWebhookHandler webhook,
     IOptions<RevenueCatOptions> revenueCat,
-    ICurrentUserAccessor currentUser) : ControllerBase
+    ICurrentUserAccessor currentUser,
+    ILogger<BillingController> logger) : ControllerBase
 {
     /// <summary>The user's plan (trial, pro or free), their subscription if any and this week's conversion allowance.</summary>
     [HttpGet("entitlement")]
@@ -33,12 +35,18 @@ public sealed class BillingController(
     {
         if (!IsAuthorized())
         {
+            logger.LogWarning("[{ClassName}] Rejected RevenueCat webhook: missing or wrong shared secret", nameof(BillingController));
             return Unauthorized();
         }
 
         if (body.Event is { } e)
         {
+            logger.LogInformation("[{ClassName}] Received RevenueCat event {EventId} ({Type})", nameof(BillingController), e.Id, e.Type);
             await webhook.HandleAsync(e, cancellationToken);
+        }
+        else
+        {
+            logger.LogWarning("[{ClassName}] RevenueCat webhook body had no event", nameof(BillingController));
         }
 
         return Ok();
@@ -49,6 +57,7 @@ public sealed class BillingController(
         var secret = revenueCat.Value.WebhookSecret;
         if (string.IsNullOrEmpty(secret))
         {
+            logger.LogError("[{ClassName}] 'RevenueCat:WebhookSecret' is not configured; every webhook will be rejected", nameof(BillingController));
             return false;
         }
 

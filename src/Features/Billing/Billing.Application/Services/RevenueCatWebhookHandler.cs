@@ -2,6 +2,8 @@ using Billing.Application.Interfaces;
 using Billing.Application.Models;
 using Billing.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shared.Application;
 
 namespace Billing.Application.Services;
@@ -14,8 +16,11 @@ public sealed class RevenueCatWebhookHandler(
     ISubscriptionRepository subscriptions,
     [FromKeyedServices(BillingKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     IEventTracker eventTracker,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<RevenueCatWebhookHandler>? logger = null)
 {
+    private readonly ILogger<RevenueCatWebhookHandler> _logger = logger ?? NullLogger<RevenueCatWebhookHandler>.Instance;
+
     private static readonly HashSet<string> GrantingTypes =
     [
         "INITIAL_PURCHASE", "RENEWAL", "PRODUCT_CHANGE", "UNCANCELLATION", "NON_RENEWING_PURCHASE", "SUBSCRIPTION_EXTENDED", "CANCELLATION", "EXPIRATION",
@@ -25,11 +30,13 @@ public sealed class RevenueCatWebhookHandler(
     {
         if (string.IsNullOrEmpty(e.Id) || string.IsNullOrEmpty(e.Type))
         {
+            _logger.LogWarning("[{ClassName}] Ignoring webhook event without an id or type", nameof(RevenueCatWebhookHandler));
             return WebhookResult.Ignored;
         }
 
         if (await subscriptions.EventSeenAsync(e.Id, cancellationToken))
         {
+            _logger.LogInformation("[{ClassName}] Duplicate webhook event {EventId} ({Type})", nameof(RevenueCatWebhookHandler), e.Id, e.Type);
             return WebhookResult.Duplicate;
         }
 
@@ -40,9 +47,11 @@ public sealed class RevenueCatWebhookHandler(
         if (changedUser is { } userId)
         {
             await eventTracker.TrackAsync(userId, EventTypes.SubscriptionChanged, $"{{\"type\":\"{e.Type}\"}}", cancellationToken);
+            _logger.LogInformation("[{ClassName}] Applied webhook event {EventId} ({Type}) to user {UserId}", nameof(RevenueCatWebhookHandler), e.Id, e.Type, userId);
             return WebhookResult.Applied;
         }
 
+        _logger.LogInformation("[{ClassName}] Webhook event {EventId} ({Type}) changed nothing", nameof(RevenueCatWebhookHandler), e.Id, e.Type);
         return WebhookResult.Ignored;
     }
 
@@ -50,6 +59,8 @@ public sealed class RevenueCatWebhookHandler(
     {
         if (!GrantingTypes.Contains(e.Type!) || !Guid.TryParse(e.AppUserId, out var userId) || e.ExpirationAtMs is not { } expirationMs)
         {
+            _logger.LogWarning("[{ClassName}] Dropping webhook event {EventId} ({Type}): not a subscription change, or no usable user id or expiry",
+                nameof(RevenueCatWebhookHandler), e.Id, e.Type);
             return null;
         }
 
@@ -57,6 +68,8 @@ public sealed class RevenueCatWebhookHandler(
         var subscription = await subscriptions.FindAsync(userId, cancellationToken);
         if (subscription is not null && eventAt < subscription.LastEventAt)
         {
+            _logger.LogWarning("[{ClassName}] Dropping out-of-order webhook event {EventId} ({Type}) for user {UserId}",
+                nameof(RevenueCatWebhookHandler), e.Id, e.Type, userId);
             return null;
         }
 
@@ -95,6 +108,8 @@ public sealed class RevenueCatWebhookHandler(
 
         if (moved is null || target is not { } targetId)
         {
+            _logger.LogWarning("[{ClassName}] Dropping transfer event {EventId}: no source subscription or no valid target user",
+                nameof(RevenueCatWebhookHandler), e.Id);
             return null;
         }
 
@@ -116,6 +131,7 @@ public sealed class RevenueCatWebhookHandler(
             LastEventAt = e.EventTimestampMs is { } ts ? DateTimeOffset.FromUnixTimeMilliseconds(ts) : now,
             UpdatedAt = now,
         });
+        _logger.LogInformation("[{ClassName}] Transferred subscription to user {UserId} (event {EventId})", nameof(RevenueCatWebhookHandler), targetId, e.Id);
         return targetId;
     }
 }

@@ -43,11 +43,6 @@
     <Project Path="src/Features/Sessions/Sessions.Domain/Sessions.Domain.csproj" />
     <Project Path="src/Features/Sessions/Sessions.Infrastructure/Sessions.Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/Features/Training/">
-    <Project Path="src/Features/Training/Training.Application/Training.Application.csproj" />
-    <Project Path="src/Features/Training/Training.Domain/Training.Domain.csproj" />
-    <Project Path="src/Features/Training/Training.Infrastructure/Training.Infrastructure.csproj" />
-  </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/SwimRebase.Tests/SwimRebase.Tests.csproj" />
   </Folder>
