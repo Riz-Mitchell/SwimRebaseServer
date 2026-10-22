@@ -44,7 +44,11 @@ var appInsightsConnectionString = builder.Configuration.GetConnectionString("App
 if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
 {
     builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
-        options.ConnectionString = appInsightsConnectionString);
+    {
+        options.ConnectionString = appInsightsConnectionString;
+        options.TracesPerSecond = null;
+        options.SamplingRatio = 1.0f;
+    });
 }
 
 builder.Services.AddControllers()
