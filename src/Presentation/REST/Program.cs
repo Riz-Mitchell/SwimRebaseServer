@@ -11,7 +11,6 @@ using SessionConversion.Infrastructure;
 using Sessions.Infrastructure;
 using Shared.Infrastructure;
 using System.Text.Json.Serialization;
-using Training.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,7 +59,6 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddProfileInfrastructure(builder.Configuration);
 builder.Services.AddBillingInfrastructure(builder.Configuration);
 builder.Services.AddAiInfrastructure(builder.Configuration);
-builder.Services.AddTrainingInfrastructure(builder.Configuration);
 builder.Services.AddSessionsInfrastructure(builder.Configuration);
 builder.Services.AddSessionConversionInfrastructure(builder.Configuration);
 
@@ -78,7 +76,6 @@ using (var migrationScope = app.Services.CreateScope())
         ("Auth", () => migrationScope.ServiceProvider.GetRequiredService<AuthDbContext>().Database.MigrateAsync()),
         ("Billing", () => migrationScope.ServiceProvider.GetRequiredService<BillingDbContext>().Database.MigrateAsync()),
         ("Profile", () => migrationScope.ServiceProvider.GetRequiredService<ProfileDbContext>().Database.MigrateAsync()),
-        ("Training", () => migrationScope.ServiceProvider.GetRequiredService<TrainingDbContext>().Database.MigrateAsync()),
         ("Sessions", () => migrationScope.ServiceProvider.GetRequiredService<SessionsDbContext>().Database.MigrateAsync()),
         ("SessionConversion", () => migrationScope.ServiceProvider.GetRequiredService<SessionConversionDbContext>().Database.MigrateAsync()),
     })

@@ -1,7 +1,7 @@
 namespace Analytics.Domain.Models;
 
 /// <summary>
-/// One recorded app event (e.g. a chat message sent, a focus created). No FK/anchor-row - unlike
+/// One recorded app event (e.g. a chat message sent, a session saved). No FK/anchor-row - unlike
 /// every other per-user entity in this codebase, nothing else hangs off this table, so UserId is a
 /// bare indexed column rather than a constrained relationship to a schema-local anchor.
 /// </summary>

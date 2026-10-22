@@ -25,7 +25,6 @@
     <ProjectReference Include="..\..\src\Features\Profile\Profile.Infrastructure\Profile.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Features\SessionConversion\SessionConversion.Infrastructure\SessionConversion.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Features\Sessions\Sessions.Infrastructure\Sessions.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\Features\Training\Training.Infrastructure\Training.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Presentation\REST\REST.csproj" />
     <ProjectReference Include="..\..\src\Features\Billing\Billing.Application\Billing.Application.csproj" />
     <ProjectReference Include="..\..\src\Features\Profile\Profile.Application\Profile.Application.csproj" />

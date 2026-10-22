@@ -50,9 +50,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenUsageRepository, TokenUsageRepository>();
         services.AddScoped<IUploadedImageRepository, UploadedImageRepository>();
         services.AddScoped<IAiToolRegistry, AiToolRegistry>();
-        services.AddAiTool<CreateFocusTool>();
-        services.AddAiTool<EditFocusTool>();
-        services.AddAiTool<DeleteFocusTool>();
         services.AddAiTool<AskUserQuestionTool>();
         services.AddAiTool<ReadSwimBoardTool>();
         services.AddAiTool<AskSwimQuestionsTool>();

@@ -9,7 +9,7 @@ namespace Analytics.Infrastructure;
 /// pattern the other features use - there's never more than this one insert to batch per call, so
 /// the extra indirection would add nothing. Never throws: this writes to a separate DbContext/
 /// connection than whatever business operation is calling it, so a hiccup here must never fail a
-/// chat send, a focus edit, or a signup.
+/// chat send, a metric edit, or a signup.
 /// </summary>
 public sealed class EventTracker(AnalyticsDbContext db, ILogger<EventTracker> logger) : IEventTracker
 {

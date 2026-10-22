@@ -32,7 +32,7 @@ public interface IAiToolDefinition
 {
     string Name { get; }
 
-    /// <summary>Short, present-tense label for streaming a live status to the client, e.g. "Creating a focus".</summary>
+    /// <summary>Short, present-tense label for streaming a live status to the client, e.g. "Saving your session".</summary>
     string DisplayName { get; }
 
     /// <summary>Coarse classification of this tool's effect on the user's data, for UI iconography/copy.</summary>
