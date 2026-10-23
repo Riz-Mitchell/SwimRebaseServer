@@ -180,7 +180,7 @@ public sealed class SessionsController(
         {
             var updated = await preferences.UpdateAsync(
                 currentUser.UserId,
-                new SessionPreferencesUpdate(request.DefaultEffort, request.EffortScale, request.CustomEffortScale?.Select(b => b.ToBand()).ToList()),
+                new SessionPreferencesUpdate(request.DefaultEffort, request.EffortScale, request.CustomEffortScale?.Select(b => b.ToBand()).ToList(), request.DisplayUnit),
                 cancellationToken);
             return Ok(SessionPreferencesResponse.From(updated));
         }
@@ -218,11 +218,11 @@ public sealed record EffortScaleSettingResponse(string Selected, EffortScaleResp
     }
 }
 
-public sealed record SessionPreferencesRequest(int? DefaultEffort, string? EffortScale, List<EffortBandDto>? CustomEffortScale);
+public sealed record SessionPreferencesRequest(int? DefaultEffort, string? EffortScale, List<EffortBandDto>? CustomEffortScale, DistanceUnit? DisplayUnit);
 
-public sealed record SessionPreferencesResponse(int DefaultEffort, string EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale)
+public sealed record SessionPreferencesResponse(int DefaultEffort, string EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale, DistanceUnit DisplayUnit)
 {
-    public static SessionPreferencesResponse From(SessionPreferencesView view) => new(view.DefaultEffort, view.EffortScale, view.CustomEffortScale);
+    public static SessionPreferencesResponse From(SessionPreferencesView view) => new(view.DefaultEffort, view.EffortScale, view.CustomEffortScale, view.DisplayUnit);
 }
 
 public enum SessionInclude { Content }

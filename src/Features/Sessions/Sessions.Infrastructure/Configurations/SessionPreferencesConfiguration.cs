@@ -13,6 +13,7 @@ public sealed class SessionPreferencesConfiguration : IEntityTypeConfiguration<S
         builder.HasKey(p => p.OwnerId);
         builder.Property(p => p.OwnerId).ValueGeneratedNever();
         builder.Property(p => p.DefaultEffort).IsRequired();
+        builder.Property(p => p.DisplayUnit).HasConversion<string>().HasMaxLength(8).IsRequired().HasDefaultValue(DistanceUnit.Metres);
         builder.Property(p => p.EffortScale).IsRequired().HasMaxLength(32).HasDefaultValue(EffortScale.TensId);
         builder.Property(p => p.CustomEffortScaleJson);
     }
