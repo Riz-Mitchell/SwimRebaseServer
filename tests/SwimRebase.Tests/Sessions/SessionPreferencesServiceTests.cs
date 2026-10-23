@@ -136,4 +136,45 @@ public class SessionPreferencesServiceTests
             await Assert.ThrowsAsync<InvalidSessionPreferencesException>(() => service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, bands), CancellationToken.None));
         }
     }
+
+    [Fact]
+    public async Task The_display_unit_is_metres_until_one_is_chosen()
+    {
+        var view = await Service(new InMemoryPreferencesRepository()).GetAsync(UserId, CancellationToken.None);
+
+        Assert.Equal(DistanceUnit.Metres, view.DisplayUnit);
+    }
+
+    [Fact]
+    public async Task A_chosen_display_unit_is_stored_and_leaves_the_other_settings_alone()
+    {
+        var service = Service(new InMemoryPreferencesRepository());
+        await service.UpdateAsync(UserId, new SessionPreferencesUpdate(70, "zones", null), CancellationToken.None);
+
+        var updated = await service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, null, DistanceUnit.Yards), CancellationToken.None);
+
+        Assert.Equal(DistanceUnit.Yards, updated.DisplayUnit);
+        Assert.Equal(70, updated.DefaultEffort);
+        Assert.Equal("zones", updated.EffortScale);
+    }
+
+    [Fact]
+    public async Task Changing_other_settings_keeps_the_display_unit()
+    {
+        var service = Service(new InMemoryPreferencesRepository());
+        await service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, null, DistanceUnit.Yards), CancellationToken.None);
+
+        var updated = await service.UpdateAsync(UserId, new SessionPreferencesUpdate(40, null, null), CancellationToken.None);
+
+        Assert.Equal(DistanceUnit.Yards, updated.DisplayUnit);
+    }
+
+    [Fact]
+    public async Task An_unknown_display_unit_is_rejected()
+    {
+        var service = Service(new InMemoryPreferencesRepository());
+
+        await Assert.ThrowsAsync<InvalidSessionPreferencesException>(() =>
+            service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, null, (DistanceUnit)7), CancellationToken.None));
+    }
 }

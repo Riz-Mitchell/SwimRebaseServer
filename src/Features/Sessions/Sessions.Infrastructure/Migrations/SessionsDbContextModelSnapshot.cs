@@ -268,6 +268,14 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("default_effort");
 
+                    b.Property<string>("DisplayUnit")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasDefaultValue("Metres")
+                        .HasColumnName("display_unit");
+
                     b.Property<string>("EffortScale")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

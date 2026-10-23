@@ -11,10 +11,10 @@ namespace Sessions.Application.Services;
 public sealed class InvalidSessionPreferencesException(string message) : Exception(message);
 
 /// <summary>A swimmer's settings. <paramref name="EffortScale"/> is the scale id metrics group intensity by when a request names none.</summary>
-public sealed record SessionPreferencesView(int DefaultEffort, string EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale);
+public sealed record SessionPreferencesView(int DefaultEffort, string EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale, DistanceUnit DisplayUnit);
 
 /// <summary>Only the fields that are set change. An empty <paramref name="CustomEffortScale"/> removes the saved one.</summary>
-public sealed record SessionPreferencesUpdate(int? DefaultEffort, string? EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale);
+public sealed record SessionPreferencesUpdate(int? DefaultEffort, string? EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale, DistanceUnit? DisplayUnit = null);
 
 public sealed class SessionPreferencesService(
     ISessionPreferencesRepository preferences,
@@ -29,17 +29,23 @@ public sealed class SessionPreferencesService(
     public async Task<SessionPreferencesView> GetAsync(Guid userId, CancellationToken cancellationToken) =>
         ToView(await preferences.FindAsync(userId, cancellationToken));
 
-    /// <exception cref="InvalidSessionPreferencesException">The default effort is outside 1-100, the scale is unknown, or the custom bands are not a usable scale.</exception>
+    /// <exception cref="InvalidSessionPreferencesException">The default effort is outside 1-100, the scale or display unit is unknown, or the custom bands are not a usable scale.</exception>
     public async Task SetDefaultEffortAsync(Guid userId, int defaultEffort, CancellationToken cancellationToken) =>
         await UpdateAsync(userId, new SessionPreferencesUpdate(defaultEffort, null, null), cancellationToken);
 
-    /// <exception cref="InvalidSessionPreferencesException">The default effort is outside 1-100, the scale is unknown, or the custom bands are not a usable scale.</exception>
+    /// <exception cref="InvalidSessionPreferencesException">The default effort is outside 1-100, the scale or display unit is unknown, or the custom bands are not a usable scale.</exception>
     public async Task<SessionPreferencesView> UpdateAsync(Guid userId, SessionPreferencesUpdate update, CancellationToken cancellationToken)
     {
         if (update.DefaultEffort is < Intensity.Min or > Intensity.Max)
         {
             _logger.LogWarning("[{ClassName}] User {UserId} sent default effort {DefaultEffort} outside {Min}-{Max}", nameof(SessionPreferencesService), userId, update.DefaultEffort, Intensity.Min, Intensity.Max);
             throw new InvalidSessionPreferencesException($"defaultEffort must be between {Intensity.Min} and {Intensity.Max}.");
+        }
+
+        if (update.DisplayUnit is { } unit && !Enum.IsDefined(unit))
+        {
+            _logger.LogWarning("[{ClassName}] User {UserId} sent unknown display unit {DisplayUnit}", nameof(SessionPreferencesService), userId, update.DisplayUnit);
+            throw new InvalidSessionPreferencesException($"displayUnit must be one of {string.Join(", ", Enum.GetNames<DistanceUnit>())}.");
         }
 
         if (update.CustomEffortScale is { Count: > 0 } proposed && EffortScale.Validate(proposed) is { Count: > 0 } problems)
@@ -88,6 +94,7 @@ public sealed class SessionPreferencesService(
         }
 
         existing.DefaultEffort = update.DefaultEffort ?? existing.DefaultEffort;
+        existing.DisplayUnit = update.DisplayUnit ?? existing.DisplayUnit;
         existing.EffortScale = scaleId;
         existing.CustomEffortScaleJson = customJson;
 
@@ -100,5 +107,6 @@ public sealed class SessionPreferencesService(
     private static SessionPreferencesView ToView(SessionPreferences? saved) => new(
         saved?.DefaultEffort ?? SessionPreferences.BuiltInDefaultEffort,
         saved?.EffortScale ?? EffortScale.TensId,
-        saved?.CustomEffortScaleJson is { Length: > 0 } json ? SessionJson.Deserialize<List<EffortBand>>(json) : null);
+        saved?.CustomEffortScaleJson is { Length: > 0 } json ? SessionJson.Deserialize<List<EffortBand>>(json) : null,
+        saved?.DisplayUnit ?? DistanceUnit.Metres);
 }

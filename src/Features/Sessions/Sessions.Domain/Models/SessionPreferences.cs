@@ -11,6 +11,9 @@ public class SessionPreferences
     /// <summary>The intensity percent (1-100) counted for distance whose effort could not be mapped.</summary>
     public int DefaultEffort { get; set; } = BuiltInDefaultEffort;
 
+    /// <summary>The unit distances are shown in across the app. Display only: it never changes the unit a session is stored or logged in.</summary>
+    public DistanceUnit DisplayUnit { get; set; } = DistanceUnit.Metres;
+
     /// <summary>The scale intensity is grouped by when a metrics request does not name one: a built-in scale id, or "custom".</summary>
     public string EffortScale { get; set; } = Calculations.EffortScale.TensId;
 
