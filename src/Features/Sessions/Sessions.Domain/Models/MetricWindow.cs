@@ -36,6 +36,23 @@ public static class MetricWindows
         _ => null,
     };
 
+    /// <summary>
+    /// The previous whole period of <paramref name="window"/> as of <paramref name="today"/>, cut at the same point in it that <paramref name="today"/> is in the current one
+    /// (a month is clamped to its length). Null for the rolling windows, which are always compared whole, and for all time.
+    /// </summary>
+    public static (DateOnly From, DateOnly To)? PreviousToDate(MetricWindow window, DateOnly today)
+    {
+        if (window is not (MetricWindow.ThisWeek or MetricWindow.ThisMonth))
+        {
+            return null;
+        }
+
+        var elapsed = today.DayNumber - Resolve(window, today).From!.Value.DayNumber;
+        var (from, to) = Period(window, PreviousAnchor(window, today)!.Value);
+        var cut = from!.Value.AddDays(elapsed);
+        return (from.Value, cut < to ? cut : to!.Value);
+    }
+
     public static DateOnly StartOfWeek(DateOnly date) => date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
 
     private static (DateOnly? From, DateOnly? To) Week(DateOnly anchor)

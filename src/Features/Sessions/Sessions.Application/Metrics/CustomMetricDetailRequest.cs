@@ -60,7 +60,8 @@ public sealed record CustomMetricDetailRequest(DateOnly Today, MetricWindow? Win
             : throw new InvalidCustomMetricException("groupBy must be day, week or month");
     }
 
-    private static bool ParseInclude(string? text)
+    /// <exception cref="InvalidCustomMetricException">The value is not <c>previous</c>.</exception>
+    public static bool ParseInclude(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {

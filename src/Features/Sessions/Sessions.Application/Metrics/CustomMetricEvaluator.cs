@@ -11,7 +11,11 @@ public sealed class CustomMetricEvaluator(
 {
     private readonly ILogger<CustomMetricEvaluator> _logger = logger ?? NullLogger<CustomMetricEvaluator>.Instance;
 
-    public async Task<IReadOnlyList<CustomMetricValue>> EvaluateAsync(Guid userId, DateOnly today, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<CustomMetricValue>> EvaluateAsync(Guid userId, DateOnly today, CancellationToken cancellationToken) =>
+        await EvaluateAsync(userId, today, false, cancellationToken);
+
+    /// <param name="includePrevious">Adds each metric's figure for the period before, from at most two extra totals over that period.</param>
+    public async Task<IReadOnlyList<CustomMetricValue>> EvaluateAsync(Guid userId, DateOnly today, bool includePrevious, CancellationToken cancellationToken)
     {
         var values = new List<CustomMetricValue>();
         foreach (var metric in await metrics.ListAsync(userId, cancellationToken))
@@ -22,7 +26,8 @@ public sealed class CustomMetricEvaluator(
 
             values.Add(new CustomMetricValue(
                 metric.Id, definition.Name, definition.Measure, definition.Window,
-                ValueOf(total, definition.Measure), grouped?.Rows, total.Units, total.AssumedDistance));
+                ValueOf(total, definition.Measure), grouped?.Rows, total.Units, total.AssumedDistance,
+                includePrevious ? await PreviousAsync(userId, definition, today, cancellationToken) : null));
         }
 
         _logger.LogDebug("[{ClassName}] Evaluated {Count} custom metric(s) for user {UserId} as of {Today}", nameof(CustomMetricEvaluator), values.Count, userId, today);
@@ -67,6 +72,26 @@ public sealed class CustomMetricEvaluator(
             metric.Id, definition.Name, definition.Measure, definition.Window, current.View.Range,
             current.View.Value, current.View.Series, current.View.Units, current.View.AssumedDistance,
             banded ? current.Grouped?.Scale : null, banded ? current.Grouped?.DefaultEffort : null, first, previous);
+    }
+
+    private async Task<PreviousFigure?> PreviousAsync(Guid userId, CustomMetricDefinition definition, DateOnly today, CancellationToken cancellationToken)
+    {
+        if (MetricWindows.PreviousAnchor(definition.Window, today) is not { } anchor)
+        {
+            return null;
+        }
+
+        var (from, to) = MetricWindows.Period(definition.Window, anchor);
+        var whole = ValueOf(await answers.QueryAsync(userId, CustomMetricQuery.For(definition, from, to), cancellationToken), definition.Measure);
+        if (MetricWindows.PreviousToDate(definition.Window, today) is not { } span)
+        {
+            return new PreviousFigure(whole, null);
+        }
+
+        var toDate = span.To == to
+            ? whole
+            : ValueOf(await answers.QueryAsync(userId, CustomMetricQuery.For(definition, span.From, span.To), cancellationToken), definition.Measure);
+        return new PreviousFigure(whole, toDate);
     }
 
     private sealed record PeriodResult(CustomMetricPeriod View, MetricsResult? Grouped);
