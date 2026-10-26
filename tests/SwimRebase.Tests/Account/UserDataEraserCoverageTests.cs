@@ -17,7 +17,7 @@ public class UserDataEraserCoverageTests
 {
     private static readonly string[] KnownUserOwnedEntities =
     [
-        "Conversation", "EventLog", "ProfileAnswer", "Session", "SessionDraft", "SessionFact", "SessionPreferences",
+        "Conversation", "CustomMetric", "EventLog", "ProfileAnswer", "Session", "SessionDraft", "SessionFact", "SessionPreferences",
         "Subscription", "ConversionUsage", "TimedSwim", "TokenUsageRecord", "ToolExecutionRequest", "UploadedImage", "UserEffortTerm",
     ];
 

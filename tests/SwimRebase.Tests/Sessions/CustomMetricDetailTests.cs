@@ -134,7 +134,7 @@ public class CustomMetricDetailTests
     [InlineData("thisWeek", "2026-10-14", "2026-10-12", "2026-10-18")]
     [InlineData("thisMonth", "2026-10-14", "2026-10-01", "2026-10-31")]
     [InlineData("thisMonth", "2026-02-10", "2026-02-01", "2026-02-28")]
-    [InlineData("thisMonth", "2028-02-10", "2028-02-01", "2028-02-29")]
+    [InlineData("thisMonth", "2024-02-10", "2024-02-01", "2024-02-29")]
     [InlineData("last7Days", "2026-10-14", "2026-10-08", "2026-10-14")]
     [InlineData("last30Days", "2026-10-14", "2026-09-15", "2026-10-14")]
     public async Task The_range_is_the_whole_period_the_window_covers(string window, string today, string from, string to)

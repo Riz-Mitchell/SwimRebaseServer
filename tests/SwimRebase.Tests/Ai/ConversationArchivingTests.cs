@@ -4,6 +4,7 @@ using Ai.Application.Services;
 using Ai.Application.Services.ToolInteractions;
 using Ai.Domain.Models;
 using Ai.Infrastructure.Tools;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace SwimRebase.Tests.Ai;
 
@@ -14,7 +15,7 @@ public class ConversationArchivingTests
 
     private static ConversationManagementService CreateService(
         InMemoryConversationRepository conversations, InMemoryToolExecutionRepository toolExecutions) =>
-        new(conversations, toolExecutions, new NoOpUnitOfWork());
+        new(conversations, toolExecutions, new NoOpUnitOfWork(), NullLogger<ConversationManagementService>.Instance);
 
     [Fact]
     public async Task Rename_updates_the_title()
