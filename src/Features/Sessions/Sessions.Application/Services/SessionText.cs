@@ -56,6 +56,12 @@ public static class SessionText
             sb.Append(timing.Kind == TimingKind.SendOff ? ", on " : ", rest ").Append(Seconds(timing.Seconds));
         }
 
+        if (item.Progression is { FromIntensity: { } from, ToIntensity: { } to } progression)
+        {
+            sb.Append(", descending ").Append(from.Percent).Append("% to ").Append(to.Percent).Append('%');
+            sb.Append(progression.Span is { } span && span < item.Reps ? $" every {span} reps" : string.Empty);
+        }
+
         if (!string.IsNullOrWhiteSpace(item.Note))
         {
             sb.Append(" (").Append(item.Note).Append(')');

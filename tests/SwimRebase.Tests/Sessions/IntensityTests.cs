@@ -16,7 +16,7 @@ public class IntensityTests
     [InlineData("relax", 20)]
     [InlineData("recovery", 20)]
     [InlineData("steady", 40)]
-    [InlineData("build", 50)]
+    [InlineData("build", 75)]
     [InlineData("fast", 80)]
     [InlineData("hard", 80)]
     [InlineData("threshold", 83)]

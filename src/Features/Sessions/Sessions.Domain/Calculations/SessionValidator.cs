@@ -49,7 +49,30 @@ public static class SessionValidator
                     CheckPart(item.Parts[p], $"{path}.parts[{p}]", errors);
                 }
 
+                if (item.Progression is { } progression)
+                {
+                    CheckProgression(item, progression, $"{path}.progression", errors);
+                }
+
                 break;
+        }
+    }
+
+    private static void CheckProgression(SetItem item, Progression progression, string path, List<string> errors)
+    {
+        if (item.Reps < 2) errors.Add($"{path}: a descend needs at least 2 reps");
+        if (progression.Span is { } span && (span < 2 || span > item.Reps)) errors.Add($"{path}: span must be between 2 and the item's {item.Reps} reps");
+        foreach (var (end, name) in new[] { (progression.FromIntensity, "from"), (progression.ToIntensity, "to") })
+        {
+            if (end is { } i && (i.Percent < Intensity.Min || i.Percent > Intensity.Max))
+            {
+                errors.Add($"{path}: {name} intensity must be {Intensity.Min}-{Intensity.Max}");
+            }
+        }
+
+        if (progression is { FromIntensity: { } from, ToIntensity: { } to } && from.Percent > to.Percent)
+        {
+            errors.Add($"{path}: a descend rises from easier to harder, but it starts at {from.Percent}% and ends at {to.Percent}%");
         }
     }
 

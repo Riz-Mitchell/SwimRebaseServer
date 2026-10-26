@@ -22,6 +22,7 @@ public sealed class SessionDraftService(
     ISessionDraftRepository drafts,
     SessionIngest ingest,
     IPersonalIntensityProvider personal,
+    IProgressionDefaultsProvider progressionDefaults,
     [FromKeyedServices(SessionConversionKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     ILogger<SessionDraftService>? logger = null)
 {
@@ -30,7 +31,8 @@ public sealed class SessionDraftService(
     /// <exception cref="InvalidSessionException">The JSON could not be read as a session, or it failed validation.</exception>
     public async Task<DraftView> CreateAsync(Guid userId, Guid? sourceConversationId, string sessionJson, CancellationToken cancellationToken)
     {
-        var session = ingest.Prepare(ingest.Parse(sessionJson), await personal.MapperAsync(userId, cancellationToken));
+        var session = ingest.Prepare(
+            ingest.Parse(sessionJson), await personal.MapperAsync(userId, cancellationToken), await progressionDefaults.DefaultsAsync(userId, cancellationToken));
 
         var now = DateTimeOffset.UtcNow;
         var draft = new SessionDraft
@@ -63,7 +65,9 @@ public sealed class SessionDraftService(
         }
 
         var edited = ingest.Prepare(
-            SessionEditor.Apply(SessionJson.Deserialize<SwimSession>(draft.ContentJson), edits), await personal.MapperAsync(userId, cancellationToken));
+            SessionEditor.Apply(SessionJson.Deserialize<SwimSession>(draft.ContentJson), edits),
+            await personal.MapperAsync(userId, cancellationToken),
+            await progressionDefaults.DefaultsAsync(userId, cancellationToken));
 
         draft.ContentJson = SessionJson.Serialize(edited);
         draft.Version++;

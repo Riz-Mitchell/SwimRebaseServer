@@ -119,4 +119,33 @@ public class ConversionSchemasTests
         var total = SessionCalculator.Total(prepared);
         Assert.Equal(300 + 300 + 300 + 3 * (3 * 50 + 50) + 50, total);
     }
+
+    [Fact]
+    public void An_item_can_carry_a_descend_in_both_the_conversion_schema_and_the_edit_tool()
+    {
+        using var conversion = JsonDocument.Parse(ConversionSchemas.Session);
+        var defs = conversion.RootElement.GetProperty("$defs");
+
+        Assert.Equal(["span", "from", "to"], defs.GetProperty("progression").GetProperty("properties").EnumerateObject().Select(p => p.Name));
+        Assert.True(defs.GetProperty("item").GetProperty("properties").TryGetProperty("progression", out _));
+
+        using var edit = JsonDocument.Parse(InterviewTools.EditDraftSchema);
+        Assert.True(edit.RootElement.GetProperty("$defs").GetProperty("node").GetProperty("properties").TryGetProperty("progression", out _));
+        Assert.True(edit.RootElement.GetProperty("$defs").TryGetProperty("progression", out _));
+    }
+
+    [Fact]
+    public void A_descend_the_model_writes_is_read_and_filled_from_the_swimmers_settings()
+    {
+        const string board = """
+            {"ledger":[],"group":null,"title":null,"sets":[
+              {"kind":"item","reps":8,"timing":null,"parts":[{"dist":100,"stroke":"free","mode":"swim","equip":[],"effort":null}],
+               "progression":{"span":4,"from":null,"to":"TH"},"note":null}]}
+            """;
+
+        var prepared = TestSessions.Ingest().Prepare(TestSessions.Ingest().Parse(board));
+
+        var progression = Assert.IsType<SetItem>(prepared.Sets[0]).Progression!;
+        Assert.Equal((4, 50, 83), (progression.Span, progression.FromIntensity!.Percent, progression.ToIntensity!.Percent));
+    }
 }

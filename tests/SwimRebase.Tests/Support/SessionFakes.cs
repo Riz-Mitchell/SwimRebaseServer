@@ -16,7 +16,15 @@ internal static class TestSessions
     public static UserEffortTermService Terms(InMemoryUserEffortTermRepository? repository = null) =>
         new(repository ?? new InMemoryUserEffortTermRepository(), Resolver(), new NoOpUnitOfWork());
 
-    public static SessionService Service(InMemorySessionRepository repository) => new(repository, Ingest(), Terms(), new NoOpUnitOfWork());
+    public static IProgressionDefaultsProvider Defaults(ProgressionDefaults? defaults = null) => new FixedProgressionDefaults(defaults ?? ProgressionDefaults.BuiltIn);
+
+    public static SessionService Service(InMemorySessionRepository repository, ProgressionDefaults? defaults = null) =>
+        new(repository, Ingest(), Terms(), Defaults(defaults), new NoOpUnitOfWork());
+}
+
+internal sealed class FixedProgressionDefaults(ProgressionDefaults defaults) : IProgressionDefaultsProvider
+{
+    public Task<ProgressionDefaults> DefaultsAsync(Guid userId, CancellationToken cancellationToken) => Task.FromResult(defaults);
 }
 
 internal sealed class InMemoryUserEffortTermRepository : IUserEffortTermRepository

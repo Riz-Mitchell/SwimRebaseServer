@@ -268,6 +268,10 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("default_effort");
 
+                    b.Property<int>("DescendTarget")
+                        .HasColumnType("integer")
+                        .HasColumnName("descend_target");
+
                     b.Property<string>("DisplayUnit")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

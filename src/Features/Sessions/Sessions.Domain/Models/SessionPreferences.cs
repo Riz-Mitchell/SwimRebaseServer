@@ -6,10 +6,16 @@ public class SessionPreferences
     /// <summary>The default effort, in percent, when a swimmer has not chosen one.</summary>
     public const int BuiltInDefaultEffort = 50;
 
+    /// <summary>The percent a descend rises to when the board does not say where it ends, when a swimmer has not chosen one.</summary>
+    public const int BuiltInDescendTarget = 85;
+
     public Guid OwnerId { get; set; }
 
     /// <summary>The intensity percent (1-100) counted for distance whose effort could not be mapped.</summary>
     public int DefaultEffort { get; set; } = BuiltInDefaultEffort;
+
+    /// <summary>The intensity percent (1-100) a descend rises to when its board names no endpoint. Applied when a session is saved.</summary>
+    public int DescendTarget { get; set; } = BuiltInDescendTarget;
 
     /// <summary>The unit distances are shown in across the app. Display only: it never changes the unit a session is stored or logged in.</summary>
     public DistanceUnit DisplayUnit { get; set; } = DistanceUnit.Metres;

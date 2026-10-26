@@ -11,20 +11,32 @@ namespace Sessions.Application.Services;
 public sealed class InvalidSessionPreferencesException(string message) : Exception(message);
 
 /// <summary>A swimmer's settings. <paramref name="EffortScale"/> is the scale id metrics group intensity by when a request names none.</summary>
-public sealed record SessionPreferencesView(int DefaultEffort, string EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale, DistanceUnit DisplayUnit);
+public sealed record SessionPreferencesView(int DefaultEffort, string EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale, DistanceUnit DisplayUnit, int DescendTarget);
 
 /// <summary>Only the fields that are set change. An empty <paramref name="CustomEffortScale"/> removes the saved one.</summary>
-public sealed record SessionPreferencesUpdate(int? DefaultEffort, string? EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale, DistanceUnit? DisplayUnit = null);
+public sealed record SessionPreferencesUpdate(int? DefaultEffort, string? EffortScale, IReadOnlyList<EffortBand>? CustomEffortScale, DistanceUnit? DisplayUnit = null, int? DescendTarget = null);
+
+/// <summary>What a descend counts as when its board names no endpoint, read when a session is saved.</summary>
+public interface IProgressionDefaultsProvider
+{
+    Task<ProgressionDefaults> DefaultsAsync(Guid userId, CancellationToken cancellationToken);
+}
 
 public sealed class SessionPreferencesService(
     ISessionPreferencesRepository preferences,
     [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork,
-    ILogger<SessionPreferencesService>? logger = null)
+    ILogger<SessionPreferencesService>? logger = null) : IProgressionDefaultsProvider
 {
     private readonly ILogger<SessionPreferencesService> _logger = logger ?? NullLogger<SessionPreferencesService>.Instance;
 
     public async Task<int> GetDefaultEffortAsync(Guid userId, CancellationToken cancellationToken) =>
         (await preferences.FindAsync(userId, cancellationToken))?.DefaultEffort ?? SessionPreferences.BuiltInDefaultEffort;
+
+    public async Task<ProgressionDefaults> DefaultsAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var view = ToView(await preferences.FindAsync(userId, cancellationToken));
+        return new ProgressionDefaults(view.DefaultEffort, view.DescendTarget);
+    }
 
     public async Task<SessionPreferencesView> GetAsync(Guid userId, CancellationToken cancellationToken) =>
         ToView(await preferences.FindAsync(userId, cancellationToken));
@@ -40,6 +52,12 @@ public sealed class SessionPreferencesService(
         {
             _logger.LogWarning("[{ClassName}] User {UserId} sent default effort {DefaultEffort} outside {Min}-{Max}", nameof(SessionPreferencesService), userId, update.DefaultEffort, Intensity.Min, Intensity.Max);
             throw new InvalidSessionPreferencesException($"defaultEffort must be between {Intensity.Min} and {Intensity.Max}.");
+        }
+
+        if (update.DescendTarget is < Intensity.Min or > Intensity.Max)
+        {
+            _logger.LogWarning("[{ClassName}] User {UserId} sent descend target {DescendTarget} outside {Min}-{Max}", nameof(SessionPreferencesService), userId, update.DescendTarget, Intensity.Min, Intensity.Max);
+            throw new InvalidSessionPreferencesException($"descendTarget must be between {Intensity.Min} and {Intensity.Max}.");
         }
 
         if (update.DisplayUnit is { } unit && !Enum.IsDefined(unit))
@@ -95,6 +113,7 @@ public sealed class SessionPreferencesService(
 
         existing.DefaultEffort = update.DefaultEffort ?? existing.DefaultEffort;
         existing.DisplayUnit = update.DisplayUnit ?? existing.DisplayUnit;
+        existing.DescendTarget = update.DescendTarget ?? existing.DescendTarget;
         existing.EffortScale = scaleId;
         existing.CustomEffortScaleJson = customJson;
 
@@ -108,5 +127,6 @@ public sealed class SessionPreferencesService(
         saved?.DefaultEffort ?? SessionPreferences.BuiltInDefaultEffort,
         saved?.EffortScale ?? EffortScale.TensId,
         saved?.CustomEffortScaleJson is { Length: > 0 } json ? SessionJson.Deserialize<List<EffortBand>>(json) : null,
-        saved?.DisplayUnit ?? DistanceUnit.Metres);
+        saved?.DisplayUnit ?? DistanceUnit.Metres,
+        saved?.DescendTarget ?? SessionPreferences.BuiltInDescendTarget);
 }

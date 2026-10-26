@@ -36,6 +36,7 @@ public sealed class SessionService(
     ISessionRepository sessions,
     SessionIngest ingest,
     IPersonalIntensityProvider personal,
+    IProgressionDefaultsProvider progressionDefaults,
     [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork,
     ILogger<SessionService>? logger = null)
 {
@@ -64,7 +65,7 @@ public sealed class SessionService(
             return SessionView.Of(existing);
         }
 
-        var prepared = NodeIds.Assign(ingest.Prepare(content, await personal.MapperAsync(userId, cancellationToken))) with { Title = null };
+        var prepared = NodeIds.Assign(ingest.Prepare(content, await personal.MapperAsync(userId, cancellationToken), await progressionDefaults.DefaultsAsync(userId, cancellationToken))) with { Title = null };
         var now = DateTimeOffset.UtcNow;
         var session = new Session
         {
@@ -104,7 +105,9 @@ public sealed class SessionService(
         }
 
         var edited = NodeIds.Assign(ingest.Prepare(
-            SessionEditor.Apply(SessionJson.Deserialize<SwimSession>(session.ContentJson), edits), await personal.MapperAsync(userId, cancellationToken)));
+            SessionEditor.Apply(SessionJson.Deserialize<SwimSession>(session.ContentJson), edits),
+            await personal.MapperAsync(userId, cancellationToken),
+            await progressionDefaults.DefaultsAsync(userId, cancellationToken)));
 
         session.ContentJson = SessionJson.Serialize(edited);
         session.TotalDistance = SessionCalculator.Total(edited);
