@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Sessions.Domain.Calculations;
 using Sessions.Domain.Models;
 
@@ -11,6 +12,7 @@ public sealed record CustomMetricView(Guid Id, int Position, CustomMetricDefinit
 /// <param name="Value">Null when the measure does not apply (an average intensity over no distance).</param>
 /// <param name="Series">The metric by day, week or month, in order; periods with nothing swum are absent. Null when the metric asks for none.</param>
 /// <param name="AssumedDistance">How much of the distance had no stated effort and was counted at the swimmer's default effort.</param>
+/// <param name="Previous">The period before this one; absent unless asked for, and for all time.</param>
 public sealed record CustomMetricValue(
     Guid Id,
     string Name,
@@ -19,7 +21,12 @@ public sealed record CustomMetricValue(
     double? Value,
     IReadOnlyList<MetricRow>? Series,
     IReadOnlyList<DistanceUnit> Units,
-    decimal AssumedDistance);
+    decimal AssumedDistance,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] PreviousFigure? Previous = null);
+
+/// <param name="Value">The whole previous period; null where <see cref="CustomMetricValue.Value"/> can be (an average over no distance).</param>
+/// <param name="ValueToDate">The previous period up to the same point in it as today; absent when the window is always compared whole.</param>
+public sealed record PreviousFigure(double? Value, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] double? ValueToDate);
 
 /// <summary>The dates a window covered, inclusive. A week or month that has not finished ends after today.</summary>
 public sealed record DateRangeView(DateOnly From, DateOnly To);

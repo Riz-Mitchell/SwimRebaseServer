@@ -24,13 +24,14 @@ public sealed class CustomMetricsController(
     public async Task<IActionResult> Definitions(CancellationToken cancellationToken) =>
         Ok(await metrics.ListAsync(currentUser.UserId, cancellationToken));
 
-    /// <summary>Every metric with its current value. <paramref name="today"/> (yyyy-MM-dd) is the swimmer's own date, so "this week" follows their time zone.</summary>
+    /// <summary>Every metric with its current value. <paramref name="today"/> (yyyy-MM-dd) is the swimmer's own date, so "this week" follows their time zone. <paramref name="include"/> (<c>previous</c>) adds each metric's figure for the period before.</summary>
     [HttpGet]
-    public async Task<IActionResult> Values([FromQuery] string? today, CancellationToken cancellationToken)
+    public async Task<IActionResult> Values([FromQuery] string? today, [FromQuery] string? include, CancellationToken cancellationToken)
     {
         try
         {
-            return Ok(await evaluator.EvaluateAsync(currentUser.UserId, CustomMetricDetailRequest.ParseToday(today, ServerToday()), cancellationToken));
+            var date = CustomMetricDetailRequest.ParseToday(today, ServerToday());
+            return Ok(await evaluator.EvaluateAsync(currentUser.UserId, date, CustomMetricDetailRequest.ParseInclude(include), cancellationToken));
         }
         catch (InvalidCustomMetricException ex)
         {
