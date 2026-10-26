@@ -177,4 +177,45 @@ public class SessionPreferencesServiceTests
         await Assert.ThrowsAsync<InvalidSessionPreferencesException>(() =>
             service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, null, (DistanceUnit)7), CancellationToken.None));
     }
+
+    [Fact]
+    public async Task The_descend_target_is_85_until_one_is_chosen()
+    {
+        var view = await Service(new InMemoryPreferencesRepository()).GetAsync(UserId, CancellationToken.None);
+
+        Assert.Equal(SessionPreferences.BuiltInDescendTarget, view.DescendTarget);
+        Assert.Equal(85, view.DescendTarget);
+    }
+
+    [Fact]
+    public async Task A_chosen_descend_target_is_stored_and_other_changes_leave_it_alone()
+    {
+        var service = Service(new InMemoryPreferencesRepository());
+        await service.UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, null, null, 92), CancellationToken.None);
+
+        var updated = await service.UpdateAsync(UserId, new SessionPreferencesUpdate(40, null, null), CancellationToken.None);
+
+        Assert.Equal(92, updated.DescendTarget);
+        Assert.Equal(40, updated.DefaultEffort);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(101)]
+    public async Task A_descend_target_outside_1_to_100_is_rejected(int percent)
+    {
+        await Assert.ThrowsAsync<InvalidSessionPreferencesException>(() =>
+            Service(new InMemoryPreferencesRepository()).UpdateAsync(UserId, new SessionPreferencesUpdate(null, null, null, null, percent), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Descends_default_from_the_default_effort_to_the_descend_target()
+    {
+        var service = Service(new InMemoryPreferencesRepository());
+        await service.UpdateAsync(UserId, new SessionPreferencesUpdate(45, null, null, null, 90), CancellationToken.None);
+
+        var defaults = await service.DefaultsAsync(UserId, CancellationToken.None);
+
+        Assert.Equal(new ProgressionDefaults(45, 90), defaults);
+    }
 }

@@ -58,6 +58,9 @@ public sealed record SetItem : SessionNode
     /// <summary>What ONE rep is made of. A plain "8 x 50 kick" is a single part; "25 fly + 75 free" is two.</summary>
     public List<Part> Parts { get; init; } = [];
 
+    /// <summary>Set for a descend: the effort of each rep is worked out from it, and replaces the parts' own effort in the maths.</summary>
+    public Progression? Progression { get; init; }
+
     public string? Note { get; init; }
 
     /// <summary>Distance of one rep.</summary>

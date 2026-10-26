@@ -51,7 +51,7 @@ public class SwimBoardFlowTests
             Client = new ScriptedChatClient(script);
             var unitOfWork = new NoOpUnitOfWork();
             var terms = TestSessions.Terms(EffortTerms);
-            var draftService = new SessionDraftService(Drafts, TestSessions.Ingest(), terms, unitOfWork);
+            var draftService = new SessionDraftService(Drafts, TestSessions.Ingest(), terms, TestSessions.Defaults(), unitOfWork);
             var sessionService = TestSessions.Service(Sessions);
 
             Registry = new AiToolRegistry(

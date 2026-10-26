@@ -63,7 +63,8 @@ public static class InterviewTools
         """;
 
     private const string NodeDefs = """
-        "node":{"type":"object","properties":{"kind":{"type":"string","enum":["item","group"]},"reps":{"type":"integer"},"timing":{"type":"object","properties":{"kind":{"type":"string","enum":["rest","sendOff"]},"seconds":{"type":"integer"}},"required":["kind","seconds"]},"parts":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/part"},"description":"one rep"},"note":{"type":"string"},"repeat":{"type":"integer"},"items":{"type":"array","items":{"$ref":"#/$defs/node"}}},"required":["kind"]},
+        "node":{"type":"object","properties":{"kind":{"type":"string","enum":["item","group"]},"reps":{"type":"integer"},"timing":{"type":"object","properties":{"kind":{"type":"string","enum":["rest","sendOff"]},"seconds":{"type":"integer"}},"required":["kind","seconds"]},"parts":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/part"},"description":"one rep"},"progression":{"$ref":"#/$defs/progression"},"note":{"type":"string"},"repeat":{"type":"integer"},"items":{"type":"array","items":{"$ref":"#/$defs/node"}}},"required":["kind"]},
+        "progression":{"type":"object","description":"a descend: effort rising across the reps of an item","properties":{"span":{"type":"integer","description":"reps per ramp (the n in 'dec 1-n'); omit to ramp the whole set"},"from":{"type":"string","description":"the board's wording for the easy end; omit if it gives none"},"to":{"type":"string","description":"the board's wording for the hard end; omit if it gives none"}}},
         "part":{"type":"object","properties":{"dist":{"type":"number"},"stroke":{"type":"string","enum":["free","back","breast","fly","im","choice"]},"mode":{"type":"string","enum":["swim","kick","pull","drill","scull"]},"equip":{"type":"array","items":{"type":"string"}},"effort":{"type":"string"}},"required":["dist","stroke"]}
         """;
 

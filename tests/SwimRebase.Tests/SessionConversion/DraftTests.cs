@@ -151,7 +151,7 @@ public class DraftTests
     [Fact]
     public async Task Creating_a_draft_stores_it_and_editing_bumps_the_version()
     {
-        var service = new SessionDraftService(new InMemoryDraftRepository(), TestSessions.Ingest(), TestSessions.Terms(), new NoOpUnitOfWork());
+        var service = new SessionDraftService(new InMemoryDraftRepository(), TestSessions.Ingest(), TestSessions.Terms(), TestSessions.Defaults(), new NoOpUnitOfWork());
         var userId = Guid.NewGuid();
 
         var created = await service.CreateAsync(userId, Guid.NewGuid(), ModelSession, CancellationToken.None);
@@ -166,7 +166,7 @@ public class DraftTests
     public async Task An_invalid_session_is_never_stored()
     {
         var repository = new InMemoryDraftRepository();
-        var service = new SessionDraftService(repository, TestSessions.Ingest(), TestSessions.Terms(), new NoOpUnitOfWork());
+        var service = new SessionDraftService(repository, TestSessions.Ingest(), TestSessions.Terms(), TestSessions.Defaults(), new NoOpUnitOfWork());
 
         var ex = await Assert.ThrowsAsync<InvalidSessionException>(() =>
             service.CreateAsync(Guid.NewGuid(), null, """{"sets":[{"kind":"item","reps":0,"parts":[{"dist":100,"stroke":"free"}]}]}""", CancellationToken.None));
@@ -178,7 +178,7 @@ public class DraftTests
     [Fact]
     public async Task A_draft_belongs_to_its_user()
     {
-        var service = new SessionDraftService(new InMemoryDraftRepository(), TestSessions.Ingest(), TestSessions.Terms(), new NoOpUnitOfWork());
+        var service = new SessionDraftService(new InMemoryDraftRepository(), TestSessions.Ingest(), TestSessions.Terms(), TestSessions.Defaults(), new NoOpUnitOfWork());
         var created = await service.CreateAsync(Guid.NewGuid(), null, ModelSession, CancellationToken.None);
 
         await Assert.ThrowsAsync<DraftNotFoundException>(() =>

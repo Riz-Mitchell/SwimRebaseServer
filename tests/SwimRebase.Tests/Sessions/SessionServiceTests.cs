@@ -146,7 +146,7 @@ public class SessionServiceTests
     public async Task Promoting_a_draft_saves_it_as_an_ai_session_and_is_repeatable()
     {
         var draftRepository = new InMemoryDraftRepository();
-        var drafts = new SessionDraftService(draftRepository, TestSessions.Ingest(), TestSessions.Terms(), new NoOpUnitOfWork());
+        var drafts = new SessionDraftService(draftRepository, TestSessions.Ingest(), TestSessions.Terms(), TestSessions.Defaults(), new NoOpUnitOfWork());
         var sessionRepository = new InMemorySessionRepository();
         var promotion = new SessionPromotionService(drafts, TestSessions.Service(sessionRepository));
         var draft = await drafts.CreateAsync(UserId, Guid.NewGuid(), DraftTests.ModelSession, CancellationToken.None);

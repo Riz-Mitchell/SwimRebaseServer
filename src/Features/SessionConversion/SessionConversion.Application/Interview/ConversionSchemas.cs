@@ -49,9 +49,12 @@ public static class ConversionSchemas
             ("reps", Integer()),
             ("timing", OrNull(Ref("timing"))),
             ("parts", ArrayOf(Ref("part"))),
+            ("progression", OrNull(Ref("progression"))),
             ("note", OrNull(Text())));
 
-        var defs = new JsonObject { ["timing"] = timing, ["part"] = part, ["item"] = item };
+        var progression = Closed(("span", OrNull(Integer())), ("from", OrNull(Text())), ("to", OrNull(Text())));
+
+        var defs = new JsonObject { ["timing"] = timing, ["part"] = part, ["progression"] = progression, ["item"] = item };
         for (var depth = 1; depth <= SessionRules.MaxGroupDepth; depth++)
         {
             var children = new JsonArray { Ref("item") };

@@ -32,9 +32,20 @@ public static class SessionLeaves
                     Walk(group.Items, here, multiplier * Math.Max(group.Repeat, 0), leaves);
                     break;
                 case SetItem item:
+                    var ramp = ProgressionRamp.Slices(item);
                     for (var p = 0; p < item.Parts.Count; p++)
                     {
-                        AddPart(item.Parts[p], $"{here}.{p}", Math.Max(item.Reps, 0) * multiplier, leaves);
+                        var part = item.Parts[p];
+                        if (ramp is null)
+                        {
+                            AddPart(part, $"{here}.{p}", Math.Max(item.Reps, 0) * multiplier, part.Intensity?.Percent, leaves);
+                            continue;
+                        }
+
+                        foreach (var slice in ramp)
+                        {
+                            AddPart(part, $"{here}.{p}", slice.Reps * multiplier, slice.Percent, leaves);
+                        }
                     }
 
                     break;
@@ -42,7 +53,7 @@ public static class SessionLeaves
         }
     }
 
-    private static void AddPart(Part part, string position, int times, List<SessionLeaf> leaves)
+    private static void AddPart(Part part, string position, int times, int? intensity, List<SessionLeaf> leaves)
     {
         var distance = part.Dist * times;
         if (distance <= 0)
@@ -53,7 +64,6 @@ public static class SessionLeaves
         var nodeId = part.Id ?? position;
         var stroke = part.Stroke ?? Stroke.Choice;
         var equip = part.Equip;
-        var intensity = part.Intensity?.Percent;
 
         if (stroke != Stroke.Im)
         {
