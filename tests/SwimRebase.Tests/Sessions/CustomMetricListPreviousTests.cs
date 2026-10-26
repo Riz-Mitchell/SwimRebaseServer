@@ -64,7 +64,7 @@ public class CustomMetricListPreviousTests
     {
         var value = await Evaluate(Fly with { Window = MetricWindow.Last7Days }, Wednesday);
 
-        Assert.Equal(new PreviousFigure(5000, null), value.Previous);
+        Assert.Equal(new PreviousFigure(1000, null), value.Previous);
     }
 
     [Fact]
