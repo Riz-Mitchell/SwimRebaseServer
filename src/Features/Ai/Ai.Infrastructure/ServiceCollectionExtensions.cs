@@ -11,6 +11,7 @@ using Anthropic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Shared.Application;
 using Shared.Infrastructure;
 
@@ -26,8 +27,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddAiInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<AiDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString("Database"))
+        services.AddDbContext<AiDbContext>((sp, options) => options
+            .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
             .UseSnakeCaseNamingConvention());
 
         services.Configure<AiModelOptions>(configuration.GetSection(AiModelOptions.SectionName));

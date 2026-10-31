@@ -3,6 +3,7 @@ using Analytics.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Shared.Application;
 
 namespace Analytics.Infrastructure;
@@ -15,8 +16,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddAnalyticsInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<AnalyticsDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString("Database"))
+        services.AddDbContext<AnalyticsDbContext>((sp, options) => options
+            .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
             .UseSnakeCaseNamingConvention());
 
         services.AddScoped<IEventTracker, EventTracker>();

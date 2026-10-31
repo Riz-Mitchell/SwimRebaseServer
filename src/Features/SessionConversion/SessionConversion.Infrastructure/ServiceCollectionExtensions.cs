@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using SessionConversion.Application;
 using SessionConversion.Application.Interfaces;
 using SessionConversion.Application.Services;
@@ -18,8 +19,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddSessionConversionInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<SessionConversionDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString("Database"))
+        services.AddDbContext<SessionConversionDbContext>((sp, options) => options
+            .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
             .UseSnakeCaseNamingConvention());
 
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<SessionConversionDbContext>>(SessionConversionKeys.UnitOfWork);

@@ -6,11 +6,11 @@ The server side is built: the webhook, plans, the weekly conversion limit and `G
 
 | Thing | Value |
 |---|---|
-| Webhook URL | `https://swimrebase-pro.azurewebsites.net/api/billing/revenuecat` (staging: `https://swimrebase-dev.azurewebsites.net/api/billing/revenuecat`) |
+| Webhook URL | `https://aueast-swimrebase-pro-app.azurewebsites.net/api/billing/revenuecat` (test: `https://aueast-swimrebase-tst-app.azurewebsites.net/api/billing/revenuecat`) |
 | Webhook header | `Authorization: <the secret below>` (RevenueCat's "Authorization header value" field; a `Bearer ` prefix also works) |
 | Secret config key | `RevenueCat:WebhookSecret` (Key Vault name `RevenueCat--WebhookSecret`) |
 | RevenueCat user id | The user's id (the Supabase `sub`), set with `Purchases.logIn(userId)` |
-| Sandbox purchases | Count as paid only where `Billing:AcceptSandbox` is true (Development and Staging; false in production) |
+| Sandbox purchases | Count as paid only where `Billing:AcceptSandbox` is true (TST only; false in PRO and in local Development) |
 | Limits | `Billing:FreeWeeklyConversions` (2), `Billing:FairUseWeeklyConversions` (50) |
 
 The server handles one paid line. It does not read entitlement ids, so any product that sends a purchase event grants Pro until its expiry. Keep to one subscription group.
@@ -18,7 +18,7 @@ The server handles one paid line. It does not read entitlement ids, so any produ
 ## 1. Webhook secret
 
 1. Generate a long random value, for example `openssl rand -base64 48`.
-2. Staging and production each get their own: `az keyvault secret set --vault-name <vault> --name RevenueCat--WebhookSecret --value '<secret>'`, then restart the web app so it is picked up.
+2. TST and PRO each get their own: `az keyvault secret set --vault-name <vault> --name RevenueCat--WebhookSecret --value '<secret>'`, then restart the web app so it is picked up.
 3. Locally: `dotnet user-secrets set "RevenueCat:WebhookSecret" "<secret>" --project src/Presentation/REST`.
 4. Until it is set, the webhook refuses every request (`401`).
 
@@ -43,7 +43,7 @@ The server handles one paid line. It does not read entitlement ids, so any produ
 1. Create a project with an iOS app and an Android app; add the store credentials from steps 2 and 3.
 2. Import the products, then create one entitlement, `pro`, and attach both products.
 3. Create an offering (`default`) with a monthly package pointing at those products. Add a paywall (RevenueCat Paywalls) if you want RevenueCat to render it.
-4. Integrations > Webhooks: add the URL above, set the authorization header value to the secret, choose the production and sandbox environments, and send a test event. A `200` response means the secret matches. Use the staging URL for sandbox purchases against staging.
+4. Integrations > Webhooks: add the URL above, set the authorization header value to the secret, choose the production and sandbox environments, and send a test event. A `200` response means the secret matches. Use the test URL for sandbox purchases against TST.
 
 ## 5. App (frontend)
 
@@ -64,7 +64,7 @@ Deleting an account also removes the user's RevenueCat subscriber record, which 
 
 ## 6. Test it
 
-1. Staging, sandbox tester: buy `pro_monthly`. In RevenueCat's customer view, confirm the event; in the app, confirm `plan: "pro"` and a higher `conversions.limit`.
+1. TST, sandbox tester: buy `pro_monthly`. In RevenueCat's customer view, confirm the event; in the app, confirm `plan: "pro"` and a higher `conversions.limit`.
 2. Cancel in the sandbox; `subscription.willRenew` becomes `false` and `plan` stays `pro` until `expiresAt`. Sandbox subscriptions renew every few minutes and expire after a handful of renewals, so you can watch an expiry drop the plan back to `free`.
 3. Use up the free conversions (a free user, or an expired trial): the third `read_swim_board` in a week should produce `quota_exceeded`.
 4. Check production with a real small purchase, or a promotional entitlement, before announcing.

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Profile.Application;
 using Profile.Application.Interfaces;
 using Profile.Application.Services;
@@ -18,8 +19,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddProfileInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<ProfileDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString("Database"))
+        services.AddDbContext<ProfileDbContext>((sp, options) => options
+            .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
             .UseSnakeCaseNamingConvention());
 
         services.AddKeyedScoped<IUnitOfWork, UnitOfWork<ProfileDbContext>>(ProfileKeys.UnitOfWork);
