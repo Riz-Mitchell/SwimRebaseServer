@@ -1,62 +1,35 @@
-name: Deploy to Azure App Service
+name: Deploy
 
+# Merges to master deploy TST, then PRO once the pro environment is approved.
+# Merges to releases/** and hotfix/** deploy TST only.
 on:
-  workflow_call:
-    inputs:
-      environment:
-        required: true
-        type: string
-      bicepParamFile:
-        description: 'Bicep parameter file basename under infra/ (e.g. tst, pro)'
-        required: true
-        type: string
+  push:
+    branches:
+      - master
+      - 'releases/**'
+      - 'hotfix/**'
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    steps:
-      - uses: actions/checkout@v4
+  build:
+    uses: ./.github/workflows/_build.yml
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
+  tst:
+    needs: build
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: tst
+      bicepParamFile: tst
+    secrets: inherit
 
-      - name: Restore
-        run: dotnet restore SwimRebase.slnx
-
-      - name: Publish REST
-        run: >
-          dotnet publish src/Presentation/REST/REST.csproj
-          -c Release
-          -o ${{ github.workspace }}/publish
-          --no-restore
-
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Provision/update infrastructure
-        uses: azure/arm-deploy@v2
-        with:
-          scope: resourcegroup
-          resourceGroupName: ${{ vars.AZURE_RESOURCE_GROUP }}
-          template: infra/main.bicep
-          parameters: infra/${{ inputs.bicepParamFile }}.bicepparam
-
-      - name: Deploy to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          package: ${{ github.workspace }}/publish
-
-      - name: Azure logout
-        if: always()
-        run: az logout || true
+  pro:
+    needs: tst
+    if: github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: pro
+      bicepParamFile: pro
+    secrets: inherit
