@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using Shared.Application;
 using Shared.Infrastructure;
 
@@ -25,8 +26,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddAuthInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<AuthDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString("Database"))
+        services.AddDbContext<AuthDbContext>((sp, options) => options
+            .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
             .UseSnakeCaseNamingConvention());
 
         services.AddHttpContextAccessor();

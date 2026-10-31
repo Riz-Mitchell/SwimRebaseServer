@@ -2,6 +2,7 @@ using Amazon.S3;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shared.Application.Storage;
+using Shared.Infrastructure.Database;
 using Shared.Infrastructure.Storage;
 
 namespace Shared.Infrastructure;
@@ -16,6 +17,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddSharedInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddDatabase(configuration);
+
         services.Configure<CloudflareR2Options>(configuration.GetSection(CloudflareR2Options.SectionName));
 
         services.AddSingleton<IAmazonS3>(sp =>

@@ -2,7 +2,7 @@
 
 _Last updated: 22/10/2026_
 
-Base URL: `https://swimrebase-pro.azurewebsites.net` (production) / `https://swimrebase-dev.azurewebsites.net` (staging)
+Base URL: `https://aueast-swimrebase-pro-app.azurewebsites.net` (PRO) / `https://aueast-swimrebase-tst-app.azurewebsites.net` (TST)
 
 All endpoints require `Authorization: Bearer <supabase-jwt>` unless stated otherwise (the only exception is the RevenueCat webhook, see [Billing](#billing--apibilling)). Requests without a valid token return `401 Unauthorized`.
 

@@ -6,6 +6,7 @@ using Billing.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Shared.Application;
 using Shared.Infrastructure;
 
@@ -19,8 +20,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddBillingInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddDbContext<BillingDbContext>(options => options
-            .UseNpgsql(configuration.GetConnectionString("Database"))
+        services.AddDbContext<BillingDbContext>((sp, options) => options
+            .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>())
             .UseSnakeCaseNamingConvention());
 
         services.Configure<BillingOptions>(configuration.GetSection(BillingOptions.SectionName));
