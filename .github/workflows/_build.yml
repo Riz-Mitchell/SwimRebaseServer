@@ -1,0 +1,34 @@
+name: Build
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore SwimRebase.slnx
+
+      - name: Publish REST
+        run: >
+          dotnet publish src/Presentation/REST/REST.csproj
+          -c Release
+          -o ${{ github.workspace }}/publish
+          --no-restore
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-package
+          path: ${{ github.workspace }}/publish
+          if-no-files-found: error

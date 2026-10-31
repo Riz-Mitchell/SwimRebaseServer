@@ -1,0 +1,29 @@
+name: Enforce source branch
+
+# master only accepts pull requests from releases/** or hotfix/** branches.
+on:
+  pull_request:
+    branches:
+      - master
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  check-source-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require releases/** or hotfix/** source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            releases/*|hotfix/*)
+              echo "OK: '$HEAD_REF' may be merged into master."
+              ;;
+            *)
+              echo "::error::PRs into master must come from releases/** or hotfix/** (got '$HEAD_REF')."
+              exit 1
+              ;;
+          esac
