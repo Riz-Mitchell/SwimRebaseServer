@@ -1,4 +1,4 @@
-name: Deploy - Staging
+name: Deploy - TST
 
 on:
   push:
@@ -12,6 +12,6 @@ jobs:
   deploy:
     uses: ./.github/workflows/deploy.yml
     with:
-      environment: staging
-      bicepParamFile: dev
+      environment: tst
+      bicepParamFile: tst
     secrets: inherit
