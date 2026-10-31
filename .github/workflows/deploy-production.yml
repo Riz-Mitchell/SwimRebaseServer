@@ -12,6 +12,6 @@ jobs:
   deploy:
     uses: ./.github/workflows/deploy.yml
     with:
-      environment: pro
-      bicepParamFile: pro
+      environment: production
+      bicepParamFile: prod
     secrets: inherit
