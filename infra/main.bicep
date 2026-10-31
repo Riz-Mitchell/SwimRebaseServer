@@ -1,4 +1,4 @@
-@description('Environment tag applied to all resources (e.g. dev, pro)')
+@description('Environment tag applied to all resources (e.g. tst, pro)')
 param environmentName string
 
 @description('Azure region')
@@ -10,6 +10,9 @@ param planSku string
 @description('Web app name (must be globally unique)')
 param webAppName string
 
+@description('Web app plan name')
+param webAppPlanName string
+
 @description('Key Vault name (must be globally unique, 3-24 chars)')
 param vaultName string
 
@@ -19,7 +22,7 @@ param aspNetCoreEnvironment string
 var keyVaultSecretsUserRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
 
 resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: '${webAppName}-plan'
+  name: webAppPlanName
   location: location
   kind: 'linux'
   sku: {
@@ -55,8 +58,6 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
           name: 'ASPNETCORE_ENVIRONMENT'
           value: aspNetCoreEnvironment
         }
-        // Runs the app from the deployed zip, mounted read-only, so a deploy swaps the whole package instead of overwriting DLLs the
-        // running process has open (which surfaced as BadImageFormatException on requests that landed mid-deploy).
         {
           name: 'WEBSITE_RUN_FROM_PACKAGE'
           value: '1'
