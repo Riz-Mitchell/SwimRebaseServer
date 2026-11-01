@@ -6,6 +6,11 @@ on:
       - master
       - 'releases/**'
       - 'hotfix/**'
+  # Gives every master tip a passing build-and-test, which new releases/** and hotfix/** branches require to be created.
+  push:
+    branches:
+      - master
+  workflow_dispatch:
 
 permissions:
   contents: read
