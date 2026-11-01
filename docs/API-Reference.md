@@ -324,6 +324,10 @@ Newest first. All parameters optional (`limit` 1-100, default 50).
 
 `include=content` adds each session's `content` (the tree, exactly as `GET /api/sessions/{id}` returns it) to every item, so a page of full sessions is one call instead of one per session. Items then look like `{ id, performedOn, title, course, unit, source, totalDistance, createdAt, content }`; there is no `outline` in the list. With `include=content`, `limit` is capped at 20 (a larger value is treated as 20). Any other `include` value is a `400`.
 
+### `GET /api/sessions/stats`
+How many sessions the caller has saved.
+**Response:** `{ "sessionCount": 12 }`. It is `0` for a user with no sessions. The count is stored and kept in step with every save and delete, so it is cheap to call and does not scan the sessions.
+
 ### `GET /api/sessions/{id}`
 **Response:** the summary fields above (without `createdAt`) plus `content` (the tree) and `outline` (numbered text). `404` if it is not the caller's.
 

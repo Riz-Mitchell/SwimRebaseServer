@@ -53,6 +53,75 @@ public class SessionServiceTests
     }
 
     [Fact]
+    public async Task Saving_a_session_adds_one_to_the_swimmers_count()
+    {
+        var stats = new InMemorySessionStatsRepository();
+        var service = TestSessions.Service(new InMemorySessionRepository(), stats: stats);
+        var other = Guid.NewGuid();
+
+        Assert.Equal(0, await service.CountAsync(UserId, CancellationToken.None));
+
+        await service.CreateAsync(UserId, Sample(), Day, PoolCourse.Scm, null, SessionSource.Ai, Guid.NewGuid(), CancellationToken.None);
+        await service.CreateAsync(UserId, Sample(), Day, PoolCourse.Scm, null, SessionSource.Logged, null, CancellationToken.None);
+        await service.CreateAsync(other, Sample(), Day, PoolCourse.Scm, null, SessionSource.Logged, null, CancellationToken.None);
+
+        Assert.Equal(2, await service.CountAsync(UserId, CancellationToken.None));
+        Assert.Equal(1, await service.CountAsync(other, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Saving_the_same_draft_twice_counts_it_once()
+    {
+        var stats = new InMemorySessionStatsRepository();
+        var service = TestSessions.Service(new InMemorySessionRepository(), stats: stats);
+        var draftId = Guid.NewGuid();
+
+        await service.CreateAsync(UserId, Sample(), Day, PoolCourse.Scy, null, SessionSource.Ai, draftId, CancellationToken.None);
+        await service.CreateAsync(UserId, Sample(), Day, PoolCourse.Scy, null, SessionSource.Ai, draftId, CancellationToken.None);
+
+        Assert.Equal(1, await service.CountAsync(UserId, CancellationToken.None));
+        Assert.Equal(1, stats.Adjustments);
+    }
+
+    [Fact]
+    public async Task Deleting_a_session_removes_it_with_its_facts_and_takes_one_off_the_count()
+    {
+        var repository = new InMemorySessionRepository();
+        var service = TestSessions.Service(repository);
+        var kept = await service.CreateAsync(UserId, Sample(), Day, PoolCourse.Scm, null, SessionSource.Logged, null, CancellationToken.None);
+        var removed = await service.CreateAsync(UserId, Sample(), Day, PoolCourse.Scm, null, SessionSource.Logged, null, CancellationToken.None);
+
+        await service.DeleteAsync(UserId, removed.Id, CancellationToken.None);
+
+        Assert.Equal(1, await service.CountAsync(UserId, CancellationToken.None));
+        Assert.Equal(kept.Id, Assert.Single(repository.Sessions).Id);
+        Assert.All(repository.Facts, f => Assert.Equal(kept.Id, f.SessionId));
+    }
+
+    [Fact]
+    public async Task Deleting_someone_elses_or_a_missing_session_fails_and_leaves_the_count_alone()
+    {
+        var service = TestSessions.Service(new InMemorySessionRepository());
+        var theirs = await service.CreateAsync(Guid.NewGuid(), Sample(), Day, PoolCourse.Scm, null, SessionSource.Logged, null, CancellationToken.None);
+        await service.CreateAsync(UserId, Sample(), Day, PoolCourse.Scm, null, SessionSource.Logged, null, CancellationToken.None);
+
+        await Assert.ThrowsAsync<SessionNotFoundException>(() => service.DeleteAsync(UserId, theirs.Id, CancellationToken.None));
+        await Assert.ThrowsAsync<SessionNotFoundException>(() => service.DeleteAsync(UserId, Guid.NewGuid(), CancellationToken.None));
+
+        Assert.Equal(1, await service.CountAsync(UserId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task The_count_never_goes_below_zero()
+    {
+        var stats = new InMemorySessionStatsRepository();
+
+        await stats.AdjustAsync(UserId, -1, DateTimeOffset.UtcNow, CancellationToken.None);
+
+        Assert.Equal(0, await stats.GetCountAsync(UserId, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task A_session_without_a_title_is_named_from_what_was_swum()
     {
         var saved = await TestSessions.Service(new InMemorySessionRepository())
