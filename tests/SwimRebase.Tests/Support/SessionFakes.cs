@@ -18,8 +18,8 @@ internal static class TestSessions
 
     public static IProgressionDefaultsProvider Defaults(ProgressionDefaults? defaults = null) => new FixedProgressionDefaults(defaults ?? ProgressionDefaults.BuiltIn);
 
-    public static SessionService Service(InMemorySessionRepository repository, ProgressionDefaults? defaults = null) =>
-        new(repository, Ingest(), Terms(), Defaults(defaults), new NoOpUnitOfWork());
+    public static SessionService Service(InMemorySessionRepository repository, ProgressionDefaults? defaults = null, InMemorySessionStatsRepository? stats = null) =>
+        new(repository, stats ?? new InMemorySessionStatsRepository(), Ingest(), Terms(), Defaults(defaults), new NoOpUnitOfWork());
 }
 
 internal sealed class FixedProgressionDefaults(ProgressionDefaults defaults) : IProgressionDefaultsProvider
@@ -55,6 +55,12 @@ internal sealed class InMemorySessionRepository : ISessionRepository
     public Task<Session?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Sessions.FirstOrDefault(s => s.Id == id && s.OwnerId == userId));
 
+    public void Remove(Session session)
+    {
+        Sessions.Remove(session);
+        Facts.RemoveAll(f => f.SessionId == session.Id);
+    }
+
     public Task<Session?> FindBySourceDraftAsync(Guid userId, Guid draftId, CancellationToken cancellationToken) =>
         Task.FromResult(Sessions.FirstOrDefault(s => s.SourceDraftId == draftId && s.OwnerId == userId));
 
@@ -74,6 +80,23 @@ internal sealed class InMemorySessionRepository : ISessionRepository
         Facts.AddRange(facts);
         return Task.CompletedTask;
     }
+}
+
+internal sealed class InMemorySessionStatsRepository : ISessionStatsRepository
+{
+    private readonly Dictionary<Guid, int> _counts = [];
+
+    /// <summary>How many times the count was adjusted, to show a save that returned early did not touch it.</summary>
+    public int Adjustments { get; private set; }
+
+    public Task AdjustAsync(Guid userId, int delta, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        Adjustments++;
+        _counts[userId] = Math.Max(_counts.GetValueOrDefault(userId) + delta, 0);
+        return Task.CompletedTask;
+    }
+
+    public Task<int> GetCountAsync(Guid userId, CancellationToken cancellationToken) => Task.FromResult(_counts.GetValueOrDefault(userId));
 }
 
 internal sealed class InMemoryPreferencesRepository : ISessionPreferencesRepository
