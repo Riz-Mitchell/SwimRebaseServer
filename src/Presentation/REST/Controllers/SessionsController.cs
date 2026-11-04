@@ -43,6 +43,11 @@ public sealed class SessionsController(
         return Ok(found.Select(SessionSummaryResponse.FromEntity));
     }
 
+    /// <summary>How many sessions the swimmer has saved. Read from a stored count, so it stays cheap however many sessions there are.</summary>
+    [HttpGet("stats")]
+    public async Task<IActionResult> GetStats(CancellationToken cancellationToken) =>
+        Ok(new SessionStatsResponse(await sessions.CountAsync(currentUser.UserId, cancellationToken)));
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken)
     {
@@ -224,6 +229,8 @@ public sealed record SessionPreferencesResponse(int DefaultEffort, string Effort
 {
     public static SessionPreferencesResponse From(SessionPreferencesView view) => new(view.DefaultEffort, view.EffortScale, view.CustomEffortScale, view.DisplayUnit, view.DescendTarget);
 }
+
+public sealed record SessionStatsResponse(int SessionCount);
 
 public enum SessionInclude { Content }
 

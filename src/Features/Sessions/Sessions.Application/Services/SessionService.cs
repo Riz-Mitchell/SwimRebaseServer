@@ -34,6 +34,7 @@ public sealed class SessionNotFoundException(Guid id) : Exception($"No session w
 /// <summary>Saves and edits sessions. The tree, the total and the fact rows are always written together, so they cannot drift apart.</summary>
 public sealed class SessionService(
     ISessionRepository sessions,
+    ISessionStatsRepository stats,
     SessionIngest ingest,
     IPersonalIntensityProvider personal,
     IProgressionDefaultsProvider progressionDefaults,
@@ -85,8 +86,15 @@ public sealed class SessionService(
         // An explicit title wins, then the one the converter wrote, then one built from what was swum.
         session.Title = SessionTitles.Clean(title) ?? SessionTitles.Clean(content.Title) ?? SessionTitles.Build(prepared, session.Unit, performedOn);
 
-        sessions.Add(session, SessionFactBuilder.Build(session, prepared));
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        // The session and the count it adds to commit together, or neither does.
+        await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
+        {
+            sessions.Add(session, SessionFactBuilder.Build(session, prepared));
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await stats.AdjustAsync(userId, 1, now, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
         _logger.LogInformation("[{ClassName}] Saved session {SessionId} '{Title}' ({TotalDistance} {Unit}) for user {UserId} from {Source}",
             nameof(SessionService), session.Id, session.Title, session.TotalDistance, session.Unit, userId, source);
         return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, prepared);
@@ -118,6 +126,31 @@ public sealed class SessionService(
             nameof(SessionService), edits.Count, id, userId, session.TotalDistance);
         return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, edited);
     }
+
+    /// <summary>Deletes a session and takes it off the swimmer's count in the same transaction.</summary>
+    /// <exception cref="SessionNotFoundException">There is no such session for this user.</exception>
+    public async Task DeleteAsync(Guid userId, Guid id, CancellationToken cancellationToken)
+    {
+        var session = await sessions.FindAsync(userId, id, cancellationToken);
+        if (session is null)
+        {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to delete session {SessionId}, which does not exist for them", nameof(SessionService), userId, id);
+            throw new SessionNotFoundException(id);
+        }
+
+        await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
+        {
+            sessions.Remove(session);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await stats.AdjustAsync(userId, -1, DateTimeOffset.UtcNow, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        _logger.LogInformation("[{ClassName}] Deleted session {SessionId} for user {UserId}", nameof(SessionService), id, userId);
+    }
+
+    /// <summary>How many sessions the swimmer has saved, read from their stats row rather than counted.</summary>
+    public Task<int> CountAsync(Guid userId, CancellationToken cancellationToken) => stats.GetCountAsync(userId, cancellationToken);
 
     public async Task<SessionView> GetAsync(Guid userId, Guid id, CancellationToken cancellationToken)
     {
