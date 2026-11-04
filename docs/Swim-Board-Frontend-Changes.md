@@ -92,13 +92,10 @@ Intensity is now a percent of maximum effort (1-100) instead of a 1-10 level. Fu
 - Refetch the entitlement after a purchase or restore. The server learns about a purchase from RevenueCat's webhook, which can lag the app by a few seconds, so retry briefly if the plan has not changed.
 - The RevenueCat SDK must be logged in with the user's id (`Purchases.logIn(userId)`) or the server cannot match purchases to users. See `docs/RevenueCat-Setup.md`.
 
-## Onboarding goal is multi-select (changed)
+## Onboarding questionnaire removed
 
-- `GET /api/profile/onboarding/questionnaire`: each question now has `multiple` and `answers`, and each option has `exclusive`. `goal` is `multiple: true`; render those questions as checkboxes and the rest as radio buttons, from the flag, not from the question key. For a multiple question `answer` is null; read `answers` (an array, empty until answered).
-- The `Other` goal option is `exclusive: true`: when the user ticks it, untick everything else; when they tick another option, untick it. The server rejects the combination with `400`.
-- No cap on the number of goals. At least one is required.
-- `PUT .../onboarding/questionnaire`: send `"goal": ["DataInsights", "GeneralFitness"]` (the full selection each time; it replaces the saved one). A plain string is still accepted as a one-item selection, so `level` is unchanged.
-- `GET /api/profile` `answers`: `goal` is now an array (`"goal": ["DataInsights"]`), `level` is still a string. Anything that read `answers.goal` as a string must handle an array. A user who answered before this change has a one-item array.
+- `GET`/`PUT /api/profile/onboarding/questionnaire` are gone, and `GET /api/profile` no longer returns `answers`. Onboarding starts at `FirstSession`; `Questionnaire` is no longer a step.
+- All users' onboarding was reset to `FirstSession` (pre-production). Remove the questionnaire screen from the client.
 
 ## Titles (changed)
 

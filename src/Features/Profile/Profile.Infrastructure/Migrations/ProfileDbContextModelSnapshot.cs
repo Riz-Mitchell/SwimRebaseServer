@@ -22,32 +22,6 @@ namespace Profile.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Profile.Domain.Models.ProfileAnswer", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.Property<string>("QuestionKey")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("question_key");
-
-                    b.Property<string>("AnswerValue")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("answer_value");
-
-                    b.Property<DateTimeOffset>("AnsweredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("answered_at");
-
-                    b.HasKey("UserId", "QuestionKey", "AnswerValue")
-                        .HasName("pk_profile_answers");
-
-                    b.ToTable("profile_answers", (string)null);
-                });
-
             modelBuilder.Entity("Profile.Domain.Models.UserProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -93,23 +67,6 @@ namespace Profile.Infrastructure.Migrations
                         .HasName("pk_user_profiles");
 
                     b.ToTable("user_profiles", (string)null);
-                });
-
-            modelBuilder.Entity("Profile.Domain.Models.ProfileAnswer", b =>
-                {
-                    b.HasOne("Profile.Domain.Models.UserProfile", "UserProfile")
-                        .WithMany("Answers")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_profile_answers_user_profiles_user_id");
-
-                    b.Navigation("UserProfile");
-                });
-
-            modelBuilder.Entity("Profile.Domain.Models.UserProfile", b =>
-                {
-                    b.Navigation("Answers");
                 });
 #pragma warning restore 612, 618
         }

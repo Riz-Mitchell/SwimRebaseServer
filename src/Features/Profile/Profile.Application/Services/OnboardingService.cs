@@ -29,99 +29,10 @@ public sealed class OnboardingService(
         return profile;
     }
 
-    /// <summary>Each question's answers replace what was saved for it; a question not in <paramref name="answers"/> keeps its answers.</summary>
-    public async Task<UserProfile> SaveAnswersAsync(
-        Guid userId, IReadOnlyDictionary<string, IReadOnlyList<string>> answers, CancellationToken cancellationToken)
-    {
-        var chosen = new Dictionary<string, List<string>>();
-        foreach (var (key, values) in answers)
-        {
-            try
-            {
-                chosen[key] = Validate(key, values);
-            }
-            catch (InvalidOnboardingRequestException ex)
-            {
-                _logger.LogWarning("[{ClassName}] Rejected answer to '{QuestionKey}' from user {UserId}: {Reason}", nameof(OnboardingService), key, userId, ex.Message);
-                throw;
-            }
-        }
-
-        var profile = await GetAsync(userId, cancellationToken);
-        var now = DateTimeOffset.UtcNow;
-
-        foreach (var (key, values) in chosen)
-        {
-            foreach (var stale in profile.Answers.Where(a => a.QuestionKey == key && !values.Contains(a.AnswerValue)).ToList())
-            {
-                profile.Answers.Remove(stale);
-                profiles.RemoveAnswer(stale);
-            }
-
-            foreach (var value in values.Where(v => profile.Answers.All(a => a.QuestionKey != key || a.AnswerValue != v)))
-            {
-                var answer = new ProfileAnswer { UserId = userId, QuestionKey = key, AnswerValue = value, AnsweredAt = now };
-                profile.Answers.Add(answer);
-                profiles.AddAnswer(answer);
-            }
-        }
-
-        profile.UpdatedAt = now;
-        var advanced = profile.CurrentStep == OnboardingStep.Questionnaire && HasAnsweredAll(profile);
-        if (advanced)
-        {
-            Advance(profile, now);
-        }
-
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("[{ClassName}] Saved answers to {QuestionCount} question(s) for user {UserId}{Advanced}",
-            nameof(OnboardingService), chosen.Count, userId, advanced ? ", completing the questionnaire" : string.Empty);
-        if (advanced)
-        {
-            await TrackAdvanceAsync(profile, OnboardingStep.Questionnaire, cancellationToken);
-        }
-
-        return profile;
-    }
-
-    private static List<string> Validate(string key, IReadOnlyList<string> values)
-    {
-        var question = QuestionnaireCatalog.Questions.FirstOrDefault(q => q.Key == key)
-            ?? throw new InvalidOnboardingRequestException($"Unknown question '{key}'.");
-        var distinct = values.Distinct().ToList();
-        if (distinct.Count == 0)
-        {
-            throw new InvalidOnboardingRequestException($"Choose an answer to '{key}'.");
-        }
-
-        if (!question.Multiple && distinct.Count > 1)
-        {
-            throw new InvalidOnboardingRequestException($"'{key}' takes one answer.");
-        }
-
-        foreach (var value in distinct)
-        {
-            var option = question.Options.FirstOrDefault(o => o.Value == value)
-                ?? throw new InvalidOnboardingRequestException($"'{value}' is not a valid answer to '{key}'.");
-            if (option.Exclusive && distinct.Count > 1)
-            {
-                throw new InvalidOnboardingRequestException($"'{value}' cannot be combined with other answers to '{key}'.");
-            }
-        }
-
-        return distinct;
-    }
-
     public async Task<UserProfile> ChooseFirstSessionPathAsync(
         Guid userId, FirstSessionPath path, CancellationToken cancellationToken)
     {
         var profile = await GetAsync(userId, cancellationToken);
-        if (profile.CurrentStep < OnboardingStep.FirstSession)
-        {
-            _logger.LogWarning("[{ClassName}] User {UserId} chose a first-session path while still at step {Step}", nameof(OnboardingService), userId, profile.CurrentStep);
-            throw new OnboardingStepConflictException("Finish the questionnaire first.");
-        }
-
         profile.FirstSessionPath = path;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -150,12 +61,6 @@ public sealed class OnboardingService(
         {
             _logger.LogWarning("[{ClassName}] User {UserId} tried to complete {Step} while at {CurrentStep}", nameof(OnboardingService), userId, step, profile.CurrentStep);
             throw new OnboardingStepConflictException($"Cannot complete '{step}' while the current step is '{profile.CurrentStep}'.");
-        }
-
-        if (step == OnboardingStep.Questionnaire && !HasAnsweredAll(profile))
-        {
-            _logger.LogWarning("[{ClassName}] User {UserId} tried to complete the questionnaire with unanswered questions", nameof(OnboardingService), userId);
-            throw new InvalidOnboardingRequestException("Answer every questionnaire question first.");
         }
 
         if (step == OnboardingStep.FirstSession && profile.FirstSessionPath is null)
@@ -210,9 +115,6 @@ public sealed class OnboardingService(
             nameof(OnboardingService), userId, remindersEnabled, reminderLeadMinutes);
         return profile;
     }
-
-    public static bool HasAnsweredAll(UserProfile profile) =>
-        QuestionnaireCatalog.Questions.All(q => profile.Answers.Any(a => a.QuestionKey == q.Key));
 
     private async Task<UserProfile> AdvanceAndSaveAsync(UserProfile profile, CancellationToken cancellationToken)
     {
