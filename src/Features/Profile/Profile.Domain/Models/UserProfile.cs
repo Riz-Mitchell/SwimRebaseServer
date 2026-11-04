@@ -26,6 +26,4 @@ public class UserProfile
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
-
-    public List<ProfileAnswer> Answers { get; set; } = [];
 }

@@ -19,10 +19,5 @@ public sealed class UserProfileConfiguration : IEntityTypeConfiguration<UserProf
         builder.Property(p => p.ReminderLeadMinutes).IsRequired();
         builder.Property(p => p.CreatedAt).IsRequired();
         builder.Property(p => p.UpdatedAt).IsRequired();
-
-        builder.HasMany(p => p.Answers)
-            .WithOne(a => a.UserProfile)
-            .HasForeignKey(a => a.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }
