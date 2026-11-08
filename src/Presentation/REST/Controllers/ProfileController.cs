@@ -33,9 +33,10 @@ public sealed class ProfileController(OnboardingService onboarding, ICurrentUser
             OnboardingStatusResponse.FromEntity);
 
     [HttpPost("onboarding/steps/{step}/complete")]
-    public Task<IActionResult> CompleteStep(OnboardingStep step, CancellationToken cancellationToken) =>
+    public Task<IActionResult> CompleteStep(
+        OnboardingStep step, [FromBody] CompleteStepRequest? request, CancellationToken cancellationToken) =>
         RunAsync(
-            () => onboarding.CompleteStepAsync(currentUser.UserId, step, cancellationToken),
+            () => onboarding.CompleteStepAsync(currentUser.UserId, step, cancellationToken, request?.Version),
             OnboardingStatusResponse.FromEntity);
 
     [HttpPost("onboarding/steps/{step}/skip")]
@@ -43,6 +44,21 @@ public sealed class ProfileController(OnboardingService onboarding, ICurrentUser
         RunAsync(
             () => onboarding.SkipStepAsync(currentUser.UserId, step, cancellationToken),
             OnboardingStatusResponse.FromEntity);
+
+    /// <summary>Records (or re-records, for new wording) the user's consent to send photos and chat messages to the AI provider.</summary>
+    [HttpPut("ai-consent")]
+    public Task<IActionResult> GrantAiConsent([FromBody] CompleteStepRequest? request, CancellationToken cancellationToken) =>
+        RunAsync(
+            () => onboarding.GrantAiConsentAsync(currentUser.UserId, request?.Version, cancellationToken),
+            AiConsentResponse.FromEntity);
+
+    /// <summary>Withdraws consent: AI endpoints return 403 <c>ai_consent_required</c> until it is given again.</summary>
+    [HttpDelete("ai-consent")]
+    public async Task<IActionResult> RevokeAiConsent(CancellationToken cancellationToken)
+    {
+        await onboarding.RevokeAiConsentAsync(currentUser.UserId, cancellationToken);
+        return NoContent();
+    }
 
     [HttpPut("notification-preferences")]
     public Task<IActionResult> UpdateNotificationPreferences(
@@ -71,6 +87,15 @@ public sealed class ProfileController(OnboardingService onboarding, ICurrentUser
     }
 }
 
+/// <summary>Body for completing a step. Only <c>AiConsent</c> reads it: <c>Version</c> identifies the consent wording shown.</summary>
+public sealed record CompleteStepRequest(string? Version);
+
+public sealed record AiConsentResponse(string Version, DateTimeOffset At)
+{
+    public static AiConsentResponse? FromEntity(UserProfile profile) =>
+        profile.HasAiConsent ? new AiConsentResponse(profile.AiConsentVersion!, profile.AiConsentAt!.Value) : null;
+}
+
 public sealed record ChooseFirstSessionRequest(FirstSessionPath Path);
 
 public sealed record NotificationPreferencesRequest(bool RemindersEnabled, int ReminderLeadMinutes);
@@ -83,7 +108,8 @@ public sealed record OnboardingStatusResponse(
     OnboardingStep ResumeStep,
     IReadOnlyList<OnboardingStep> CompletedSteps,
     FirstSessionPath? FirstSessionPath,
-    ProTrialResponse? ProTrial)
+    ProTrialResponse? ProTrial,
+    AiConsentResponse? AiConsent)
 {
     public static OnboardingStatusResponse FromEntity(UserProfile profile) => new(
         profile.CurrentStep == OnboardingStep.Completed ? "Completed" : "InProgress",
@@ -91,20 +117,23 @@ public sealed record OnboardingStatusResponse(
         profile.CurrentStep,
         Enum.GetValues<OnboardingStep>().Where(s => s < profile.CurrentStep).ToList(),
         profile.FirstSessionPath,
-        ProfileResponse.TrialOf(profile));
+        ProfileResponse.TrialOf(profile),
+        AiConsentResponse.FromEntity(profile));
 }
 
 public sealed record ProfileResponse(
     bool OnboardingCompleted,
     bool RemindersEnabled,
     int ReminderLeadMinutes,
-    ProTrialResponse? ProTrial)
+    ProTrialResponse? ProTrial,
+    AiConsentResponse? AiConsent)
 {
     public static ProfileResponse FromEntity(UserProfile profile) => new(
         profile.CurrentStep == OnboardingStep.Completed,
         profile.RemindersEnabled,
         profile.ReminderLeadMinutes,
-        TrialOf(profile));
+        TrialOf(profile),
+        AiConsentResponse.FromEntity(profile));
 
     public static ProTrialResponse? TrialOf(UserProfile profile) =>
         profile.ProTrialEndsAt is { } endsAt

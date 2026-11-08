@@ -507,23 +507,26 @@ A timed swim counts towards `GET /api/sessions/metrics` as training volume (its 
 
 ## Profile & onboarding — `/api/profile`
 
-Onboarding progress is tracked server-side so a user who closes the app can resume. On launch call `GET /api/profile/onboarding`: if `status` is `Completed`, go straight into the app, otherwise resume at `resumeStep`. A profile is created on first call (existing users before launch are already `Completed`).
+Onboarding progress is tracked server-side so a user who closes the app can resume. On launch call `GET /api/profile/onboarding`: if `status` is `Completed`, go straight into the app, otherwise resume at `resumeStep`. A profile is created on first call (the AddAiConsent migration reset every pre-launch user to `AiConsent`).
 
-Steps, in order: `FirstSession` → `ReviewWorkout` → `ProTrial` → `Completed`. Only `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
+Steps, in order: `AiConsent` → `FirstSession` → `ReviewWorkout` → `ProTrial` → `Completed`. Only `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
 
 ### `GET /api/profile`
-**Response:** `{ "onboardingCompleted": bool, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null }`
+**Response:** `{ "onboardingCompleted": bool, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null, "aiConsent": { "version": "2026-11-01", "at": "datetime" } | null }`
+
+`aiConsent` is null when no consent is held (never given, or withdrawn); it is the place to check consent. The onboarding status carries the same field.
 
 ### `GET /api/profile/onboarding`
 **Response:**
 ```json
 {
   "status": "InProgress | Completed",
-  "currentStep": "FirstSession",
-  "resumeStep": "FirstSession",
+  "currentStep": "AiConsent",
+  "resumeStep": "AiConsent",
   "completedSteps": [],
   "firstSessionPath": "Upload | Sample | null",
-  "proTrial": { "endsAt": "datetime", "daysRemaining": 21 }
+  "proTrial": { "endsAt": "datetime", "daysRemaining": 21 },
+  "aiConsent": { "version": "2026-11-01", "at": "datetime" }
 }
 ```
 `proTrial` is null until onboarding completes; the 21-day Pro trial starts then.
@@ -534,8 +537,19 @@ Records which branch the user picked for the first session: `{ "path": "Upload" 
 ### `POST /api/profile/onboarding/steps/{step}/complete`
 Marks the current step done and advances. Completing a step the user is already past is a no-op; completing one ahead of the current step returns `409`. `FirstSession` needs a chosen path, otherwise `400`. Completing `ProTrial` finishes onboarding. **Response:** onboarding status.
 
+`AiConsent` takes a body, `{ "version": "2026-11-01" }`: the id of the consent wording shown (stored as given, 1–50 characters; no quotes or backslashes). A missing or empty `version` returns `400 { "error": "..." }` and the step stays. Completing it records the version and time and advances; re-completing keeps the first time. No other step reads a body.
+
 ### `POST /api/profile/onboarding/steps/{step}/skip`
-Only valid for `ProTrial` (`400` otherwise). **Response:** onboarding status.
+Only valid for `ProTrial` (`400` otherwise); `AiConsent` cannot be skipped. **Response:** onboarding status.
+
+### `PUT /api/profile/ai-consent`
+Body `{ "version": "2026-11-01" }`. Records consent outside onboarding (users who finished or passed `AiConsent` before consent existed, or who withdrew). Does not move onboarding. Sending the version already held keeps the original time; a different version replaces it. Missing or empty `version` → `400`. **Response:** `{ "version": "...", "at": "datetime" }`.
+
+### `DELETE /api/profile/ai-consent`
+Withdraws consent (`204`, also when none was held). Onboarding does not move. The AI endpoints refuse the user again until consent is given.
+
+### AI consent guard
+These return **`403 { "error": "AI consent required", "code": "ai_consent_required" }`** when the user holds no consent, before any stream starts: `POST /api/ai/conversations/messages`, `POST /api/ai/conversations/{id}/messages`, and `POST /api/ai/tool-requests/{id}/resolve`, `/answer` and `/cancel` (each resumes the AI turn). Image upload/confirm/delete, listing, history and usage do not call the provider and are not guarded.
 
 ### `PUT /api/profile/notification-preferences`
 **Body:** `{ "remindersEnabled": true, "reminderLeadMinutes": 60 }` - lead time must be 5-1440. **Response:** profile (as `GET /api/profile`).
