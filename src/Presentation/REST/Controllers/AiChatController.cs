@@ -9,6 +9,7 @@ using Auth.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using REST.Filters;
 using Shared.Application.Storage;
 
 namespace REST.Controllers;
@@ -36,6 +37,7 @@ public sealed class AiChatController(
     // Two templates because an optional route parameter that isn't the final segment (this one is
     // followed by "/messages") doesn't collapse correctly when omitted - ASP.NET Core won't match
     // "conversations/messages" against "conversations/{conversationId:guid?}/messages" on its own.
+    [RequireAiConsent]
     [HttpPost("conversations/messages")]
     [HttpPost("conversations/{conversationId:guid}/messages")]
     public Task SendMessage(Guid? conversationId, [FromBody] SendMessageRequest request, CancellationToken cancellationToken) =>
@@ -44,6 +46,7 @@ public sealed class AiChatController(
             nameof(SendMessage),
             cancellationToken);
 
+    [RequireAiConsent]
     [HttpPost("tool-requests/{toolExecutionRequestId:guid}/resolve")]
     public Task ResolveToolRequest(
         Guid toolExecutionRequestId, [FromBody] ResolveToolRequestBody body, CancellationToken cancellationToken) =>
@@ -52,6 +55,7 @@ public sealed class AiChatController(
             nameof(ResolveToolRequest),
             cancellationToken);
 
+    [RequireAiConsent]
     [HttpPost("tool-requests/{toolExecutionRequestId:guid}/answer")]
     public Task AnswerToolRequest(
         Guid toolExecutionRequestId, [FromBody] AnswerToolRequestBody body, CancellationToken cancellationToken) =>
@@ -61,6 +65,7 @@ public sealed class AiChatController(
             cancellationToken);
 
     /// <summary>Abandons a running sub-agent (its tool call is InProgress), unblocking the chat. Whatever it was waiting on is denied.</summary>
+    [RequireAiConsent]
     [HttpPost("tool-requests/{toolExecutionRequestId:guid}/cancel")]
     public Task CancelToolRequest(Guid toolExecutionRequestId, CancellationToken cancellationToken) =>
         StreamEventsAsync(

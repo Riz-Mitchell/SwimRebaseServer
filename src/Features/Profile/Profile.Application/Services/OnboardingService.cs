@@ -41,7 +41,8 @@ public sealed class OnboardingService(
     }
 
     /// <summary>Completing a step the user is already past is a no-op, so a client retry is safe.</summary>
-    public async Task<UserProfile> CompleteStepAsync(Guid userId, OnboardingStep step, CancellationToken cancellationToken)
+    public async Task<UserProfile> CompleteStepAsync(
+        Guid userId, OnboardingStep step, CancellationToken cancellationToken, string? aiConsentVersion = null)
     {
         var profile = await GetAsync(userId, cancellationToken);
         if (step == OnboardingStep.Completed)
@@ -50,10 +51,18 @@ public sealed class OnboardingService(
             throw new InvalidOnboardingRequestException("'Completed' is not a step that can be completed.");
         }
 
+        var consentVersion = step == OnboardingStep.AiConsent ? ValidateConsentVersion(userId, aiConsentVersion) : null;
+
         if (step < profile.CurrentStep)
         {
             _logger.LogInformation("[{ClassName}] User {UserId} re-completed {Step} but is already at {CurrentStep}; nothing to do",
                 nameof(OnboardingService), userId, step, profile.CurrentStep);
+            if (consentVersion is not null && !profile.HasAiConsent)
+            {
+                // Past the step but holding no consent (withdrawn): accepting again restores it.
+                await GrantConsentAsync(profile, consentVersion, cancellationToken);
+            }
+
             return profile;
         }
 
@@ -69,7 +78,79 @@ public sealed class OnboardingService(
             throw new InvalidOnboardingRequestException("Choose how to analyse the first session first.");
         }
 
+        if (consentVersion is not null && !profile.HasAiConsent)
+        {
+            SetConsent(profile, consentVersion, DateTimeOffset.UtcNow);
+        }
+
         return await AdvanceAndSaveAsync(profile, cancellationToken);
+    }
+
+    /// <summary>
+    /// Records acceptance outside onboarding (users who onboarded before consent existed, or who withdrew).
+    /// Re-accepting the version already held keeps the original timestamp; a different version replaces it.
+    /// </summary>
+    public async Task<UserProfile> GrantAiConsentAsync(Guid userId, string? version, CancellationToken cancellationToken)
+    {
+        var consentVersion = ValidateConsentVersion(userId, version);
+        var profile = await GetAsync(userId, cancellationToken);
+        if (profile.HasAiConsent && profile.AiConsentVersion == consentVersion)
+        {
+            return profile;
+        }
+
+        await GrantConsentAsync(profile, consentVersion, cancellationToken);
+        return profile;
+    }
+
+    /// <summary>Withdraws consent; AI endpoints refuse the user again. Does not move onboarding. Withdrawing when none is held is a no-op.</summary>
+    public async Task<UserProfile> RevokeAiConsentAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var profile = await GetAsync(userId, cancellationToken);
+        if (!profile.HasAiConsent)
+        {
+            return profile;
+        }
+
+        profile.AiConsentVersion = null;
+        profile.AiConsentAt = null;
+        profile.UpdatedAt = DateTimeOffset.UtcNow;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] User {UserId} withdrew AI consent", nameof(OnboardingService), userId);
+        await eventTracker.TrackAsync(userId, EventTypes.AiConsentWithdrawn, null, cancellationToken);
+        return profile;
+    }
+
+    public async Task<bool> HasAiConsentAsync(Guid userId, CancellationToken cancellationToken) =>
+        (await profiles.FindAsync(userId, cancellationToken))?.HasAiConsent == true;
+
+    private async Task GrantConsentAsync(UserProfile profile, string version, CancellationToken cancellationToken)
+    {
+        SetConsent(profile, version, DateTimeOffset.UtcNow);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] User {UserId} accepted AI consent version {Version}", nameof(OnboardingService), profile.Id, version);
+        await eventTracker.TrackAsync(profile.Id, EventTypes.AiConsentGranted, $"{{\"version\":\"{version}\"}}", cancellationToken);
+    }
+
+    private static void SetConsent(UserProfile profile, string version, DateTimeOffset now)
+    {
+        profile.AiConsentVersion = version;
+        profile.AiConsentAt = now;
+        profile.UpdatedAt = now;
+    }
+
+    private string ValidateConsentVersion(Guid userId, string? version)
+    {
+        var trimmed = version?.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed.Length > UserProfile.MaxAiConsentVersionLength
+            || trimmed.Any(c => char.IsControl(c) || c is '"' or '\\'))
+        {
+            _logger.LogWarning("[{ClassName}] User {UserId} sent an invalid AI consent version", nameof(OnboardingService), userId);
+            throw new InvalidOnboardingRequestException(
+                $"A consent 'version' of 1 to {UserProfile.MaxAiConsentVersionLength} characters (no quotes, backslashes or control characters) is required.");
+        }
+
+        return trimmed;
     }
 
     public async Task<UserProfile> SkipStepAsync(Guid userId, OnboardingStep step, CancellationToken cancellationToken)

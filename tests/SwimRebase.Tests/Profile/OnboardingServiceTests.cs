@@ -14,11 +14,11 @@ public sealed class OnboardingServiceTests
         service = new OnboardingService(repository, new NoOpUnitOfWork(), new NoOpEventTracker());
 
     [Fact]
-    public async Task NewUser_StartsAtFirstSession()
+    public async Task NewUser_StartsAtAiConsent()
     {
         var profile = await service.GetAsync(UserId, CancellationToken.None);
 
-        Assert.Equal(OnboardingStep.FirstSession, profile.CurrentStep);
+        Assert.Equal(OnboardingStep.AiConsent, profile.CurrentStep);
     }
 
     [Fact]
@@ -31,6 +31,7 @@ public sealed class OnboardingServiceTests
     [Fact]
     public async Task CompletingAPastStep_IsANoOp()
     {
+        await Consent();
         await service.ChooseFirstSessionPathAsync(UserId, FirstSessionPath.Sample, CancellationToken.None);
         await service.CompleteStepAsync(UserId, OnboardingStep.FirstSession, CancellationToken.None);
 
@@ -42,11 +43,13 @@ public sealed class OnboardingServiceTests
     [Fact]
     public async Task FirstSession_RequiresAPathBeforeCompleting()
     {
+        await Consent();
         await Assert.ThrowsAsync<InvalidOnboardingRequestException>(() =>
             service.CompleteStepAsync(UserId, OnboardingStep.FirstSession, CancellationToken.None));
     }
 
     [Theory]
+    [InlineData(OnboardingStep.AiConsent)]
     [InlineData(OnboardingStep.FirstSession)]
     [InlineData(OnboardingStep.ReviewWorkout)]
     public async Task RequiredSteps_CannotBeSkipped(OnboardingStep step) =>
@@ -56,6 +59,7 @@ public sealed class OnboardingServiceTests
     [Fact]
     public async Task FullFlow_CompletesAndStartsProTrial()
     {
+        await Consent();
         await service.ChooseFirstSessionPathAsync(UserId, FirstSessionPath.Sample, CancellationToken.None);
         await service.CompleteStepAsync(UserId, OnboardingStep.FirstSession, CancellationToken.None);
         await service.CompleteStepAsync(UserId, OnboardingStep.ReviewWorkout, CancellationToken.None);
@@ -74,6 +78,104 @@ public sealed class OnboardingServiceTests
         await Assert.ThrowsAsync<InvalidOnboardingRequestException>(() =>
             service.UpdateNotificationPreferencesAsync(UserId, true, minutes, CancellationToken.None));
 
+    private Task<UserProfile> Consent(string version = "2026-11-01") =>
+        service.CompleteStepAsync(UserId, OnboardingStep.AiConsent, CancellationToken.None, version);
+
+    [Fact]
+    public async Task CompletingAiConsent_StoresVersionAndTimeAndAdvances()
+    {
+        var before = DateTimeOffset.UtcNow;
+        var profile = await Consent();
+
+        Assert.Equal(OnboardingStep.FirstSession, profile.CurrentStep);
+        Assert.Equal("2026-11-01", profile.AiConsentVersion);
+        Assert.True(profile.AiConsentAt >= before);
+        Assert.True(profile.HasAiConsent);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CompletingAiConsent_WithoutAVersion_IsRejectedAndStaysPut(string? version)
+    {
+        await Assert.ThrowsAsync<InvalidOnboardingRequestException>(() =>
+            service.CompleteStepAsync(UserId, OnboardingStep.AiConsent, CancellationToken.None, version));
+
+        var profile = await service.GetAsync(UserId, CancellationToken.None);
+        Assert.Equal(OnboardingStep.AiConsent, profile.CurrentStep);
+        Assert.False(profile.HasAiConsent);
+    }
+
+    [Fact]
+    public async Task CompletingAiConsent_WithAnOverlongVersion_IsRejected() =>
+        await Assert.ThrowsAsync<InvalidOnboardingRequestException>(() =>
+            Consent(new string('v', UserProfile.MaxAiConsentVersionLength + 1)));
+
+    [Fact]
+    public async Task ReCompletingAiConsent_KeepsTheFirstTimestamp()
+    {
+        var first = (await Consent()).AiConsentAt;
+        await Task.Delay(10);
+
+        var profile = await Consent("2026-12-01");
+
+        Assert.Equal(first, profile.AiConsentAt);
+        Assert.Equal("2026-11-01", profile.AiConsentVersion);
+        Assert.Equal(OnboardingStep.FirstSession, profile.CurrentStep);
+    }
+
+    [Fact]
+    public async Task GrantAiConsent_ForAUserPastOnboardingStep_StoresItWithoutMovingTheStep()
+    {
+        await Consent();
+        await service.GrantAiConsentAsync(UserId, "2026-11-01", CancellationToken.None);
+        await service.RevokeAiConsentAsync(UserId, CancellationToken.None);
+
+        var profile = await service.GrantAiConsentAsync(UserId, "2026-12-01", CancellationToken.None);
+
+        Assert.Equal("2026-12-01", profile.AiConsentVersion);
+        Assert.Equal(OnboardingStep.FirstSession, profile.CurrentStep);
+    }
+
+    [Fact]
+    public async Task GrantAiConsent_WithoutAVersion_IsRejected() =>
+        await Assert.ThrowsAsync<InvalidOnboardingRequestException>(() =>
+            service.GrantAiConsentAsync(UserId, null, CancellationToken.None));
+
+    [Fact]
+    public async Task GrantAiConsent_OfTheVersionAlreadyHeld_KeepsTheTimestamp()
+    {
+        var first = (await service.GrantAiConsentAsync(UserId, "2026-11-01", CancellationToken.None)).AiConsentAt;
+        await Task.Delay(10);
+
+        var profile = await service.GrantAiConsentAsync(UserId, "2026-11-01", CancellationToken.None);
+
+        Assert.Equal(first, profile.AiConsentAt);
+    }
+
+    [Fact]
+    public async Task RevokeAiConsent_ClearsConsentButNotOnboardingProgress()
+    {
+        await Consent();
+
+        var profile = await service.RevokeAiConsentAsync(UserId, CancellationToken.None);
+
+        Assert.False(profile.HasAiConsent);
+        Assert.Null(profile.AiConsentVersion);
+        Assert.Null(profile.AiConsentAt);
+        Assert.False(await service.HasAiConsentAsync(UserId, CancellationToken.None));
+        Assert.Equal(OnboardingStep.FirstSession, profile.CurrentStep);
+    }
+
+    [Fact]
+    public async Task HasAiConsent_IsFalseForUnknownUsersAndTrueAfterConsenting()
+    {
+        Assert.False(await service.HasAiConsentAsync(UserId, CancellationToken.None));
+        await Consent();
+        Assert.True(await service.HasAiConsentAsync(UserId, CancellationToken.None));
+    }
+
     private sealed class InMemoryProfileRepository : IUserProfileRepository
     {
         private readonly Dictionary<Guid, UserProfile> profiles = [];
@@ -86,7 +188,7 @@ public sealed class OnboardingServiceTests
             profiles.TryAdd(userId, new UserProfile
             {
                 Id = userId,
-                CurrentStep = OnboardingStep.FirstSession,
+                CurrentStep = OnboardingStep.AiConsent,
                 ReminderLeadMinutes = 60,
                 CreatedAt = now,
                 UpdatedAt = now,

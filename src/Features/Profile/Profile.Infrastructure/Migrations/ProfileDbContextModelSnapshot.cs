@@ -28,6 +28,15 @@ namespace Profile.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTimeOffset?>("AiConsentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ai_consent_at");
+
+                    b.Property<string>("AiConsentVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("ai_consent_version");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");

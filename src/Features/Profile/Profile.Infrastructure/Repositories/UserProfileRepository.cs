@@ -14,7 +14,7 @@ public sealed class UserProfileRepository(ProfileDbContext db) : IUserProfileRep
 
     public async Task EnsureExistsAsync(Guid userId, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var step = nameof(OnboardingStep.FirstSession);
+        var step = nameof(OnboardingStep.AiConsent);
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO user_profiles (id, current_step, reminders_enabled, reminder_lead_minutes, created_at, updated_at)
