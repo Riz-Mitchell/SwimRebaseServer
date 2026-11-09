@@ -6,6 +6,8 @@ public static class EventTypes
     public const string UserSignedUp = "user_signed_up";
     public const string AiMessageSent = "ai_message_sent";
     public const string OnboardingStepCompleted = "onboarding_step_completed";
+    public const string AiConsentGranted = "ai_consent_granted";
+    public const string AiConsentWithdrawn = "ai_consent_withdrawn";
     public const string OnboardingCompleted = "onboarding_completed";
     public const string ConversionQuotaExceeded = "conversion_quota_exceeded";
     public const string SubscriptionChanged = "subscription_changed";

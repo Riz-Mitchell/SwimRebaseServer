@@ -13,6 +13,8 @@ public sealed class SessionRepository(SessionsDbContext db) : ISessionRepository
         db.SessionFacts.AddRange(facts);
     }
 
+    public void Remove(Session session) => db.Sessions.Remove(session);
+
     public async Task<Session?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
         await db.Sessions.FirstOrDefaultAsync(s => s.Id == id && s.OwnerId == userId, cancellationToken);
 

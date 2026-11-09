@@ -324,6 +324,10 @@ Newest first. All parameters optional (`limit` 1-100, default 50).
 
 `include=content` adds each session's `content` (the tree, exactly as `GET /api/sessions/{id}` returns it) to every item, so a page of full sessions is one call instead of one per session. Items then look like `{ id, performedOn, title, course, unit, source, totalDistance, createdAt, content }`; there is no `outline` in the list. With `include=content`, `limit` is capped at 20 (a larger value is treated as 20). Any other `include` value is a `400`.
 
+### `GET /api/sessions/stats`
+How many sessions the caller has saved.
+**Response:** `{ "sessionCount": 12 }`. It is `0` for a user with no sessions. The count is stored and kept in step with every save and delete, so it is cheap to call and does not scan the sessions.
+
 ### `GET /api/sessions/{id}`
 **Response:** the summary fields above (without `createdAt`) plus `content` (the tree) and `outline` (numbered text). `404` if it is not the caller's.
 
@@ -503,49 +507,49 @@ A timed swim counts towards `GET /api/sessions/metrics` as training volume (its 
 
 ## Profile & onboarding — `/api/profile`
 
-Onboarding progress is tracked server-side so a user who closes the app can resume. On launch call `GET /api/profile/onboarding`: if `status` is `Completed`, go straight into the app, otherwise resume at `resumeStep`. A profile is created on first call (existing users before launch are already `Completed`).
+Onboarding progress is tracked server-side so a user who closes the app can resume. On launch call `GET /api/profile/onboarding`: if `status` is `Completed`, go straight into the app, otherwise resume at `resumeStep`. A profile is created on first call (the AddAiConsent migration reset every pre-launch user to `AiConsent`).
 
-Steps, in order: `Questionnaire` → `FirstSession` → `ReviewWorkout` → `ProTrial` → `Completed`. Only `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
+Steps, in order: `AiConsent` → `FirstSession` → `ReviewWorkout` → `ProTrial` → `Completed`. Only `ProTrial` can be skipped. Splash and OTP sign-in are not steps.
 
 ### `GET /api/profile`
-**Response:** `{ "onboardingCompleted": bool, "answers": { "level": "Regional", "goal": ["DataInsights", "GeneralFitness"] }, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null }`
+**Response:** `{ "onboardingCompleted": bool, "remindersEnabled": bool, "reminderLeadMinutes": 60, "proTrial": { "endsAt": "datetime", "daysRemaining": 21 } | null, "aiConsent": { "version": "2026-11-01", "at": "datetime" } | null }`
+
+`aiConsent` is null when no consent is held (never given, or withdrawn); it is the place to check consent. The onboarding status carries the same field.
 
 ### `GET /api/profile/onboarding`
 **Response:**
 ```json
 {
   "status": "InProgress | Completed",
-  "currentStep": "FirstSession",
-  "resumeStep": "FirstSession",
-  "completedSteps": ["Questionnaire"],
+  "currentStep": "AiConsent",
+  "resumeStep": "AiConsent",
+  "completedSteps": [],
   "firstSessionPath": "Upload | Sample | null",
-  "proTrial": { "endsAt": "datetime", "daysRemaining": 21 }
+  "proTrial": { "endsAt": "datetime", "daysRemaining": 21 },
+  "aiConsent": { "version": "2026-11-01", "at": "datetime" }
 }
 ```
 `proTrial` is null until onboarding completes; the 21-day Pro trial starts then.
 
-### `GET /api/profile/onboarding/questionnaire`
-The questions and their options, plus the user's saved answers - render the questionnaire from this so new questions need no app change.
-
-**Response:** `{ "questions": [{ "key": "level", "prompt": "string", "multiple": false, "options": [{ "value": "Regional", "label": "Regional", "exclusive": false }], "answer": "string | null", "answers": ["string"] }], "complete": bool }`
-
-`multiple` says whether several options can be chosen (checkboxes rather than radio buttons). `exclusive` on an option means choosing it excludes the others: clear the other selections when it is picked. For a single-answer question read `answer` (null until answered); for a multiple-answer question `answer` is always null and `answers` lists every chosen value (for single-answer questions `answers` holds that one value too).
-
-Current questions: `level` (one answer: `Regional`, `StateQualified`, `NationalQualified`, `OlympicTrialQualified`) and `goal` (any number of: `CompetitiveImprovement`, `DataInsights`, `GeneralFitness`, `SocialCommunityAndGamification`; or `Other` on its own, which is exclusive).
-
-### `PUT /api/profile/onboarding/questionnaire`
-**Body:** `{ "answers": { "level": "Regional", "goal": ["DataInsights", "GeneralFitness"] } }`
-
-Each answer is the chosen value, or an array of values; a plain string is a one-item selection, so `"goal": "DataInsights"` still works. Saving a question replaces everything previously saved for it (send the whole selection, not a delta), and a question left out of the body keeps its answers. Partial saves are fine; once every question has at least one answer the user advances to `FirstSession`. `400` for an unknown question or value, an empty selection, several answers to a single-answer question, or an exclusive option (`Other`) sent together with others. **Response:** same shape as `GET /api/profile/onboarding`.
-
 ### `PUT /api/profile/onboarding/first-session`
-Records which branch the user picked for the first session: `{ "path": "Upload" | "Sample" }`. Returns `409` before the questionnaire is done. **Response:** onboarding status.
+Records which branch the user picked for the first session: `{ "path": "Upload" | "Sample" }`. **Response:** onboarding status.
 
 ### `POST /api/profile/onboarding/steps/{step}/complete`
-Marks the current step done and advances. Completing a step the user is already past is a no-op; completing one ahead of the current step returns `409`. `Questionnaire` needs all answers and `FirstSession` needs a chosen path, otherwise `400`. Completing `ProTrial` finishes onboarding. **Response:** onboarding status.
+Marks the current step done and advances. Completing a step the user is already past is a no-op; completing one ahead of the current step returns `409`. `FirstSession` needs a chosen path, otherwise `400`. Completing `ProTrial` finishes onboarding. **Response:** onboarding status.
+
+`AiConsent` takes a body, `{ "version": "2026-11-01" }`: the id of the consent wording shown (stored as given, 1–50 characters; no quotes or backslashes). A missing or empty `version` returns `400 { "error": "..." }` and the step stays. Completing it records the version and time and advances; re-completing keeps the first time. No other step reads a body.
 
 ### `POST /api/profile/onboarding/steps/{step}/skip`
-Only valid for `ProTrial` (`400` otherwise). **Response:** onboarding status.
+Only valid for `ProTrial` (`400` otherwise); `AiConsent` cannot be skipped. **Response:** onboarding status.
+
+### `PUT /api/profile/ai-consent`
+Body `{ "version": "2026-11-01" }`. Records consent outside onboarding (users who finished or passed `AiConsent` before consent existed, or who withdrew). Does not move onboarding. Sending the version already held keeps the original time; a different version replaces it. Missing or empty `version` → `400`. **Response:** `{ "version": "...", "at": "datetime" }`.
+
+### `DELETE /api/profile/ai-consent`
+Withdraws consent (`204`, also when none was held). Onboarding does not move. The AI endpoints refuse the user again until consent is given.
+
+### AI consent guard
+These return **`403 { "error": "AI consent required", "code": "ai_consent_required" }`** when the user holds no consent, before any stream starts: `POST /api/ai/conversations/messages`, `POST /api/ai/conversations/{id}/messages`, and `POST /api/ai/tool-requests/{id}/resolve`, `/answer` and `/cancel` (each resumes the AI turn). Image upload/confirm/delete, listing, history and usage do not call the provider and are not guarded.
 
 ### `PUT /api/profile/notification-preferences`
 **Body:** `{ "remindersEnabled": true, "reminderLeadMinutes": 60 }` - lead time must be 5-1440. **Response:** profile (as `GET /api/profile`).

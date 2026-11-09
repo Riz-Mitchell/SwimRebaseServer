@@ -10,6 +10,9 @@ public interface ISessionRepository
     /// <summary>Scoped to <paramref name="userId"/> - returns null if the session belongs to someone else. Tracked, so it can be edited.</summary>
     Task<Session?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Deletes a session found with <see cref="FindAsync"/>; its facts go with it.</summary>
+    void Remove(Session session);
+
     Task<Session?> FindBySourceDraftAsync(Guid userId, Guid draftId, CancellationToken cancellationToken);
 
     /// <summary>Newest first (by date swum, then by when it was saved).</summary>

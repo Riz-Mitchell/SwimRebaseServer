@@ -10,11 +10,11 @@ public sealed class UserProfileRepository(ProfileDbContext db) : IUserProfileRep
     private const int DefaultReminderLeadMinutes = 60;
 
     public Task<UserProfile?> FindAsync(Guid userId, CancellationToken cancellationToken) =>
-        db.UserProfiles.Include(p => p.Answers).SingleOrDefaultAsync(p => p.Id == userId, cancellationToken);
+        db.UserProfiles.SingleOrDefaultAsync(p => p.Id == userId, cancellationToken);
 
     public async Task EnsureExistsAsync(Guid userId, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var step = nameof(OnboardingStep.Questionnaire);
+        var step = nameof(OnboardingStep.AiConsent);
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO user_profiles (id, current_step, reminders_enabled, reminder_lead_minutes, created_at, updated_at)
@@ -23,8 +23,4 @@ public sealed class UserProfileRepository(ProfileDbContext db) : IUserProfileRep
             """,
             cancellationToken);
     }
-
-    public void AddAnswer(ProfileAnswer answer) => db.ProfileAnswers.Add(answer);
-
-    public void RemoveAnswer(ProfileAnswer answer) => db.ProfileAnswers.Remove(answer);
 }

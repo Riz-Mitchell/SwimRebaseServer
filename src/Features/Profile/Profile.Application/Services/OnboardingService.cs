@@ -29,99 +29,10 @@ public sealed class OnboardingService(
         return profile;
     }
 
-    /// <summary>Each question's answers replace what was saved for it; a question not in <paramref name="answers"/> keeps its answers.</summary>
-    public async Task<UserProfile> SaveAnswersAsync(
-        Guid userId, IReadOnlyDictionary<string, IReadOnlyList<string>> answers, CancellationToken cancellationToken)
-    {
-        var chosen = new Dictionary<string, List<string>>();
-        foreach (var (key, values) in answers)
-        {
-            try
-            {
-                chosen[key] = Validate(key, values);
-            }
-            catch (InvalidOnboardingRequestException ex)
-            {
-                _logger.LogWarning("[{ClassName}] Rejected answer to '{QuestionKey}' from user {UserId}: {Reason}", nameof(OnboardingService), key, userId, ex.Message);
-                throw;
-            }
-        }
-
-        var profile = await GetAsync(userId, cancellationToken);
-        var now = DateTimeOffset.UtcNow;
-
-        foreach (var (key, values) in chosen)
-        {
-            foreach (var stale in profile.Answers.Where(a => a.QuestionKey == key && !values.Contains(a.AnswerValue)).ToList())
-            {
-                profile.Answers.Remove(stale);
-                profiles.RemoveAnswer(stale);
-            }
-
-            foreach (var value in values.Where(v => profile.Answers.All(a => a.QuestionKey != key || a.AnswerValue != v)))
-            {
-                var answer = new ProfileAnswer { UserId = userId, QuestionKey = key, AnswerValue = value, AnsweredAt = now };
-                profile.Answers.Add(answer);
-                profiles.AddAnswer(answer);
-            }
-        }
-
-        profile.UpdatedAt = now;
-        var advanced = profile.CurrentStep == OnboardingStep.Questionnaire && HasAnsweredAll(profile);
-        if (advanced)
-        {
-            Advance(profile, now);
-        }
-
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("[{ClassName}] Saved answers to {QuestionCount} question(s) for user {UserId}{Advanced}",
-            nameof(OnboardingService), chosen.Count, userId, advanced ? ", completing the questionnaire" : string.Empty);
-        if (advanced)
-        {
-            await TrackAdvanceAsync(profile, OnboardingStep.Questionnaire, cancellationToken);
-        }
-
-        return profile;
-    }
-
-    private static List<string> Validate(string key, IReadOnlyList<string> values)
-    {
-        var question = QuestionnaireCatalog.Questions.FirstOrDefault(q => q.Key == key)
-            ?? throw new InvalidOnboardingRequestException($"Unknown question '{key}'.");
-        var distinct = values.Distinct().ToList();
-        if (distinct.Count == 0)
-        {
-            throw new InvalidOnboardingRequestException($"Choose an answer to '{key}'.");
-        }
-
-        if (!question.Multiple && distinct.Count > 1)
-        {
-            throw new InvalidOnboardingRequestException($"'{key}' takes one answer.");
-        }
-
-        foreach (var value in distinct)
-        {
-            var option = question.Options.FirstOrDefault(o => o.Value == value)
-                ?? throw new InvalidOnboardingRequestException($"'{value}' is not a valid answer to '{key}'.");
-            if (option.Exclusive && distinct.Count > 1)
-            {
-                throw new InvalidOnboardingRequestException($"'{value}' cannot be combined with other answers to '{key}'.");
-            }
-        }
-
-        return distinct;
-    }
-
     public async Task<UserProfile> ChooseFirstSessionPathAsync(
         Guid userId, FirstSessionPath path, CancellationToken cancellationToken)
     {
         var profile = await GetAsync(userId, cancellationToken);
-        if (profile.CurrentStep < OnboardingStep.FirstSession)
-        {
-            _logger.LogWarning("[{ClassName}] User {UserId} chose a first-session path while still at step {Step}", nameof(OnboardingService), userId, profile.CurrentStep);
-            throw new OnboardingStepConflictException("Finish the questionnaire first.");
-        }
-
         profile.FirstSessionPath = path;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -130,7 +41,8 @@ public sealed class OnboardingService(
     }
 
     /// <summary>Completing a step the user is already past is a no-op, so a client retry is safe.</summary>
-    public async Task<UserProfile> CompleteStepAsync(Guid userId, OnboardingStep step, CancellationToken cancellationToken)
+    public async Task<UserProfile> CompleteStepAsync(
+        Guid userId, OnboardingStep step, CancellationToken cancellationToken, string? aiConsentVersion = null)
     {
         var profile = await GetAsync(userId, cancellationToken);
         if (step == OnboardingStep.Completed)
@@ -139,10 +51,18 @@ public sealed class OnboardingService(
             throw new InvalidOnboardingRequestException("'Completed' is not a step that can be completed.");
         }
 
+        var consentVersion = step == OnboardingStep.AiConsent ? ValidateConsentVersion(userId, aiConsentVersion) : null;
+
         if (step < profile.CurrentStep)
         {
             _logger.LogInformation("[{ClassName}] User {UserId} re-completed {Step} but is already at {CurrentStep}; nothing to do",
                 nameof(OnboardingService), userId, step, profile.CurrentStep);
+            if (consentVersion is not null && !profile.HasAiConsent)
+            {
+                // Past the step but holding no consent (withdrawn): accepting again restores it.
+                await GrantConsentAsync(profile, consentVersion, cancellationToken);
+            }
+
             return profile;
         }
 
@@ -152,19 +72,85 @@ public sealed class OnboardingService(
             throw new OnboardingStepConflictException($"Cannot complete '{step}' while the current step is '{profile.CurrentStep}'.");
         }
 
-        if (step == OnboardingStep.Questionnaire && !HasAnsweredAll(profile))
-        {
-            _logger.LogWarning("[{ClassName}] User {UserId} tried to complete the questionnaire with unanswered questions", nameof(OnboardingService), userId);
-            throw new InvalidOnboardingRequestException("Answer every questionnaire question first.");
-        }
-
         if (step == OnboardingStep.FirstSession && profile.FirstSessionPath is null)
         {
             _logger.LogWarning("[{ClassName}] User {UserId} tried to complete the first session without choosing a path", nameof(OnboardingService), userId);
             throw new InvalidOnboardingRequestException("Choose how to analyse the first session first.");
         }
 
+        if (consentVersion is not null && !profile.HasAiConsent)
+        {
+            SetConsent(profile, consentVersion, DateTimeOffset.UtcNow);
+        }
+
         return await AdvanceAndSaveAsync(profile, cancellationToken);
+    }
+
+    /// <summary>
+    /// Records acceptance outside onboarding (users who onboarded before consent existed, or who withdrew).
+    /// Re-accepting the version already held keeps the original timestamp; a different version replaces it.
+    /// </summary>
+    public async Task<UserProfile> GrantAiConsentAsync(Guid userId, string? version, CancellationToken cancellationToken)
+    {
+        var consentVersion = ValidateConsentVersion(userId, version);
+        var profile = await GetAsync(userId, cancellationToken);
+        if (profile.HasAiConsent && profile.AiConsentVersion == consentVersion)
+        {
+            return profile;
+        }
+
+        await GrantConsentAsync(profile, consentVersion, cancellationToken);
+        return profile;
+    }
+
+    /// <summary>Withdraws consent; AI endpoints refuse the user again. Does not move onboarding. Withdrawing when none is held is a no-op.</summary>
+    public async Task<UserProfile> RevokeAiConsentAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var profile = await GetAsync(userId, cancellationToken);
+        if (!profile.HasAiConsent)
+        {
+            return profile;
+        }
+
+        profile.AiConsentVersion = null;
+        profile.AiConsentAt = null;
+        profile.UpdatedAt = DateTimeOffset.UtcNow;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] User {UserId} withdrew AI consent", nameof(OnboardingService), userId);
+        await eventTracker.TrackAsync(userId, EventTypes.AiConsentWithdrawn, null, cancellationToken);
+        return profile;
+    }
+
+    public async Task<bool> HasAiConsentAsync(Guid userId, CancellationToken cancellationToken) =>
+        (await profiles.FindAsync(userId, cancellationToken))?.HasAiConsent == true;
+
+    private async Task GrantConsentAsync(UserProfile profile, string version, CancellationToken cancellationToken)
+    {
+        SetConsent(profile, version, DateTimeOffset.UtcNow);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] User {UserId} accepted AI consent version {Version}", nameof(OnboardingService), profile.Id, version);
+        await eventTracker.TrackAsync(profile.Id, EventTypes.AiConsentGranted, $"{{\"version\":\"{version}\"}}", cancellationToken);
+    }
+
+    private static void SetConsent(UserProfile profile, string version, DateTimeOffset now)
+    {
+        profile.AiConsentVersion = version;
+        profile.AiConsentAt = now;
+        profile.UpdatedAt = now;
+    }
+
+    private string ValidateConsentVersion(Guid userId, string? version)
+    {
+        var trimmed = version?.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed.Length > UserProfile.MaxAiConsentVersionLength
+            || trimmed.Any(c => char.IsControl(c) || c is '"' or '\\'))
+        {
+            _logger.LogWarning("[{ClassName}] User {UserId} sent an invalid AI consent version", nameof(OnboardingService), userId);
+            throw new InvalidOnboardingRequestException(
+                $"A consent 'version' of 1 to {UserProfile.MaxAiConsentVersionLength} characters (no quotes, backslashes or control characters) is required.");
+        }
+
+        return trimmed;
     }
 
     public async Task<UserProfile> SkipStepAsync(Guid userId, OnboardingStep step, CancellationToken cancellationToken)
@@ -210,9 +196,6 @@ public sealed class OnboardingService(
             nameof(OnboardingService), userId, remindersEnabled, reminderLeadMinutes);
         return profile;
     }
-
-    public static bool HasAnsweredAll(UserProfile profile) =>
-        QuestionnaireCatalog.Questions.All(q => profile.Answers.Any(a => a.QuestionKey == q.Key));
 
     private async Task<UserProfile> AdvanceAndSaveAsync(UserProfile profile, CancellationToken cancellationToken)
     {

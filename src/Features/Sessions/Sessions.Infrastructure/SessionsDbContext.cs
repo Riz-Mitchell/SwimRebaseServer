@@ -17,6 +17,8 @@ public sealed class SessionsDbContext(DbContextOptions<SessionsDbContext> option
 
     public DbSet<CustomMetric> CustomMetrics => Set<CustomMetric>();
 
+    public DbSet<UserSessionStats> SessionStats => Set<UserSessionStats>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SessionsDbContext).Assembly);

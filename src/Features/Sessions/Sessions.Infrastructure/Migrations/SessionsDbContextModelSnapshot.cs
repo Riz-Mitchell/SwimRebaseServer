@@ -430,6 +430,26 @@ namespace Sessions.Infrastructure.Migrations
                     b.ToTable("user_effort_terms", (string)null);
                 });
 
+            modelBuilder.Entity("Sessions.Domain.Models.UserSessionStats", b =>
+                {
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<int>("SessionCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("session_count");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("OwnerId")
+                        .HasName("pk_session_stats");
+
+                    b.ToTable("session_stats", (string)null);
+                });
+
             modelBuilder.Entity("Sessions.Domain.Models.SessionFact", b =>
                 {
                     b.HasOne("Sessions.Domain.Models.Session", null)

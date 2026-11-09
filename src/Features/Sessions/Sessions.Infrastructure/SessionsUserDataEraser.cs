@@ -12,5 +12,6 @@ public sealed class SessionsUserDataEraser(SessionsDbContext db) : IUserDataEras
         await db.SessionPreferences.Where(p => p.OwnerId == userId).ExecuteDeleteAsync(cancellationToken);
         await db.UserEffortTerms.Where(t => t.OwnerId == userId).ExecuteDeleteAsync(cancellationToken);
         await db.CustomMetrics.Where(m => m.OwnerId == userId).ExecuteDeleteAsync(cancellationToken);
+        await db.SessionStats.Where(s => s.OwnerId == userId).ExecuteDeleteAsync(cancellationToken);
     }
 }
