@@ -27,6 +27,8 @@ public sealed class AccountDeletionService(
 
     public AccountDeletionRequest Request(Guid userId, DateTimeOffset? lastSignInAt)
     {
+        EnsureReady(userId);
+
         var now = clock.GetUtcNow();
         if (lastSignInAt is not { } signedInAt || now - signedInAt > RecentLoginWindow)
         {
@@ -49,6 +51,8 @@ public sealed class AccountDeletionService(
             throw new InvalidDeletionConfirmationException();
         }
 
+        EnsureReady(userId);
+
         _logger.LogInformation("[{ClassName}] Deleting account for user {UserId}", nameof(AccountDeletionService), userId);
         try
         {
@@ -70,5 +74,24 @@ public sealed class AccountDeletionService(
 
         deletedUsers.Add(userId);
         _logger.LogInformation("[{ClassName}] Account deleted for user {UserId}", nameof(AccountDeletionService), userId);
+    }
+
+    /// <summary>Refuses up front when any step's configuration is missing, so no data is erased by a deletion that cannot finish.</summary>
+    private void EnsureReady(Guid userId)
+    {
+        try
+        {
+            foreach (var eraser in erasers)
+            {
+                eraser.EnsureReady();
+            }
+
+            supabase.EnsureConfigured();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "[{ClassName}] Refusing account deletion for user {UserId}: {Message}", nameof(AccountDeletionService), userId, ex.Message);
+            throw;
+        }
     }
 }
