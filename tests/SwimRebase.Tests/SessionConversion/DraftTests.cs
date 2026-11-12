@@ -149,6 +149,34 @@ public class DraftTests
     }
 
     [Fact]
+    public void Edits_sent_as_a_json_encoded_string_are_read_as_the_array()
+    {
+        var id = Guid.NewGuid();
+        var inner = """[{"op":"remove","path":"2"},{"op":"set_group","group":"Lane 3"}]""";
+        var json = JsonSerializer.Serialize(new { draftId = id, edits = inner });
+
+        var request = DraftEditRequest.Parse(json);
+
+        Assert.Equal(id, request.DraftId);
+        Assert.Equal(2, request.Edits.Count);
+        Assert.Equal("Lane 3", request.Edits[1].Group);
+    }
+
+    [Theory]
+    [InlineData("\"not json\"")]
+    [InlineData("\"{\\\"op\\\":\\\"remove\\\"}\"")]
+    [InlineData("{\"op\":\"remove\",\"path\":\"2\"}")]
+    [InlineData("42")]
+    public void Edits_that_are_not_an_array_are_rejected_with_a_message_the_model_can_act_on(string edits)
+    {
+        var json = $$"""{"draftId":"{{Guid.NewGuid()}}","edits":{{edits}}}""";
+
+        var ex = Assert.Throws<InvalidSessionEditException>(() => DraftEditRequest.Parse(json));
+
+        Assert.Contains("JSON array", ex.Message);
+    }
+
+    [Fact]
     public async Task Creating_a_draft_stores_it_and_editing_bumps_the_version()
     {
         var service = new SessionDraftService(new InMemoryDraftRepository(), TestSessions.Ingest(), TestSessions.Terms(), TestSessions.Defaults(), new NoOpUnitOfWork());
