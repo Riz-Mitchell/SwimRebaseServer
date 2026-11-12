@@ -8,15 +8,11 @@ namespace Auth.Infrastructure;
 
 public sealed class SupabaseAdminClient(HttpClient http, IOptions<SupabaseOptions> options, ILogger<SupabaseAdminClient> logger) : ISupabaseAdminClient
 {
+    public void EnsureConfigured() => _ = ServiceRoleKey();
+
     public async Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var serviceRoleKey = options.Value.ServiceRoleKey;
-        if (string.IsNullOrWhiteSpace(serviceRoleKey))
-        {
-            logger.LogError("[{ClassName}] Cannot delete user {UserId}: 'Supabase:ServiceRoleKey' is not configured", nameof(SupabaseAdminClient), userId);
-            throw new InvalidOperationException(
-                "Missing configuration 'Supabase:ServiceRoleKey' - needed to delete a user from Supabase Auth.");
-        }
+        var serviceRoleKey = ServiceRoleKey();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"auth/v1/admin/users/{userId}");
         request.Headers.Add("apikey", serviceRoleKey);
@@ -36,5 +32,18 @@ public sealed class SupabaseAdminClient(HttpClient http, IOptions<SupabaseOption
 
         response.EnsureSuccessStatusCode();
         logger.LogInformation("[{ClassName}] Deleted user {UserId} from Supabase", nameof(SupabaseAdminClient), userId);
+    }
+
+    private string ServiceRoleKey()
+    {
+        var serviceRoleKey = options.Value.ServiceRoleKey;
+        if (string.IsNullOrWhiteSpace(serviceRoleKey))
+        {
+            logger.LogError("[{ClassName}] Cannot delete users: 'Supabase:ServiceRoleKey' is not configured", nameof(SupabaseAdminClient));
+            throw new InvalidOperationException(
+                "Missing configuration 'Supabase:ServiceRoleKey' - needed to delete a user from Supabase Auth.");
+        }
+
+        return serviceRoleKey;
     }
 }

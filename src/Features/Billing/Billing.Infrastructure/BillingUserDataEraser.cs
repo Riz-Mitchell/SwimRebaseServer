@@ -6,6 +6,8 @@ namespace Billing.Infrastructure;
 
 public sealed class BillingUserDataEraser(BillingDbContext db, IRevenueCatSubscriberClient revenueCat) : IUserDataEraser
 {
+    public void EnsureReady() => revenueCat.EnsureConfigured();
+
     public async Task EraseAsync(Guid userId, CancellationToken cancellationToken)
     {
         await db.ConversionUsages.Where(u => u.UserId == userId).ExecuteDeleteAsync(cancellationToken);

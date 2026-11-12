@@ -56,11 +56,14 @@ The server handles one paid line. It does not read entitlement ids, so any produ
 
 ## Account deletion
 
-Deleting an account also removes the user's RevenueCat subscriber record, which needs a **secret** API key (RevenueCat > Project settings > API keys > secret key, v1 read/write).
+Deleting an account also removes the user's RevenueCat customer record through the v2 API, which needs a **v2 secret API key** and the project id. A v1 key is rejected by v2 endpoints.
 
-1. `az keyvault secret set --vault-name <vault> --name RevenueCat--SecretApiKey --value '<sk_...>'`, then restart the web app. Locally: `dotnet user-secrets set "RevenueCat:SecretApiKey" "<sk_...>" --project src/Presentation/REST`.
+1. In RevenueCat > Project settings > API keys, create a secret key with API version **v2** and read/write permission on customer information. Then store it and the project id (shown in the dashboard URL, like `proj1ab2c3d4`), and restart the web app:
+   `az keyvault secret set --vault-name <vault> --name RevenueCat--SecretApiKey --value '<sk_...>'`
+   `az keyvault secret set --vault-name <vault> --name RevenueCat--ProjectId --value '<proj...>'`
+   Locally: `dotnet user-secrets set "RevenueCat:SecretApiKey" "<sk_...>" --project src/Presentation/REST` and the same for `RevenueCat:ProjectId`.
 2. Deleting the Supabase user needs the project's service-role key: `az keyvault secret set --vault-name <vault> --name Supabase--ServiceRoleKey --value '<key>'` (Supabase dashboard > Project Settings > API). Locally: `dotnet user-secrets set "Supabase:ServiceRoleKey" "<key>" --project src/Presentation/REST`.
-3. Until both are set, `POST /api/account/deletion/confirm` fails with a `5xx` after the database data has been removed; setting them and retrying completes the deletion.
+3. Until the RevenueCat key, the RevenueCat project id and the Supabase key are all set, `POST /api/account/deletion/confirm` fails with a `5xx` after the database data has been removed; setting them and retrying completes the deletion.
 
 ## 6. Test it
 
