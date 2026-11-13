@@ -74,9 +74,41 @@ public class AccountDeletionServiceTests
         Assert.True(deletedUsers.Contains(UserId));
     }
 
+    [Fact]
+    public async Task Confirm_erases_nothing_when_any_eraser_is_missing_configuration()
+    {
+        var unready = new RecordingEraser("b", calls);
+        var service = CreateService(new RecordingEraser("a", calls), unready);
+        var token = service.Request(UserId, Now).ConfirmationToken;
+        unready.NotReady = true;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ConfirmAsync(UserId, token, CancellationToken.None));
+
+        Assert.Empty(calls);
+        Assert.False(deletedUsers.Contains(UserId));
+    }
+
+    [Fact]
+    public void Request_is_refused_when_an_eraser_is_missing_configuration()
+    {
+        var service = CreateService(new RecordingEraser("a", calls) { NotReady = true });
+
+        Assert.Throws<InvalidOperationException>(() => service.Request(UserId, Now));
+    }
+
     private sealed class RecordingEraser(string name, List<string> calls) : IUserDataEraser
     {
         public bool Fail { get; set; }
+
+        public bool NotReady { get; set; }
+
+        public void EnsureReady()
+        {
+            if (NotReady)
+            {
+                throw new InvalidOperationException("Missing configuration");
+            }
+        }
 
         public Task EraseAsync(Guid userId, CancellationToken cancellationToken)
         {
@@ -87,6 +119,8 @@ public class AccountDeletionServiceTests
 
     private sealed class RecordingSupabase(List<string> calls) : ISupabaseAdminClient
     {
+        public void EnsureConfigured() { }
+
         public Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken)
         {
             calls.Add("supabase");

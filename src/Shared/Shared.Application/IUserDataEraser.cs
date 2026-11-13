@@ -6,5 +6,11 @@ namespace Shared.Application;
 /// </summary>
 public interface IUserDataEraser
 {
+    /// <summary>
+    /// Throws if something this eraser needs (a secret, a key) is not configured. Called before any eraser runs, so a deployment with
+    /// missing configuration refuses the deletion up front instead of failing after some data is already gone.
+    /// </summary>
+    void EnsureReady() { }
+
     Task EraseAsync(Guid userId, CancellationToken cancellationToken);
 }
