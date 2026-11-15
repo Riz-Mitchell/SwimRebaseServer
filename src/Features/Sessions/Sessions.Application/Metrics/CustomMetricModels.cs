@@ -15,7 +15,7 @@ public sealed record CustomMetricView(Guid Id, int Position, CustomMetricDefinit
 /// <param name="Previous">The period before this one; absent unless asked for, and for all time.</param>
 public sealed record CustomMetricValue(
     Guid Id,
-    string Name,
+    string? Name,
     MetricMeasure Measure,
     MetricWindow Window,
     double? Value,
@@ -46,7 +46,7 @@ public sealed record CustomMetricPeriod(
 /// <param name="Previous">The period before this one, with the same bands; null unless asked for, and for all time.</param>
 public sealed record CustomMetricDetail(
     Guid Id,
-    string Name,
+    string? Name,
     MetricMeasure Measure,
     MetricWindow Window,
     DateRangeView Range,

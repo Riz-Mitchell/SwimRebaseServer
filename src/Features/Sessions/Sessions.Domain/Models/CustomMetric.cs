@@ -5,7 +5,7 @@ namespace Sessions.Domain.Models;
 /// maximum effort, so the metric keeps its meaning if the swimmer later changes their effort scale.
 /// </summary>
 public sealed record CustomMetricDefinition(
-    string Name,
+    string? Name,
     IReadOnlyList<Stroke>? Strokes,
     IReadOnlyList<SwimMode>? Modes,
     int? MinPercent,
@@ -21,7 +21,8 @@ public class CustomMetric
 
     public Guid OwnerId { get; set; }
 
-    public string Name { get; set; } = string.Empty;
+    /// <summary>Being phased out: a metric's title is derived from what it tracks. Null for any metric saved without one.</summary>
+    public string? Name { get; set; }
 
     /// <summary>Stroke names; empty means every stroke.</summary>
     public string[] Strokes { get; set; } = [];
@@ -45,7 +46,7 @@ public class CustomMetric
 
     public void Apply(CustomMetricDefinition definition)
     {
-        Name = definition.Name.Trim();
+        Name = string.IsNullOrWhiteSpace(definition.Name) ? null : definition.Name.Trim();
         Strokes = (definition.Strokes ?? []).Distinct().Select(s => s.ToString()).ToArray();
         Modes = (definition.Modes ?? []).Distinct().Select(m => m.ToString()).ToArray();
         MinPercent = definition.MinPercent;
