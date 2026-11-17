@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Sessions.Application.Interfaces;
 using Sessions.Application.Metrics;
 using Sessions.Application.Services;
@@ -115,11 +116,22 @@ public class CustomMetricTests
     }
 
     [Theory]
+    [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task A_metric_needs_a_name(string name)
+    public async Task A_metric_needs_no_name(string? name)
     {
-        await Assert.ThrowsAsync<InvalidCustomMetricException>(() => new Harness().Metrics.CreateAsync(Swimmer, FlyAtThreshold with { Name = name }, default));
+        var saved = await new Harness().Metrics.CreateAsync(Swimmer, FlyAtThreshold with { Name = name }, default);
+
+        Assert.Null(saved.Definition.Name);
+    }
+
+    [Fact]
+    public async Task A_name_that_is_given_must_not_be_too_long()
+    {
+        var tooLong = new string('x', CustomMetricService.MaxNameLength + 1);
+
+        await Assert.ThrowsAsync<InvalidCustomMetricException>(() => new Harness().Metrics.CreateAsync(Swimmer, FlyAtThreshold with { Name = tooLong }, default));
     }
 
     [Fact]
@@ -156,6 +168,24 @@ public class CustomMetricTests
         Assert.Equal(MetricWindow.ThisWeek, parsed.Window);
         Assert.Equal(MetricDimension.Day, parsed.GroupBy);
         Assert.Throws<InvalidCustomMetricException>(() => CustomMetricTool.Parse("""{"window":"someday"}"""));
+    }
+
+    [Fact]
+    public void The_chat_tool_reads_a_metric_with_no_name()
+    {
+        var parsed = CustomMetricTool.Parse("""{"strokes":["fly"],"measure":"distance","window":"thisWeek"}""");
+
+        Assert.Null(parsed.Name);
+    }
+
+    [Fact]
+    public void The_chat_tool_result_keeps_the_name_when_there_is_one_and_leaves_it_out_when_there_is_not()
+    {
+        var withName = SessionJson.Deserialize<JsonElement>(CustomMetricTool.Format(new CustomMetricView(Guid.NewGuid(), 0, FlyAtThreshold with { Name = "Fly" })));
+        var withoutName = SessionJson.Deserialize<JsonElement>(CustomMetricTool.Format(new CustomMetricView(Guid.NewGuid(), 0, FlyAtThreshold with { Name = null })));
+
+        Assert.Equal("Fly", withName.GetProperty("definition").GetProperty("name").GetString());
+        Assert.False(withoutName.GetProperty("definition").TryGetProperty("name", out _));
     }
 
     private sealed class Harness

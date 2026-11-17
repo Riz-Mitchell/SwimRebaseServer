@@ -15,7 +15,7 @@ public static class CustomMetricTool
         "series over time. Use get_training_metrics first when the user wants to see a number rather than keep it.";
 
     public const string Schema = """
-        {"type":"object","required":["name"],"properties":{"name":{"type":"string","description":"short label for the tile, e.g. Fly at TH+ this week"},"strokes":{"type":"array","items":{"type":"string","enum":["free","back","breast","fly","im","choice"]}},"modes":{"type":"array","items":{"type":"string","enum":["swim","kick","pull","drill","scull"]}},"minPercent":{"type":"integer","description":"1-100"},"maxPercent":{"type":"integer","description":"1-100"},"measure":{"type":"string","enum":["distance","sessions","avgIntensity"]},"window":{"type":"string","enum":["last7Days","last30Days","thisWeek","thisMonth","allTime"]},"groupBy":{"type":"string","enum":["day","week","month"]}}}
+        {"type":"object","properties":{"name":{"type":"string","description":"optional; leave it out, the tile is titled from the filters"},"strokes":{"type":"array","items":{"type":"string","enum":["free","back","breast","fly","im","choice"]}},"modes":{"type":"array","items":{"type":"string","enum":["swim","kick","pull","drill","scull"]}},"minPercent":{"type":"integer","description":"1-100"},"maxPercent":{"type":"integer","description":"1-100"},"measure":{"type":"string","enum":["distance","sessions","avgIntensity"]},"window":{"type":"string","enum":["last7Days","last30Days","thisWeek","thisMonth","allTime"]},"groupBy":{"type":"string","enum":["day","week","month"]}}}
         """;
 
     /// <exception cref="InvalidCustomMetricException">The JSON is not a metric.</exception>

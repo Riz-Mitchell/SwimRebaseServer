@@ -12,7 +12,7 @@ public sealed class CustomMetricConfiguration : IEntityTypeConfiguration<CustomM
         builder.ToTable("custom_metrics");
         builder.HasKey(m => m.Id);
         builder.Property(m => m.Id).ValueGeneratedNever();
-        builder.Property(m => m.Name).IsRequired().HasMaxLength(CustomMetricService.MaxNameLength);
+        builder.Property(m => m.Name).HasMaxLength(CustomMetricService.MaxNameLength);
         builder.Property(m => m.Strokes).IsRequired();
         builder.Property(m => m.Modes).IsRequired();
         builder.Property(m => m.Measure).HasConversion<string>().HasMaxLength(16).IsRequired();

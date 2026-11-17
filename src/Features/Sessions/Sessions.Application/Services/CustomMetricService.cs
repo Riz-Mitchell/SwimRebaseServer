@@ -96,9 +96,9 @@ public sealed class CustomMetricService(
 
     private static void ValidateDefinition(CustomMetricDefinition definition)
     {
-        if (string.IsNullOrWhiteSpace(definition.Name) || definition.Name.Trim().Length > MaxNameLength)
+        if (definition.Name is not null && definition.Name.Trim().Length > MaxNameLength)
         {
-            throw new InvalidCustomMetricException($"name must be 1-{MaxNameLength} characters");
+            throw new InvalidCustomMetricException($"name must be at most {MaxNameLength} characters");
         }
 
         if (!Enum.IsDefined(definition.Measure) || !Enum.IsDefined(definition.Window))
