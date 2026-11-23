@@ -7,15 +7,15 @@ public class TimedSwimServiceTests
 {
     private static readonly Guid User = Guid.NewGuid();
 
-    private static (TimedSwimService Service, InMemoryTimedSwimRepository Repo, InMemoryUserEffortTermRepository Terms) Build()
+    private static (TimedSwimService Service, InMemoryTimedSwimRepository Repo, InMemoryUserEffortTermRepository Terms) Build(InMemorySessionRepository? sessions = null)
     {
         var repo = new InMemoryTimedSwimRepository();
         var terms = new InMemoryUserEffortTermRepository();
-        return (new TimedSwimService(repo, TestSessions.Resolver(), TestSessions.Terms(terms), new NoOpUnitOfWork()), repo, terms);
+        return (new TimedSwimService(repo, sessions ?? new InMemorySessionRepository(), TestSessions.Resolver(), TestSessions.Terms(terms), new NoOpUnitOfWork()), repo, terms);
     }
 
-    private static LogTimedSwimRequest Request(decimal dist = 25, double seconds = 12.4, string? effort = "max", List<ResistanceItem>? gear = null) =>
-        new(null, new DateOnly(2026, 11, 23), PoolCourse.Scm, dist, Stroke.Free, SwimMode.Swim, seconds, effort, StartType.Dive, FinishReference.Head, gear, null);
+    private static LogTimedSwimRequest Request(decimal dist = 25, double seconds = 12.4, string? effort = "max", List<ResistanceItem>? gear = null, Guid? sessionId = null) =>
+        new(sessionId, new DateOnly(2026, 11, 23), PoolCourse.Scm, dist, Stroke.Free, SwimMode.Swim, seconds, effort, StartType.Dive, FinishReference.Head, gear, null);
 
     [Fact]
     public async Task Logging_resolves_intensity_and_keeps_the_gear()
@@ -101,5 +101,51 @@ public class TimedSwimServiceTests
 
         Assert.Empty(repo.Swims);
         await Assert.ThrowsAsync<TimedSwimNotFoundException>(() => service.GetAsync(User, logged.Id, default));
+    }
+
+    [Fact]
+    public async Task A_swim_can_be_linked_to_the_swimmers_own_session()
+    {
+        var sessions = new InMemorySessionRepository();
+        var own = new Session { Id = Guid.NewGuid(), OwnerId = User };
+        sessions.Sessions.Add(own);
+        var (service, _, _) = Build(sessions);
+
+        var logged = await service.LogAsync(User, Request(sessionId: own.Id), default);
+        var updated = await service.UpdateAsync(User, logged.Id, Request(seconds: 12.0, sessionId: own.Id), default);
+
+        Assert.Equal(own.Id, logged.SessionId);
+        Assert.Equal(own.Id, updated.SessionId);
+    }
+
+    [Fact]
+    public async Task Logging_against_another_swimmers_or_a_missing_session_is_rejected_and_not_saved()
+    {
+        var sessions = new InMemorySessionRepository();
+        var theirs = new Session { Id = Guid.NewGuid(), OwnerId = Guid.NewGuid() };
+        sessions.Sessions.Add(theirs);
+        var (service, repo, _) = Build(sessions);
+
+        var ex = await Assert.ThrowsAsync<InvalidTimedSwimException>(() => service.LogAsync(User, Request(sessionId: theirs.Id), default));
+        await Assert.ThrowsAsync<InvalidTimedSwimException>(() => service.LogAsync(User, Request(sessionId: Guid.NewGuid()), default));
+
+        Assert.Contains(ex.Problems, p => p.Contains("not one of your sessions"));
+        Assert.Empty(repo.Swims);
+    }
+
+    [Fact]
+    public async Task Updating_a_swim_onto_another_swimmers_session_is_rejected_and_changes_nothing()
+    {
+        var sessions = new InMemorySessionRepository();
+        var theirs = new Session { Id = Guid.NewGuid(), OwnerId = Guid.NewGuid() };
+        sessions.Sessions.Add(theirs);
+        var (service, repo, _) = Build(sessions);
+        var logged = await service.LogAsync(User, Request(), default);
+
+        await Assert.ThrowsAsync<InvalidTimedSwimException>(() => service.UpdateAsync(User, logged.Id, Request(seconds: 11.0, sessionId: theirs.Id), default));
+
+        var stored = repo.Swims.Single();
+        Assert.Null(stored.SessionId);
+        Assert.Equal(12.4, stored.Seconds);
     }
 }

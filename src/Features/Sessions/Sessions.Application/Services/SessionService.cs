@@ -127,7 +127,10 @@ public sealed class SessionService(
         return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, edited);
     }
 
-    /// <summary>Deletes a session and takes it off the swimmer's count in the same transaction.</summary>
+    /// <summary>
+    /// Deletes a session and takes it off the swimmer's count in the same transaction. Its facts are deleted with it; timed swims
+    /// logged against it are kept and have their session id cleared by the database (ON DELETE SET NULL).
+    /// </summary>
     /// <exception cref="SessionNotFoundException">There is no such session for this user.</exception>
     public async Task DeleteAsync(Guid userId, Guid id, CancellationToken cancellationToken)
     {

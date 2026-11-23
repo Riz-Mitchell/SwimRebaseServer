@@ -61,6 +61,24 @@ public sealed class SessionsController(
         }
     }
 
+    /// <summary>
+    /// Permanently deletes a session with its facts and takes it off the swimmer's count. Timed swims logged against it are kept, with
+    /// their <c>sessionId</c> cleared.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await sessions.DeleteAsync(currentUser.UserId, id, cancellationToken);
+            return NoContent();
+        }
+        catch (SessionNotFoundException)
+        {
+            return NotFound();
+        }
+    }
+
     /// <summary>Changes a session with small path-addressed edits (remove, replace, insert, set_group); the totals and facts are rebuilt with it.</summary>
     [HttpPost("{id:guid}/edits")]
     public async Task<IActionResult> Edit(Guid id, [FromBody] EditSessionRequest request, CancellationToken cancellationToken)

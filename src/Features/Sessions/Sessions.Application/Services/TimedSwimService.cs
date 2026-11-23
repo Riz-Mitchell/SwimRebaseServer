@@ -50,6 +50,7 @@ public sealed class TimedSwimNotFoundException(Guid id) : Exception($"No timed s
 /// </summary>
 public sealed class TimedSwimService(
     ITimedSwimRepository timedSwims,
+    ISessionRepository sessions,
     IntensityResolver intensity,
     IPersonalIntensityProvider personal,
     [FromKeyedServices(SessionsKeys.UnitOfWork)] IUnitOfWork unitOfWork,
@@ -61,6 +62,7 @@ public sealed class TimedSwimService(
     public async Task<TimedSwimView> LogAsync(Guid userId, LogTimedSwimRequest request, CancellationToken cancellationToken)
     {
         var (splits, resistances) = Check(userId, request);
+        await CheckSessionAsync(userId, request.SessionId, cancellationToken);
         var timedSwim = new TimedSwim { Id = Guid.NewGuid(), OwnerId = userId, CreatedAt = DateTimeOffset.UtcNow };
         await ApplyAsync(timedSwim, request, splits, cancellationToken);
         timedSwim.Resistances = [.. resistances.Select(r => TimedSwimResistance.From(timedSwim.Id, r))];
@@ -79,6 +81,7 @@ public sealed class TimedSwimService(
     {
         var (splits, resistances) = Check(userId, request);
         var timedSwim = await timedSwims.FindForUpdateAsync(userId, id, cancellationToken) ?? throw NotFound(userId, id);
+        await CheckSessionAsync(userId, request.SessionId, cancellationToken);
 
         await ApplyAsync(timedSwim, request, splits, cancellationToken);
         timedSwims.ReplaceResistances(timedSwim, [.. resistances.Select(r => TimedSwimResistance.From(timedSwim.Id, r))]);
@@ -95,6 +98,21 @@ public sealed class TimedSwimService(
         timedSwims.Remove(timedSwim);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("[{ClassName}] Deleted timed swim {TimedSwimId} for user {UserId}", nameof(TimedSwimService), id, userId);
+    }
+
+    /// <summary>
+    /// A swim may only point at one of the caller's own sessions. Checked here rather than left to the foreign key, which would accept
+    /// another user's session and fail with a server error for an unknown one.
+    /// </summary>
+    private async Task CheckSessionAsync(Guid userId, Guid? sessionId, CancellationToken cancellationToken)
+    {
+        if (sessionId is not { } id || await sessions.ExistsAsync(userId, id, cancellationToken))
+        {
+            return;
+        }
+
+        _logger.LogWarning("[{ClassName}] User {UserId} tried to link a timed swim to session {SessionId}, which does not exist for them", nameof(TimedSwimService), userId, id);
+        throw new InvalidTimedSwimException([$"sessionId {id} is not one of your sessions"]);
     }
 
     private (List<Split> Splits, List<ResistanceItem> Resistances) Check(Guid userId, LogTimedSwimRequest request)
