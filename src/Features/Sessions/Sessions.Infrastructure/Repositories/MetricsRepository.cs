@@ -22,25 +22,10 @@ public sealed class MetricsRepository(SessionsDbContext db) : IMetricsRepository
 
         // Summed per session, stroke, mode and intensity: small however many sessions there are, and enough for the calculator to
         // group by anything (including sessions and time buckets) and count sessions.
-        var factTotals = await facts
+        return await facts
             .GroupBy(f => new { f.PerformedOn, f.SessionId, f.Stroke, f.Mode, f.Intensity, f.Unit })
             .Select(g => new FactTotal(g.Key.PerformedOn, g.Key.SessionId, g.Key.Stroke, g.Key.Mode, g.Key.Intensity, g.Key.Unit, g.Sum(f => f.Distance)))
             .ToListAsync(cancellationToken);
-
-        // Opted-in, session-linked timed swims count too (see TimedSwimFacts) - unioned here rather than written as SessionFact
-        // rows, so a later edit to the linked session can never silently drop them.
-        var timedSwims = db.TimedSwims.AsNoTracking().Where(t => t.OwnerId == userId && t.IncludeInMetrics && t.SessionId != null);
-        if (query.From is { } tsFrom) timedSwims = timedSwims.Where(t => t.PerformedOn >= tsFrom);
-        if (query.To is { } tsTo) timedSwims = timedSwims.Where(t => t.PerformedOn <= tsTo);
-        if (query.SessionId is { } tsSessionId) timedSwims = timedSwims.Where(t => t.SessionId == tsSessionId);
-        if (query.Strokes is { Count: > 0 } tsStrokes) timedSwims = timedSwims.Where(t => tsStrokes.Contains(t.Stroke));
-        if (query.Modes is { Count: > 0 } tsModes) timedSwims = timedSwims.Where(t => tsModes.Contains(t.Mode));
-        if (query.MinPercent is { } tsMin) timedSwims = timedSwims.Where(t => (t.Intensity ?? fallback) >= tsMin);
-        if (query.MaxPercent is { } tsMax) timedSwims = timedSwims.Where(t => (t.Intensity ?? fallback) <= tsMax);
-
-        var timedSwimTotals = TimedSwimFacts.ToFactTotals(await timedSwims.ToListAsync(cancellationToken));
-
-        return [.. factTotals, .. timedSwimTotals];
     }
 
     public async Task<DateOnly?> FirstPerformedOnAsync(Guid userId, CancellationToken cancellationToken) =>

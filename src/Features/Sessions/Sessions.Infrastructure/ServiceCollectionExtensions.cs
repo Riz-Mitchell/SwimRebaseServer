@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CustomMetricEvaluator>();
         services.AddScoped<CustomMetricService>();
         services.AddScoped<TimedSwimService>();
+        services.AddScoped<TimedSwimMetricsService>();
         services.AddScoped<SessionPreferencesService>();
         services.AddScoped<IProgressionDefaultsProvider>(sp => sp.GetRequiredService<SessionPreferencesService>());
         services.AddScoped<UserEffortTermService>();

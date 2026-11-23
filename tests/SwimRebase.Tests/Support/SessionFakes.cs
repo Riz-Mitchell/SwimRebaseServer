@@ -133,3 +133,27 @@ internal sealed class InMemoryMetricsRepository(IReadOnlyList<FactTotal> facts, 
     public Task<DateOnly?> FirstPerformedOnAsync(Guid userId, CancellationToken cancellationToken) =>
         Task.FromResult(firstPerformedOn);
 }
+
+internal sealed class InMemoryTimedSwimRepository : ITimedSwimRepository
+{
+    public List<TimedSwim> Swims { get; } = [];
+
+    public void Add(TimedSwim timedSwim) => Swims.Add(timedSwim);
+
+    public Task<TimedSwim?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Swims.FirstOrDefault(t => t.Id == id && t.OwnerId == userId));
+
+    public Task<TimedSwim?> FindForUpdateAsync(Guid userId, Guid id, CancellationToken cancellationToken) => FindAsync(userId, id, cancellationToken);
+
+    public void ReplaceResistances(TimedSwim timedSwim, IReadOnlyList<TimedSwimResistance> replacements) => timedSwim.Resistances = [.. replacements];
+
+    public void Remove(TimedSwim timedSwim) => Swims.Remove(timedSwim);
+
+    public Task<IReadOnlyList<TimedSwim>> ListAsync(Guid userId, TimedSwimFilter filter, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<TimedSwim>>(Swims.Where(t => t.OwnerId == userId).OrderBy(t => t.Seconds).ToList());
+
+    public Task<IReadOnlyList<TimedSwimFact>> GetFactsAsync(Guid userId, TimedSwimMetricsQuery query, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<TimedSwimFact>>(Swims.Where(t => t.OwnerId == userId)
+            .Select(t => new TimedSwimFact(t.PerformedOn, t.Course, t.Dist, t.Stroke, t.Mode, t.Seconds, t.Intensity, t.StartType, t.Finish, t.Resistances.Select(r => r.Kind).ToList()))
+            .ToList());
+}

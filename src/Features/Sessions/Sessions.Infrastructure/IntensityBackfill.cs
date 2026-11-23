@@ -11,7 +11,7 @@ namespace Sessions.Infrastructure;
 /// on every start: a session is only touched until it is written at <see cref="SwimSession.CurrentSchemaVersion"/>, and a timed swim only
 /// when its mapped value changes.
 /// </summary>
-public sealed class IntensityBackfill(SessionsDbContext db, IntensityResolver resolver, ILogger<IntensityBackfill> logger)
+public sealed class IntensityBackfill(SessionsDbContext db, IntensityResolver resolver, IPersonalIntensityProvider personal, ILogger<IntensityBackfill> logger)
 {
     private const int BatchSize = 100;
 
@@ -82,13 +82,20 @@ public sealed class IntensityBackfill(SessionsDbContext db, IntensityResolver re
     private async Task<int> BackfillTimedSwimsAsync(CancellationToken cancellationToken)
     {
         var updated = 0;
-        foreach (var swim in await db.TimedSwims.Where(t => t.Effort != null).ToListAsync(cancellationToken))
+
+        // Per swimmer, with their own effort terms first: that is how a swim's intensity is resolved when it is saved, so
+        // re-mapping with the built-in vocabulary alone would undo it on every start.
+        foreach (var owner in (await db.TimedSwims.Where(t => t.Effort != null).ToListAsync(cancellationToken)).GroupBy(t => t.OwnerId))
         {
-            var percent = resolver.Resolve(swim.Effort)?.Percent;
-            if (swim.Intensity != percent)
+            var mapper = await personal.MapperAsync(owner.Key, cancellationToken);
+            foreach (var swim in owner)
             {
-                swim.Intensity = percent;
-                updated++;
+                var percent = resolver.Resolve(swim.Effort, mapper)?.Percent;
+                if (swim.Intensity != percent)
+                {
+                    swim.Intensity = percent;
+                    updated++;
+                }
             }
         }
 

@@ -11,6 +11,8 @@ public sealed class SessionsDbContext(DbContextOptions<SessionsDbContext> option
 
     public DbSet<TimedSwim> TimedSwims => Set<TimedSwim>();
 
+    public DbSet<TimedSwimResistance> TimedSwimResistances => Set<TimedSwimResistance>();
+
     public DbSet<SessionPreferences> SessionPreferences => Set<SessionPreferences>();
 
     public DbSet<UserEffortTerm> UserEffortTerms => Set<UserEffortTerm>();

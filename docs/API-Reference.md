@@ -350,7 +350,7 @@ Filter, group and measure what was swum. All parameters optional; repeat a param
 
 | Parameter | Meaning |
 |---|---|
-| `sessionId` | Only that saved session (including its linked timed swims). Combine with `groupBy=stroke`, `mode` or `intensity` for one session's breakdown; an unknown id returns empty rows |
+| `sessionId` | Only that saved session. Combine with `groupBy=stroke`, `mode` or `intensity` for one session's breakdown; an unknown id returns empty rows |
 | `from`, `to` | Date range (yyyy-MM-dd), inclusive |
 | `strokes` | `free | back | breast | fly | im | choice` (an IM part counts towards fly, back, breast and free) |
 | `modes` | `swim | kick | pull | drill | scull` |
@@ -414,7 +414,7 @@ The scale metrics use when a request names none, already resolved, plus the defa
 
 ## Timed swims — `/api/timed-swims`
 
-How a swim went, as opposed to how much was swum: a time for a distance and stroke (the "event" is just `dist` + `stroke`, e.g. 50 free). Logged separately from sessions, usually during a practice (`sessionId` set) and sometimes standalone, such as a race result. Timed swims are never edited or deleted through the API.
+How a swim went, as opposed to how much was swum: a time for a distance and stroke (the "event" is just `dist` + `stroke`, e.g. 25 free), logged like a set in a gym app with its start, finish, effort and resistance gear. Usually logged during a practice (`sessionId` set, as a plain reference) and sometimes standalone, such as a race result. **Timed swims never count toward `/api/sessions/metrics`**; they have their own metrics (below).
 
 Enums are accepted in any case on input and returned PascalCase (`Free`, `Scm`, `Push`).
 
@@ -425,31 +425,51 @@ Enums are accepted in any case on input and returned PascalCase (`Free`, `Scm`, 
   "sessionId": "guid|null",
   "performedOn": "yyyy-MM-dd",
   "course": "Scy | Scm | Lcm",
-  "dist": 50,
+  "dist": 25,
   "stroke": "free | back | breast | fly | im | choice",
   "mode": "swim | kick | pull | drill | scull",
-  "seconds": 27.84,
+  "seconds": 11.84,
   "effort": "string|null",
   "startType": "Push | Dive | null",
   "finish": "Hand | Head | Feet | null",
-  "resistance": { "type": "string", "load": "string|null" },
-  "splits": [
-    { "distanceFromStart": 25, "seconds": 13.1, "strokeRateCyclesPerMinute": 52 }
+  "resistances": [
+    { "kind": "Sponges", "count": 2 },
+    { "kind": "Parachute", "widthCm": 30, "heightCm": 20 }
   ],
-  "includeInMetrics": false
+  "splits": [
+    { "distanceFromStart": 12.5, "seconds": 5.6, "strokeRateCyclesPerMinute": 58 }
+  ]
 }
 ```
-`sessionId`, `effort`, `startType`, `finish`, `resistance`, `splits` and `includeInMetrics` are optional.
+`sessionId`, `effort`, `startType`, `finish`, `resistances` and `splits` are optional.
 
 - `seconds` is the whole swim's time and is always required; splits are extra detail on top of it.
-- `effort` is free text ("easy", "80%", "race pace") and is mapped to the same percent `intensity` as a session part. It is `null` when the text can't be mapped.
+- `effort` is free text ("easy", "80%", "race pace") and is mapped to the same percent `intensity` as a session part, using the swimmer's own effort terms first. It is `null` when the text can't be mapped. A swim's identity is the combination of stroke, distance, effort, start, finish and resistance; there is no separate label.
 - A split is a checkpoint before the finish, so `distanceFromStart` must be below `dist`. The finish time is `seconds`, not a split.
 - `strokeRateCyclesPerMinute` counts full stroke cycles, not individual arm strokes.
-- `includeInMetrics` defaults to `false`; see below.
+- `resistances` lists the gear used, up to 10 items. Measures are metric. A swim can carry several kinds at once.
 
-**Validation (400):** `dist >= 1` with at most 2 decimal places, `seconds > 0`, a `resistance` must have a `type`, and splits must be strictly increasing in both distance and seconds, finish before `dist` and `seconds`, with a rate above 0.
+| `kind` | Requires | May also have |
+|---|---|---|
+| `Sponges` | `count` | `note` |
+| `Parachute` | `widthCm`, `heightCm` | `note` |
+| `StretchCord` | `lengthCm` | `tensionLevel` (1-10), `note` |
+| `WeightedBelt` | `weightKg` | `note` |
+| `DragSuit` | nothing | `note` |
+| `DragBucket` | nothing | `note` |
+| `Other` | `note` | |
+
+Numbers must be above 0 and `note` is at most 160 characters. A measure a kind does not use (a `weightKg` on `Sponges`) is rejected.
+
+**Validation (400):** `dist >= 1` with at most 2 decimal places, `seconds > 0`, the resistance rules above, and splits strictly increasing in both distance and seconds, finish before `dist` and `seconds`, with a rate above 0.
 
 **Response:** `TimedSwimResponse`. `400` with `{ error, problems }` listing everything to fix; nothing is saved.
+
+### `PUT /api/timed-swims/{id}`
+Replaces the swim with the body, which has the same shape as `POST`. The id, owner and `createdAt` are kept, and the resistances are replaced as a whole. `404` if it is not the caller's; `400` as for `POST`, in which case nothing changes.
+
+### `DELETE /api/timed-swims/{id}`
+`204`, or `404` if it is not the caller's.
 
 ### `GET /api/timed-swims`
 Fastest first. All parameters optional; repeat a parameter for several values (`strokes=free&strokes=fly`).
@@ -458,15 +478,15 @@ Fastest first. All parameters optional; repeat a parameter for several values (`
 |---|---|
 | `sessionId` | Only swims logged against this session |
 | `from`, `to` | Date range (yyyy-MM-dd), inclusive |
-| `distances` | Exact distances, e.g. `distances=50&distances=12.5` |
+| `distances` | Exact distances, e.g. `distances=25&distances=12.5` |
 | `strokes` | `free | back | breast | fly | im | choice` |
 | `minPercent`, `maxPercent` | Bounds on intensity, 1-100. Swims with no intensity are left out when either is set |
 | `minIntensity`, `maxIntensity` | The earlier 1-10 bounds (a level covers the percents of its tens band); `minPercent`/`maxPercent` win when both are sent |
 | `startTypes` | `Push | Dive` |
-| `resistanceTypes` | Resistance type names to match |
-| `hasResistance` | `true` for swims with resistance, `false` for without |
+| `resistanceKinds` | Swims with any of these kinds of gear: `Sponges | Parachute | StretchCord | DragSuit | WeightedBelt | DragBucket | Other` |
+| `hasResistance` | `true` for swims with gear, `false` for without |
 
-Examples: `?strokes=free&distances=50` (50 free times, best first), `?hasResistance=false&startTypes=Dive` (unresisted dive starts).
+Examples: `?strokes=free&distances=25` (25 free times, best first), `?hasResistance=false&startTypes=Dive` (unresisted dive starts).
 
 The list is not paginated.
 
@@ -474,6 +494,31 @@ The list is not paginated.
 
 ### `GET /api/timed-swims/{id}`
 **Response:** `TimedSwimResponse`. `404` if it is not the caller's.
+
+### `GET /api/timed-swims/metrics`
+Filter, group and measure timed swims. This is separate from `/api/sessions/metrics`, which only ever sees session volume.
+
+| Parameter | Meaning |
+|---|---|
+| `from`, `to` | Date range (yyyy-MM-dd), inclusive |
+| `distances`, `strokes`, `modes`, `courses`, `startTypes`, `finishes`, `resistanceKinds`, `hasResistance` | The same filters as the list, plus `modes` (`swim | kick | pull | drill | scull`), `courses` (`Scy | Scm | Lcm`) and `finishes` (`Hand | Head | Feet`) |
+| `minPercent`, `maxPercent`, `minIntensity`, `maxIntensity` | Bounds on intensity, as in the list |
+| `scale` | `tens`, `zones` or `custom`: how `groupBy=intensity` buckets intensity. Omit it to use the swimmer's saved scale |
+| `groupBy` | Up to 2 of `stroke | mode | distance | course | startType | finish | intensity | resistanceKind | day | week | month` |
+| `thenBy` | A second dimension, for a request with exactly one `groupBy` |
+| `measure` | `count` (default), `bestTime` (fastest, in seconds), `avgTime` (mean seconds) or `avgIntensity` (mean percent of the swims that have one) |
+
+A swim with several kinds of gear counts under each kind when grouping by `resistanceKind`; a swim with none counts under `none`. A swim with no start or finish is grouped under `unspecified`. Time measures only compare like with like, so group by `distance` and `stroke` (or filter to one event); when a time measure mixes events the response has `mixedEvents: true`.
+
+Examples: `?distances=25&strokes=free&groupBy=startType&measure=bestTime` (best 25 free by start), `?distances=50&strokes=free&groupBy=resistanceKind&measure=avgTime` (average 50 free time by gear), `?groupBy=distance&thenBy=stroke&measure=bestTime` (personal bests), `?groupBy=month&measure=count`.
+
+**Response:**
+```json
+{ "measure": "BestTime", "groupBy": ["StartType"], "totalSwims": 3, "units": ["Metres"],
+  "scale": { "id": "tens", "name": "Tens", "bands": [ ... ] }, "mixedEvents": false,
+  "rows": [ { "keys": ["dive"], "value": 11.9 }, { "keys": ["push"], "value": 13.8 } ] }
+```
+`rows` reads in order when grouped by time, distance or intensity; otherwise biggest first for counts and fastest first for times. `units` lists every distance unit present; more than one means metres and yards are mixed and nothing is converted. `400` with `{ error }` for a question that cannot be answered (more than 2 `groupBy`, an unknown `scale`, `from` after `to`).
 
 ### `TimedSwimResponse` shape
 ```json
@@ -483,25 +528,27 @@ The list is not paginated.
   "performedOn": "yyyy-MM-dd",
   "course": "Scy | Scm | Lcm",
   "unit": "Yards | Metres",
-  "dist": 50,
+  "dist": 25,
   "stroke": "Free",
   "mode": "Swim",
-  "seconds": 27.84,
-  "effort": "string|null",
-  "intensity": 90,
+  "seconds": 11.84,
+  "effort": "max",
+  "intensity": 100,
   "startType": "Push | Dive | null",
   "finish": "Hand | Head | Feet | null",
-  "resistance": { "type": "string", "load": "string|null" },
-  "splits": [{ "distanceFromStart": 25, "seconds": 13.1, "strokeRateCyclesPerMinute": 52 }],
-  "strokeRateCyclesPerMinute": 52.0,
-  "includeInMetrics": false,
+  "resistances": [
+    { "kind": "Sponges", "count": 2, "widthCm": null, "heightCm": null, "lengthCm": null, "weightKg": null, "tensionLevel": null, "note": null, "areaCm2": null },
+    { "kind": "Parachute", "count": null, "widthCm": 30, "heightCm": 20, "lengthCm": null, "weightKg": null, "tensionLevel": null, "note": null, "areaCm2": 600 }
+  ],
+  "splits": [{ "distanceFromStart": 12.5, "seconds": 5.6, "strokeRateCyclesPerMinute": 58 }],
+  "strokeRateCyclesPerMinute": 58.0,
   "createdAt": "ISO-8601 timestamp"
 }
 ```
-`unit` is derived from `course` (yards for `Scy`). `resistance` is `null` when none was set. The top-level `strokeRateCyclesPerMinute` is the average of the splits' rates, to one decimal place, and `null` when no split has one.
+`unit` is derived from `course` (yards for `Scy`). `resistances` is an empty array when there was none, and `areaCm2` is derived for a parachute. The top-level `strokeRateCyclesPerMinute` is the average of the splits' rates, to one decimal place, and `null` when no split has one.
 
-### Interaction with session metrics
-A timed swim counts towards `GET /api/sessions/metrics` as training volume (its `dist`, `stroke`, `mode` and `intensity`, on the swim's own `performedOn` date, grouped under its session) only when **both** `includeInMetrics` is `true` and `sessionId` is set. A standalone swim never counts, whatever the flag, because there is no session for it to be volume of. Because the swim is added to the metrics at query time, editing the linked session does not remove it.
+### Breaking changes from the first version
+`includeInMetrics` is gone from the request and response, and so is its effect on `/api/sessions/metrics`. The free-text `resistance: { type, load }` is replaced by `resistances`; swims logged earlier keep their old wording as one `Other` resistance with it in `note`. The `resistanceTypes` list filter is now `resistanceKinds`.
 
 ---
 
