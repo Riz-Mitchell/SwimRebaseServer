@@ -15,18 +15,11 @@ public sealed record Split
     public int? StrokeRateCyclesPerMinute { get; init; }
 }
 
-/// <summary>What resistance, if any, the swim was done with.</summary>
-public sealed record Resistance
-{
-    public string Type { get; init; } = string.Empty;
-
-    public string? Load { get; init; }
-}
-
 /// <summary>
-/// How one swim went: a time for a distance+stroke, logged separately from training-volume sessions. Usually swum during a
-/// session (<see cref="SessionId"/> set); sometimes standalone, e.g. a race result. The "event" is just <see cref="Dist"/> +
-/// <see cref="Stroke"/> (e.g. "50 Free") - no separate meet/event field.
+/// How one swim went: a time for a distance+stroke, logged like a gym set rather than as training volume. Usually swum during a
+/// session (<see cref="SessionId"/> set, as a plain reference); sometimes standalone, e.g. a race result. The "event" is just
+/// <see cref="Dist"/> + <see cref="Stroke"/> (e.g. "50 Free") - no separate meet/event field. Timed swims have their own metrics
+/// and never feed the session volume metrics.
 /// </summary>
 public class TimedSwim
 {
@@ -60,9 +53,8 @@ public class TimedSwim
 
     public FinishReference? Finish { get; set; }
 
-    public string? ResistanceType { get; set; }
-
-    public string? ResistanceLoad { get; set; }
+    /// <summary>The gear the swim was done with (sponges, parachute, ...); empty when unresisted. Replaced as a whole on edit.</summary>
+    public List<TimedSwimResistance> Resistances { get; set; } = [];
 
     /// <summary>A serialized <see cref="Split"/> list ("[]" when there are none). Kept as JSON rather than a child table: read as a
     /// whole with the swim, never queried at the SQL level.</summary>
@@ -70,10 +62,6 @@ public class TimedSwim
 
     /// <summary>Denormalized: <see cref="Calculations.StrokeRateCalculator.Compute"/> over the splits, stored at write time.</summary>
     public double? StrokeRateCyclesPerMinute { get; set; }
-
-    /// <summary>Whether this swim counts toward the volume-metrics pipeline (GET /api/sessions/metrics). Only meaningful when
-    /// <see cref="SessionId"/> is set - a standalone swim has no session to be training volume of.</summary>
-    public bool IncludeInMetrics { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

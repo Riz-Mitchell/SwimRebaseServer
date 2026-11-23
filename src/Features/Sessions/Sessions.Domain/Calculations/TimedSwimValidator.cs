@@ -2,16 +2,16 @@ using Sessions.Domain.Models;
 
 namespace Sessions.Domain.Calculations;
 
-/// <summary>Problems a re-ask can fix: impossible numbers, splits out of order, resistance missing its type.</summary>
+/// <summary>Problems a re-ask can fix: impossible numbers, splits out of order, resistance gear missing or misusing its measures.</summary>
 public static class TimedSwimValidator
 {
-    public static List<string> Validate(decimal dist, double seconds, Resistance? resistance, IReadOnlyList<Split> splits)
+    public static List<string> Validate(decimal dist, double seconds, IReadOnlyList<ResistanceItem> resistances, IReadOnlyList<Split> splits)
     {
         var errors = new List<string>();
         if (dist < 1) errors.Add("dist must be >= 1");
         if (decimal.Round(dist, 2) != dist) errors.Add("dist can have at most 2 decimal places");
         if (seconds <= 0) errors.Add("seconds must be > 0");
-        if (resistance is { Type.Length: 0 }) errors.Add("resistance type is required when resistance is set");
+        errors.AddRange(ResistanceCatalog.Validate(resistances));
 
         var lastDistance = 0m;
         var lastSeconds = 0.0;
