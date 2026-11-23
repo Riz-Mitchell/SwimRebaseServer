@@ -55,6 +55,9 @@ internal sealed class InMemorySessionRepository : ISessionRepository
     public Task<Session?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Sessions.FirstOrDefault(s => s.Id == id && s.OwnerId == userId));
 
+    public Task<bool> ExistsAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
+        Task.FromResult(Sessions.Any(s => s.Id == id && s.OwnerId == userId));
+
     public void Remove(Session session)
     {
         Sessions.Remove(session);

@@ -331,6 +331,10 @@ How many sessions the caller has saved.
 ### `GET /api/sessions/{id}`
 **Response:** the summary fields above (without `createdAt`) plus `content` (the tree) and `outline` (numbered text). `404` if it is not the caller's.
 
+### `DELETE /api/sessions/{id}`
+Permanently deletes the session. Its metrics data goes with it, so it stops counting towards `/api/sessions/metrics` and custom metrics, and `/api/sessions/stats` drops by one. Timed swims logged against it are **not** deleted: they keep everything except `sessionId`, which becomes `null`, as for a standalone swim. This cannot be undone.
+**Response:** `204`, or `404` if it is not the caller's.
+
 ### `POST /api/sessions/{id}/edits`
 Changes a session with small path-addressed edits; the total and the per-part facts are rebuilt with it.
 
@@ -443,6 +447,7 @@ Enums are accepted in any case on input and returned PascalCase (`Free`, `Scm`, 
 ```
 `sessionId`, `effort`, `startType`, `finish`, `resistances` and `splits` are optional.
 
+- `sessionId`, when sent, must be one of the caller's own sessions; otherwise the request is a `400` with `{ error, problems }` and nothing is saved. If that session is later deleted the swim is kept and its `sessionId` becomes `null`.
 - `seconds` is the whole swim's time and is always required; splits are extra detail on top of it.
 - `effort` is free text ("easy", "80%", "race pace") and is mapped to the same percent `intensity` as a session part, using the swimmer's own effort terms first. It is `null` when the text can't be mapped. A swim's identity is the combination of stroke, distance, effort, start, finish and resistance; there is no separate label.
 - A split is a checkpoint before the finish, so `distanceFromStart` must be below `dist`. The finish time is `seconds`, not a split.

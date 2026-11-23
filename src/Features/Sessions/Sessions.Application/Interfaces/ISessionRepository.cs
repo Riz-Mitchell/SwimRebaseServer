@@ -10,6 +10,9 @@ public interface ISessionRepository
     /// <summary>Scoped to <paramref name="userId"/> - returns null if the session belongs to someone else. Tracked, so it can be edited.</summary>
     Task<Session?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Whether <paramref name="id"/> is one of <paramref name="userId"/>'s sessions. Read-only.</summary>
+    Task<bool> ExistsAsync(Guid userId, Guid id, CancellationToken cancellationToken);
+
     /// <summary>Deletes a session found with <see cref="FindAsync"/>; its facts go with it.</summary>
     void Remove(Session session);
 
