@@ -31,6 +31,12 @@ public sealed record SessionWithContent(Session Session, SwimSession Content);
 
 public sealed class SessionNotFoundException(Guid id) : Exception($"No session with id {id} exists for this user.");
 
+/// <summary>The fields <see cref="SessionService.UpdateDetailsAsync"/> may change; a null field is left as it is.</summary>
+public sealed record SessionDetailsUpdate(string? Title, DateOnly? PerformedOn, PoolCourse? Course);
+
+/// <summary>The details change is empty or one of its values is not usable. The message says which.</summary>
+public sealed class InvalidSessionDetailsException(string message) : Exception(message);
+
 /// <summary>Saves and edits sessions. The tree, the total and the fact rows are always written together, so they cannot drift apart.</summary>
 public sealed class SessionService(
     ISessionRepository sessions,
@@ -125,6 +131,63 @@ public sealed class SessionService(
         _logger.LogInformation("[{ClassName}] Applied {EditCount} edit(s) to session {SessionId} for user {UserId}; total now {TotalDistance}",
             nameof(SessionService), edits.Count, id, userId, session.TotalDistance);
         return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, edited);
+    }
+
+    /// <summary>
+    /// Changes a session's title, date or course. The date and course are copied onto every fact row, so a change to either rebuilds the
+    /// facts in the same save and metrics follow. The tree is never touched: a new course changes what the unchanged distances are measured
+    /// in (yards for SCY, metres otherwise), it does not convert them. Metrics add yards and metres up in the swimmer's display unit.
+    /// </summary>
+    /// <exception cref="SessionNotFoundException">There is no such session for this user.</exception>
+    /// <exception cref="InvalidSessionDetailsException">Nothing was sent to change, or a value is not usable.</exception>
+    public async Task<SessionView> UpdateDetailsAsync(Guid userId, Guid id, SessionDetailsUpdate update, CancellationToken cancellationToken)
+    {
+        var title = update.Title is null ? null : SessionTitles.Clean(update.Title)
+            ?? throw Invalid(userId, id, "title cannot be empty.");
+        if (update.Title is null && update.PerformedOn is null && update.Course is null)
+        {
+            throw Invalid(userId, id, "send at least one of title, performedOn or course.");
+        }
+
+        if (update.PerformedOn is { } day && day == default)
+        {
+            throw Invalid(userId, id, "performedOn is not a valid date.");
+        }
+
+        if (update.Course is { } course && !Enum.IsDefined(course))
+        {
+            throw Invalid(userId, id, $"course must be one of {string.Join(", ", Enum.GetNames<PoolCourse>().Select(n => n.ToLowerInvariant()))}.");
+        }
+
+        var session = await sessions.FindAsync(userId, id, cancellationToken);
+        if (session is null)
+        {
+            _logger.LogWarning("[{ClassName}] User {UserId} tried to change the details of session {SessionId}, which does not exist for them", nameof(SessionService), userId, id);
+            throw new SessionNotFoundException(id);
+        }
+
+        var factsChanged = (update.PerformedOn is { } d && d != session.PerformedOn) || (update.Course is { } c && c != session.Course);
+        if (title is not null) session.Title = title;
+        if (update.PerformedOn is { } newDay) session.PerformedOn = newDay;
+        if (update.Course is { } newCourse) session.Course = newCourse;
+
+        var content = SessionJson.Deserialize<SwimSession>(session.ContentJson);
+        session.UpdatedAt = DateTimeOffset.UtcNow;
+        if (factsChanged)
+        {
+            await sessions.ReplaceFactsAsync(session.Id, SessionFactBuilder.Build(session, content), cancellationToken);
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("[{ClassName}] Changed details of session {SessionId} for user {UserId} (title {Title}, date {PerformedOn}, course {Course}, facts rebuilt {FactsRebuilt})",
+            nameof(SessionService), id, userId, title is not null, update.PerformedOn is not null, update.Course is not null, factsChanged);
+        return new SessionView(session.Id, session.PerformedOn, session.Title, session.Course, session.Unit, session.Source, session.TotalDistance, content);
+    }
+
+    private InvalidSessionDetailsException Invalid(Guid userId, Guid id, string reason)
+    {
+        _logger.LogWarning("[{ClassName}] Rejected a details change to session {SessionId} from user {UserId}: {Reason}", nameof(SessionService), id, userId, reason);
+        return new InvalidSessionDetailsException(reason);
     }
 
     /// <summary>

@@ -12,16 +12,16 @@ public static class MetricsCalculator
         Validate(query);
 
         // The repository filters in SQL; the same rule is applied here so the calculator is correct on its own.
-        var candidates = totals
+        var candidates = Normalise(query, totals)
             .Select(f => f.Intensity is null && query.DefaultEffort is { } fallback ? (Fact: f with { Intensity = fallback }, Assumed: true) : (Fact: f, Assumed: false))
             .Where(c => Matches(query, c.Fact))
             .ToList();
         var facts = candidates.Select(c => c.Fact).ToList();
-        var assumed = candidates.Where(c => c.Assumed).Sum(c => c.Fact.Distance);
+        var assumed = RoundDistance(query, candidates.Where(c => c.Assumed).Sum(c => c.Fact.Distance));
 
         var grouped = candidates
             .GroupBy(c => query.GroupBy.Select(d => Key(d, c.Fact, query.EffectiveScale)).ToArray(), KeyComparer.Instance)
-            .Select(g => new MetricRow(g.Key, Measure(query.Measure, g.Select(c => c.Fact)), AssumedIn(query.Measure, g.Where(c => c.Assumed).Sum(c => c.Fact.Distance))));
+            .Select(g => new MetricRow(g.Key, Measure(query.Measure, g.Select(c => c.Fact), query), AssumedIn(query.Measure, RoundDistance(query, g.Where(c => c.Assumed).Sum(c => c.Fact.Distance)))));
 
         // Time and intensity read in order; everything else (stroke, mode, session) reads biggest first.
         var inOrder = query.GroupBy.Any(d => d is MetricDimension.Day or MetricDimension.Week or MetricDimension.Month or MetricDimension.Intensity);
@@ -30,8 +30,21 @@ public static class MetricsCalculator
             ? grouped.OrderBy(r => r.Keys, order).ThenByDescending(r => r.Value)
             : grouped.OrderByDescending(r => r.Value).ThenBy(r => r.Keys, order)).ToList();
 
-        return new MetricsResult(query.Measure, query.GroupBy, rows, facts.Sum(f => f.Distance), facts.Select(f => f.Unit).Distinct().Order().ToList(), query.EffectiveScale, query.DefaultEffort, assumed);
+        return new MetricsResult(query.Measure, query.GroupBy, rows, RoundDistance(query, facts.Sum(f => f.Distance)), facts.Select(f => f.Unit).Distinct().Order().ToList(), query.EffectiveScale, query.DefaultEffort, assumed);
     }
+
+    /// <summary>
+    /// With a display unit, every fact is converted to it so yards and metres add up as one distance. Each fact row is already summed per
+    /// session, stroke, mode, intensity and unit, so conversion is applied to those sums; totals are rounded once, afterwards.
+    /// </summary>
+    private static IEnumerable<FactTotal> Normalise(MetricsQuery query, IEnumerable<FactTotal> totals) =>
+        query.DisplayUnit is not { } unit
+            ? totals
+            : totals.Select(f => f.Unit == unit ? f : f with { Distance = DistanceUnits.Convert(f.Distance, f.Unit, unit), Unit = unit });
+
+    /// <summary>Stored distances have at most two decimals, so rounding to two changes nothing until something has been converted.</summary>
+    private static decimal RoundDistance(MetricsQuery query, decimal distance) =>
+        query.DisplayUnit is null ? distance : decimal.Round(distance, 2, MidpointRounding.AwayFromZero);
 
     private static void Validate(MetricsQuery query)
     {
@@ -65,9 +78,9 @@ public static class MetricsCalculator
         && (q.MinPercent is null || f.Intensity >= q.MinPercent)
         && (q.MaxPercent is null || f.Intensity <= q.MaxPercent);
 
-    private static double? Measure(MetricMeasure measure, IEnumerable<FactTotal> group) => measure switch
+    private static double? Measure(MetricMeasure measure, IEnumerable<FactTotal> group, MetricsQuery query) => measure switch
     {
-        MetricMeasure.Distance => (double)group.Sum(f => f.Distance),
+        MetricMeasure.Distance => (double)RoundDistance(query, group.Sum(f => f.Distance)),
         MetricMeasure.Sessions => group.Select(f => f.SessionId).Distinct().Count(),
         _ => WeightedIntensity(group),
     };

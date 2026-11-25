@@ -21,7 +21,8 @@ public sealed record MetricsQuery(
     EffortScale? Scale = null,
     Guid? SessionId = null,
     bool ApplyDefaultEffort = true,
-    int? DefaultEffort = null)
+    int? DefaultEffort = null,
+    DistanceUnit? DisplayUnit = null)
 {
     public const int MaxDimensions = 2;
 
@@ -46,7 +47,7 @@ public sealed record MetricRow(
 /// <param name="Scale">The effort scale intensity was bucketed by.</param>
 /// <param name="DefaultEffort">The percent that distance with no stated effort was counted at; null when that was not applied.</param>
 /// <param name="AssumedDistance">How much distance was counted at <paramref name="DefaultEffort"/>.</param>
-/// <param name="Units">Every distance unit present in the matching facts. More than one means distances mix metres and yards - nothing is converted.</param>
+/// <param name="Units">Every distance unit present in the matching facts. When the query names a display unit, every distance was converted to it and this is just that unit; otherwise more than one means distances mix metres and yards and nothing was converted.</param>
 public sealed record MetricsResult(
     MetricMeasure Measure,
     IReadOnlyList<MetricDimension> GroupBy,
