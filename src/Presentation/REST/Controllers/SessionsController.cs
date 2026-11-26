@@ -61,6 +61,47 @@ public sealed class SessionsController(
         }
     }
 
+    /// <summary>
+    /// Permanently deletes a session with its facts and takes it off the swimmer's count. Timed swims logged against it are kept, with
+    /// their <c>sessionId</c> cleared.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await sessions.DeleteAsync(currentUser.UserId, id, cancellationToken);
+            return NoContent();
+        }
+        catch (SessionNotFoundException)
+        {
+            return NotFound();
+        }
+    }
+
+    /// <summary>
+    /// Changes a session's title, date or course; send only what changes. Its facts, and so every metric, follow the new date and course.
+    /// Changing the course between SCY (yards) and SCM/LCM (metres) keeps the distances as swum and changes the unit they are in;
+    /// metrics add yards and metres up in the swimmer's display unit.
+    /// </summary>
+    [HttpPatch("{id:guid}")]
+    public async Task<IActionResult> UpdateDetails(Guid id, [FromBody] UpdateSessionDetailsRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var updated = await sessions.UpdateDetailsAsync(currentUser.UserId, id, new SessionDetailsUpdate(request.Title, request.PerformedOn, request.Course), cancellationToken);
+            return Ok(SessionResponse.FromView(updated));
+        }
+        catch (SessionNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (InvalidSessionDetailsException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     /// <summary>Changes a session with small path-addressed edits (remove, replace, insert, set_group); the totals and facts are rebuilt with it.</summary>
     [HttpPost("{id:guid}/edits")]
     public async Task<IActionResult> Edit(Guid id, [FromBody] EditSessionRequest request, CancellationToken cancellationToken)
@@ -233,6 +274,8 @@ public sealed record SessionPreferencesResponse(int DefaultEffort, string Effort
 public sealed record SessionStatsResponse(int SessionCount);
 
 public enum SessionInclude { Content }
+
+public sealed record UpdateSessionDetailsRequest(string? Title, DateOnly? PerformedOn, PoolCourse? Course);
 
 public sealed record EditSessionRequest(List<SessionEditDto> Edits);
 

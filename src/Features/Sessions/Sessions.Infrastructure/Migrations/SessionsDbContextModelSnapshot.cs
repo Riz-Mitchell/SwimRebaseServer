@@ -17,7 +17,7 @@ namespace Sessions.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -324,10 +324,6 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnType("character varying(8)")
                         .HasColumnName("finish");
 
-                    b.Property<bool>("IncludeInMetrics")
-                        .HasColumnType("boolean")
-                        .HasColumnName("include_in_metrics");
-
                     b.Property<int?>("Intensity")
                         .HasColumnType("integer")
                         .HasColumnName("intensity");
@@ -345,16 +341,6 @@ namespace Sessions.Infrastructure.Migrations
                     b.Property<DateOnly>("PerformedOn")
                         .HasColumnType("date")
                         .HasColumnName("performed_on");
-
-                    b.Property<string>("ResistanceLoad")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("resistance_load");
-
-                    b.Property<string>("ResistanceType")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("resistance_type");
 
                     b.Property<double>("Seconds")
                         .HasColumnType("double precision")
@@ -397,6 +383,67 @@ namespace Sessions.Infrastructure.Migrations
                         .HasDatabaseName("ix_timed_swims_owner_id_dist_stroke_performed_on");
 
                     b.ToTable("timed_swims", (string)null);
+                });
+
+            modelBuilder.Entity("Sessions.Domain.Models.TimedSwimResistance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int?>("Count")
+                        .HasColumnType("integer")
+                        .HasColumnName("count");
+
+                    b.Property<decimal?>("HeightCm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("height_cm");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<decimal?>("LengthCm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("length_cm");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("note");
+
+                    b.Property<int?>("TensionLevel")
+                        .HasColumnType("integer")
+                        .HasColumnName("tension_level");
+
+                    b.Property<Guid>("TimedSwimId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("timed_swim_id");
+
+                    b.Property<decimal?>("WeightKg")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("weight_kg");
+
+                    b.Property<decimal?>("WidthCm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("width_cm");
+
+                    b.HasKey("Id")
+                        .HasName("pk_timed_swim_resistances");
+
+                    b.HasIndex("Kind")
+                        .HasDatabaseName("ix_timed_swim_resistances_kind");
+
+                    b.HasIndex("TimedSwimId")
+                        .HasDatabaseName("ix_timed_swim_resistances_timed_swim_id");
+
+                    b.ToTable("timed_swim_resistances", (string)null);
                 });
 
             modelBuilder.Entity("Sessions.Domain.Models.UserEffortTerm", b =>
@@ -466,6 +513,21 @@ namespace Sessions.Infrastructure.Migrations
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_timed_swims_sessions_session_id");
+                });
+
+            modelBuilder.Entity("Sessions.Domain.Models.TimedSwimResistance", b =>
+                {
+                    b.HasOne("Sessions.Domain.Models.TimedSwim", null)
+                        .WithMany("Resistances")
+                        .HasForeignKey("TimedSwimId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_timed_swim_resistances_timed_swims_timed_swim_id");
+                });
+
+            modelBuilder.Entity("Sessions.Domain.Models.TimedSwim", b =>
+                {
+                    b.Navigation("Resistances");
                 });
 #pragma warning restore 612, 618
         }

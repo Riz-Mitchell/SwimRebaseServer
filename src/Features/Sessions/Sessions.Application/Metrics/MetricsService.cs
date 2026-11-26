@@ -20,6 +20,8 @@ public sealed class MetricsService(IMetricsRepository metrics, ISessionPreferenc
         {
             Scale = EffortScaleChoice.Resolve(query.ScaleId, saved),
             DefaultEffort = query.ApplyDefaultEffort ? saved?.DefaultEffort ?? SessionPreferences.BuiltInDefaultEffort : null,
+            // Yards and metres are added up in the swimmer's own display unit, so a total never mixes the two.
+            DisplayUnit = saved?.DisplayUnit ?? DistanceUnit.Metres,
         };
         var totals = await metrics.GetTotalsAsync(userId, resolved, cancellationToken);
         _logger.LogDebug("[{ClassName}] Metrics query for user {UserId} over {RowCount} total row(s), measure {Measure}", nameof(MetricsService), userId, totals.Count, query.Measure);

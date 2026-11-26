@@ -18,6 +18,9 @@ public sealed class SessionRepository(SessionsDbContext db) : ISessionRepository
     public async Task<Session?> FindAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
         await db.Sessions.FirstOrDefaultAsync(s => s.Id == id && s.OwnerId == userId, cancellationToken);
 
+    public async Task<bool> ExistsAsync(Guid userId, Guid id, CancellationToken cancellationToken) =>
+        await db.Sessions.AsNoTracking().AnyAsync(s => s.Id == id && s.OwnerId == userId, cancellationToken);
+
     public async Task<Session?> FindBySourceDraftAsync(Guid userId, Guid draftId, CancellationToken cancellationToken) =>
         await db.Sessions.AsNoTracking().FirstOrDefaultAsync(s => s.SourceDraftId == draftId && s.OwnerId == userId, cancellationToken);
 
