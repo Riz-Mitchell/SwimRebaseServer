@@ -8,7 +8,6 @@ namespace Sessions.Application.Metrics;
 public static class TimedSwimMetricsCalculator
 {
     private const string None = "none";
-    private const string Unspecified = "unspecified";
 
     public static TimedSwimMetricsResult Compute(TimedSwimMetricsQuery query, IEnumerable<TimedSwimFact> facts)
     {
@@ -73,8 +72,8 @@ public static class TimedSwimMetricsCalculator
         && (q.Strokes is not { Count: > 0 } || q.Strokes.Contains(f.Stroke))
         && (q.Modes is not { Count: > 0 } || q.Modes.Contains(f.Mode))
         && (q.Courses is not { Count: > 0 } || q.Courses.Contains(f.Course))
-        && (q.StartTypes is not { Count: > 0 } || (f.StartType is { } start && q.StartTypes.Contains(start)))
-        && (q.Finishes is not { Count: > 0 } || (f.Finish is { } finish && q.Finishes.Contains(finish)))
+        && (q.StartTypes is not { Count: > 0 } || q.StartTypes.Contains(f.StartType))
+        && (q.Finishes is not { Count: > 0 } || q.Finishes.Contains(f.Finish))
         && (q.ResistanceKinds is not { Count: > 0 } || f.ResistanceKinds.Any(q.ResistanceKinds.Contains))
         && (q.HasResistance is null || (f.ResistanceKinds.Count > 0) == q.HasResistance)
         && (q.MinPercent is null || f.Intensity >= q.MinPercent)
@@ -107,8 +106,8 @@ public static class TimedSwimMetricsCalculator
         TimedSwimDimension.Mode => [f.Mode.ToString().ToLowerInvariant()],
         TimedSwimDimension.Distance => [f.Dist.ToString("0.##", CultureInfo.InvariantCulture)],
         TimedSwimDimension.Course => [f.Course.ToString().ToLowerInvariant()],
-        TimedSwimDimension.StartType => [f.StartType?.ToString().ToLowerInvariant() ?? Unspecified],
-        TimedSwimDimension.Finish => [f.Finish?.ToString().ToLowerInvariant() ?? Unspecified],
+        TimedSwimDimension.StartType => [f.StartType.ToString().ToLowerInvariant()],
+        TimedSwimDimension.Finish => [f.Finish.ToString().ToLowerInvariant()],
         TimedSwimDimension.Intensity => [scale.Bucket(f.Intensity)],
         TimedSwimDimension.ResistanceKind => f.ResistanceKinds.Count == 0 ? [None] : [.. f.ResistanceKinds.Distinct().Select(k => k.ToString().ToLowerInvariant())],
         TimedSwimDimension.Day => [f.PerformedOn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)],

@@ -39,7 +39,7 @@ public sealed class TimedSwimRepository(SessionsDbContext db) : ITimedSwimReposi
         if (filter.Strokes is { Count: > 0 } strokes) query = query.Where(t => strokes.Contains(t.Stroke));
         if (filter.MinPercent is { } min) query = query.Where(t => t.Intensity >= min);
         if (filter.MaxPercent is { } max) query = query.Where(t => t.Intensity <= max);
-        if (filter.StartTypes is { Count: > 0 } startTypes) query = query.Where(t => t.StartType != null && startTypes.Contains(t.StartType.Value));
+        if (filter.StartTypes is { Count: > 0 } startTypes) query = query.Where(t => startTypes.Contains(t.StartType));
         if (filter.ResistanceKinds is { Count: > 0 } kinds) query = query.Where(t => t.Resistances.Any(r => kinds.Contains(r.Kind)));
         if (filter.HasResistance is { } hasResistance) query = query.Where(t => t.Resistances.Any() == hasResistance);
 
@@ -56,8 +56,8 @@ public sealed class TimedSwimRepository(SessionsDbContext db) : ITimedSwimReposi
         if (query.Strokes is { Count: > 0 } strokes) swims = swims.Where(t => strokes.Contains(t.Stroke));
         if (query.Modes is { Count: > 0 } modes) swims = swims.Where(t => modes.Contains(t.Mode));
         if (query.Courses is { Count: > 0 } courses) swims = swims.Where(t => courses.Contains(t.Course));
-        if (query.StartTypes is { Count: > 0 } startTypes) swims = swims.Where(t => t.StartType != null && startTypes.Contains(t.StartType.Value));
-        if (query.Finishes is { Count: > 0 } finishes) swims = swims.Where(t => t.Finish != null && finishes.Contains(t.Finish.Value));
+        if (query.StartTypes is { Count: > 0 } startTypes) swims = swims.Where(t => startTypes.Contains(t.StartType));
+        if (query.Finishes is { Count: > 0 } finishes) swims = swims.Where(t => finishes.Contains(t.Finish));
         if (query.ResistanceKinds is { Count: > 0 } kinds) swims = swims.Where(t => t.Resistances.Any(r => kinds.Contains(r.Kind)));
         if (query.HasResistance is { } hasResistance) swims = swims.Where(t => t.Resistances.Any() == hasResistance);
         if (query.MinPercent is { } min) swims = swims.Where(t => t.Intensity >= min);

@@ -320,6 +320,7 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnName("effort");
 
                     b.Property<string>("Finish")
+                        .IsRequired()
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)")
                         .HasColumnName("finish");
@@ -356,6 +357,7 @@ namespace Sessions.Infrastructure.Migrations
                         .HasColumnName("splits_json");
 
                     b.Property<string>("StartType")
+                        .IsRequired()
                         .HasMaxLength(8)
                         .HasColumnType("character varying(8)")
                         .HasColumnName("start_type");

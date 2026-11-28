@@ -41,8 +41,8 @@ public sealed record TimedSwimFact(
     SwimMode Mode,
     double Seconds,
     int? Intensity,
-    StartType? StartType,
-    FinishReference? Finish,
+    StartType StartType,
+    FinishReference Finish,
     IReadOnlyList<ResistanceKind> ResistanceKinds)
 {
     public DistanceUnit Unit => Course == PoolCourse.Scy ? DistanceUnit.Yards : DistanceUnit.Metres;

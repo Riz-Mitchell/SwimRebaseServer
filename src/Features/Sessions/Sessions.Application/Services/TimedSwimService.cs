@@ -21,8 +21,8 @@ public sealed record TimedSwimView(
     double Seconds,
     string? Effort,
     int? Intensity,
-    StartType? StartType,
-    FinishReference? Finish,
+    StartType StartType,
+    FinishReference Finish,
     IReadOnlyList<ResistanceItem> Resistances,
     IReadOnlyList<Split> Splits,
     double? StrokeRateCyclesPerMinute,
@@ -141,8 +141,8 @@ public sealed class TimedSwimService(
         timedSwim.Seconds = request.Seconds;
         timedSwim.Effort = request.Effort;
         timedSwim.Intensity = intensity.Resolve(request.Effort, await personal.MapperAsync(timedSwim.OwnerId, cancellationToken))?.Percent;
-        timedSwim.StartType = request.StartType;
-        timedSwim.Finish = request.Finish;
+        timedSwim.StartType = request.StartType ?? TimedSwim.DefaultStartType;
+        timedSwim.Finish = request.Finish ?? TimedSwim.DefaultFinish;
         timedSwim.SplitsJson = SessionJson.Serialize(splits);
         timedSwim.StrokeRateCyclesPerMinute = StrokeRateCalculator.Compute(splits);
     }

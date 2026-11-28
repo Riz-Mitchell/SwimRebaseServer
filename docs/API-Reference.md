@@ -437,8 +437,8 @@ Enums are accepted in any case on input and returned PascalCase (`Free`, `Scm`, 
   "mode": "swim | kick | pull | drill | scull",
   "seconds": 11.84,
   "effort": "string|null",
-  "startType": "Push | Dive | null",
-  "finish": "Hand | Head | Feet | null",
+  "startType": "Push | Dive",
+  "finish": "Hand | Head | Feet",
   "resistances": [
     { "kind": "Sponges", "count": 2 },
     { "kind": "Parachute", "widthCm": 30, "heightCm": 20 }
@@ -449,6 +449,8 @@ Enums are accepted in any case on input and returned PascalCase (`Free`, `Scm`, 
 }
 ```
 `sessionId`, `effort`, `startType`, `finish`, `resistances` and `splits` are optional.
+
+- `startType` defaults to `Dive` and `finish` to `Hand` when left out or sent as `null`. The two default independently, and every swim has both.
 
 - `sessionId`, when sent, must be one of the caller's own sessions; otherwise the request is a `400` with `{ error, problems }` and nothing is saved. If that session is later deleted the swim is kept and its `sessionId` becomes `null`.
 - `seconds` is the whole swim's time and is always required; splits are extra detail on top of it.
@@ -474,7 +476,7 @@ Numbers must be above 0 and `note` is at most 160 characters. A measure a kind d
 **Response:** `TimedSwimResponse`. `400` with `{ error, problems }` listing everything to fix; nothing is saved.
 
 ### `PUT /api/timed-swims/{id}`
-Replaces the swim with the body, which has the same shape as `POST`. The id, owner and `createdAt` are kept, and the resistances are replaced as a whole. `404` if it is not the caller's; `400` as for `POST`, in which case nothing changes.
+Replaces the swim with the body, which has the same shape as `POST`. A `startType` or `finish` left out or sent as `null` is set to its default (`Dive`, `Hand`), **not** kept from the stored swim, so send both to keep other values. The id, owner and `createdAt` are kept, and the resistances are replaced as a whole. `404` if it is not the caller's; `400` as for `POST`, in which case nothing changes.
 
 ### `DELETE /api/timed-swims/{id}`
 `204`, or `404` if it is not the caller's.
@@ -516,7 +518,7 @@ Filter, group and measure timed swims. This is separate from `/api/sessions/metr
 | `thenBy` | A second dimension, for a request with exactly one `groupBy` |
 | `measure` | `count` (default), `bestTime` (fastest, in seconds), `avgTime` (mean seconds) or `avgIntensity` (mean percent of the swims that have one) |
 
-A swim with several kinds of gear counts under each kind when grouping by `resistanceKind`; a swim with none counts under `none`. A swim with no start or finish is grouped under `unspecified`. Time measures only compare like with like, so group by `distance` and `stroke` (or filter to one event); when a time measure mixes events the response has `mixedEvents: true`.
+A swim with several kinds of gear counts under each kind when grouping by `resistanceKind`; a swim with none counts under `none`. Every swim has a start and a finish (see the defaults under `POST`), so grouping by `startType` or `finish` has no `unspecified` group. Time measures only compare like with like, so group by `distance` and `stroke` (or filter to one event); when a time measure mixes events the response has `mixedEvents: true`.
 
 Examples: `?distances=25&strokes=free&groupBy=startType&measure=bestTime` (best 25 free by start), `?distances=50&strokes=free&groupBy=resistanceKind&measure=avgTime` (average 50 free time by gear), `?groupBy=distance&thenBy=stroke&measure=bestTime` (personal bests), `?groupBy=month&measure=count`.
 
@@ -542,8 +544,8 @@ Examples: `?distances=25&strokes=free&groupBy=startType&measure=bestTime` (best 
   "seconds": 11.84,
   "effort": "max",
   "intensity": 100,
-  "startType": "Push | Dive | null",
-  "finish": "Hand | Head | Feet | null",
+  "startType": "Push | Dive",
+  "finish": "Hand | Head | Feet",
   "resistances": [
     { "kind": "Sponges", "count": 2, "widthCm": null, "heightCm": null, "lengthCm": null, "weightKg": null, "tensionLevel": null, "note": null, "areaCm2": null },
     { "kind": "Parachute", "count": null, "widthCm": 30, "heightCm": 20, "lengthCm": null, "weightKg": null, "tensionLevel": null, "note": null, "areaCm2": 600 }
@@ -553,7 +555,10 @@ Examples: `?distances=25&strokes=free&groupBy=startType&measure=bestTime` (best 
   "createdAt": "ISO-8601 timestamp"
 }
 ```
-`unit` is derived from `course` (yards for `Scy`). `resistances` is an empty array when there was none, and `areaCm2` is derived for a parachute. The top-level `strokeRateCyclesPerMinute` is the average of the splits' rates, to one decimal place, and `null` when no split has one.
+`startType` and `finish` are never `null`. `unit` is derived from `course` (yards for `Scy`). `resistances` is an empty array when there was none, and `areaCm2` is derived for a parachute. The top-level `strokeRateCyclesPerMinute` is the average of the splits' rates, to one decimal place, and `null` when no split has one.
+
+### Start and finish defaults
+`startType` and `finish` used to be nullable. They now default to `Dive` and `Hand`, and swims logged earlier without them were updated to those values. They can no longer be told apart from swims logged as `Dive` or `Hand`.
 
 ### Breaking changes from the first version
 `includeInMetrics` is gone from the request and response, and so is its effect on `/api/sessions/metrics`. The free-text `resistance: { type, load }` is replaced by `resistances`; swims logged earlier keep their old wording as one `Other` resistance with it in `note`. The `resistanceTypes` list filter is now `resistanceKinds`.
