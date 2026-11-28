@@ -9,7 +9,7 @@ public class TimedSwimMetricsCalculatorTests
     private static TimedSwimFact Swim(
         string date, decimal dist, double seconds, Stroke stroke = Stroke.Free, int? intensity = null, StartType? start = null,
         FinishReference? finish = null, PoolCourse course = PoolCourse.Scm, SwimMode mode = SwimMode.Swim, params ResistanceKind[] gear) =>
-        new(DateOnly.Parse(date), course, dist, stroke, mode, seconds, intensity, start, finish, gear);
+        new(DateOnly.Parse(date), course, dist, stroke, mode, seconds, intensity, start ?? TimedSwim.DefaultStartType, finish ?? TimedSwim.DefaultFinish, gear);
 
     private static TimedSwimMetricsQuery Query(
         TimedSwimMeasure measure = TimedSwimMeasure.Count,
@@ -31,7 +31,7 @@ public class TimedSwimMetricsCalculatorTests
         Swim("2026-11-02", 25, 12.4, Stroke.Free, 100, StartType.Dive, FinishReference.Head),
         Swim("2026-11-09", 25, 11.9, Stroke.Free, 100, StartType.Dive, FinishReference.Head),
         Swim("2026-11-09", 25, 13.8, Stroke.Free, 100, StartType.Push, FinishReference.Hand, gear: ResistanceKind.Sponges),
-        Swim("2026-11-16", 25, 14.5, Stroke.Free, 90, StartType.Dive, null, gear: [ResistanceKind.Sponges, ResistanceKind.Parachute]),
+        Swim("2026-11-16", 25, 14.5, Stroke.Free, 90, StartType.Dive, FinishReference.Feet, gear: [ResistanceKind.Sponges, ResistanceKind.Parachute]),
         Swim("2026-11-16", 50, 27.1, Stroke.Fly, 80, StartType.Push),
         Swim("2026-12-01", 50, 30.0, Stroke.Back, null, null, null, PoolCourse.Scy),
     ];
@@ -95,15 +95,14 @@ public class TimedSwimMetricsCalculatorTests
     }
 
     [Fact]
-    public void Groups_by_two_dimensions_with_unspecified_values_kept()
+    public void Groups_by_two_dimensions()
     {
         var table = Table(TimedSwimMetricsCalculator.Compute(Query(groupBy: [TimedSwimDimension.StartType, TimedSwimDimension.Finish]), Swims()));
 
         Assert.Equal(2, table["dive|head"]);
-        Assert.Equal(1, table["dive|unspecified"]);
-        Assert.Equal(1, table["push|hand"]);
-        Assert.Equal(1, table["push|unspecified"]);
-        Assert.Equal(1, table["unspecified|unspecified"]);
+        Assert.Equal(1, table["dive|feet"]);
+        Assert.Equal(2, table["push|hand"]);
+        Assert.Equal(1, table["dive|hand"]);
     }
 
     [Fact]

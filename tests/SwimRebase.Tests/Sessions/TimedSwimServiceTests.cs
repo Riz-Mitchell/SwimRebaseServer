@@ -92,6 +92,42 @@ public class TimedSwimServiceTests
     }
 
     [Fact]
+    public async Task A_swim_logged_without_a_start_or_finish_is_a_dive_with_a_hand_finish()
+    {
+        var (service, repo, _) = Build();
+
+        var view = await service.LogAsync(User, Request() with { StartType = null, Finish = null }, default);
+
+        Assert.Equal(StartType.Dive, view.StartType);
+        Assert.Equal(FinishReference.Hand, view.Finish);
+        Assert.Equal(StartType.Dive, repo.Swims.Single().StartType);
+        Assert.Equal(FinishReference.Hand, repo.Swims.Single().Finish);
+    }
+
+    [Fact]
+    public async Task A_stated_start_and_finish_are_kept_and_each_defaults_on_its_own()
+    {
+        var (service, _, _) = Build();
+
+        var pushed = await service.LogAsync(User, Request() with { StartType = StartType.Push, Finish = null }, default);
+        var feet = await service.LogAsync(User, Request() with { StartType = null, Finish = FinishReference.Feet }, default);
+
+        Assert.Equal((StartType.Push, FinishReference.Hand), (pushed.StartType, pushed.Finish));
+        Assert.Equal((StartType.Dive, FinishReference.Feet), (feet.StartType, feet.Finish));
+    }
+
+    [Fact]
+    public async Task An_update_without_a_start_or_finish_goes_back_to_the_defaults()
+    {
+        var (service, _, _) = Build();
+        var logged = await service.LogAsync(User, Request() with { StartType = StartType.Push, Finish = FinishReference.Feet }, default);
+
+        var updated = await service.UpdateAsync(User, logged.Id, Request() with { StartType = null, Finish = null }, default);
+
+        Assert.Equal((StartType.Dive, FinishReference.Hand), (updated.StartType, updated.Finish));
+    }
+
+    [Fact]
     public async Task Deleting_removes_the_swim()
     {
         var (service, repo, _) = Build();

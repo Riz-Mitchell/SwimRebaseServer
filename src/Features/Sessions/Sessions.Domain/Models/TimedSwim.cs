@@ -23,6 +23,12 @@ public sealed record Split
 /// </summary>
 public class TimedSwim
 {
+    /// <summary>What a swim logged without a start counts as.</summary>
+    public const StartType DefaultStartType = StartType.Dive;
+
+    /// <summary>What a swim logged without a finish counts as.</summary>
+    public const FinishReference DefaultFinish = FinishReference.Hand;
+
     public Guid Id { get; set; }
 
     public Guid OwnerId { get; set; }
@@ -49,9 +55,9 @@ public class TimedSwim
     /// <summary>On the global 1-10 scale; null means unspecified. Only the level is kept, matching <see cref="SessionFact.Intensity"/>.</summary>
     public int? Intensity { get; set; }
 
-    public StartType? StartType { get; set; }
+    public StartType StartType { get; set; } = DefaultStartType;
 
-    public FinishReference? Finish { get; set; }
+    public FinishReference Finish { get; set; } = DefaultFinish;
 
     /// <summary>The gear the swim was done with (sponges, parachute, ...); empty when unresisted. Replaced as a whole on edit.</summary>
     public List<TimedSwimResistance> Resistances { get; set; } = [];

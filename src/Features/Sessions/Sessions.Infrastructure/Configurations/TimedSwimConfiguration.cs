@@ -19,8 +19,8 @@ public sealed class TimedSwimConfiguration : IEntityTypeConfiguration<TimedSwim>
         builder.Property(t => t.Mode).HasConversion<string>().HasMaxLength(16).IsRequired();
         builder.Property(t => t.Seconds).IsRequired();
         builder.Property(t => t.Effort).HasColumnType("text");
-        builder.Property(t => t.StartType).HasConversion<string>().HasMaxLength(8);
-        builder.Property(t => t.Finish).HasConversion<string>().HasMaxLength(8);
+        builder.Property(t => t.StartType).HasConversion<string>().HasMaxLength(8).IsRequired();
+        builder.Property(t => t.Finish).HasConversion<string>().HasMaxLength(8).IsRequired();
         // Plain text, not jsonb: splits are read as a whole with the swim, never queried at the SQL level.
         builder.Property(t => t.SplitsJson).HasColumnType("text").IsRequired();
         builder.Property(t => t.CreatedAt).IsRequired();
